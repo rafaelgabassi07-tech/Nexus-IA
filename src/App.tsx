@@ -58,7 +58,6 @@ export type APIPreset = {
   id: string;
   name: string;
   apiKey: string;
-  model: string;
 };
 
 export type ChatSession = {
@@ -246,7 +245,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro-preview');
+  const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
   const [temperature, setTemperature] = useState<number>(0.7);
   const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
   
@@ -318,7 +317,7 @@ export default function App() {
   };
 
   const addOrUpdatePreset = () => {
-    if (!presetForm.name || !presetForm.apiKey || !presetForm.model) return;
+    if (!presetForm.name || !presetForm.apiKey) return;
 
     if (editingPreset) {
       const updated = apiPresets.map(p => p.id === editingPreset.id ? { ...p, ...presetForm } as APIPreset : p);
@@ -328,7 +327,6 @@ export default function App() {
         id: generateId(),
         name: presetForm.name!,
         apiKey: presetForm.apiKey!,
-        model: presetForm.model!,
       };
       saveApiPresets([...apiPresets, newPreset]);
       if (!activePresetId) {
@@ -755,101 +753,135 @@ export default function App() {
     setIsLoading(true);
     setIsRunning(true);
 
-    const activePreset = apiPresets.find(p => p.id === activePresetId);
-    const apiToUse = activePreset ? activePreset.apiKey : apiKey;
-    const modelToUse = activePreset ? activePreset.model : selectedModel;
-
     abortControllerRef.current = new AbortController();
 
+    const modelToUse = selectedModel;
+    let currentPresetIndex = apiPresets.findIndex(p => p.id === activePresetId);
+    let attemptsCount = 0;
+    const maxAttempts = Math.max(1, apiPresets.length);
+
+    const messageId = generateId();
+    setMessages(prev => [...prev, {
+      id: messageId,
+      role: 'model',
+      content: ''
+    }]);
+
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          messages: updatedMessages.map(m => ({ 
-            role: m.role, 
-            content: m.content,
-            images: (m as any).images 
-          })),
-          systemPrompt: systemPrompt,
-          temperature: temperature,
-          agentId: activeAgent.id,
-          apiKey: apiToUse,
-          model: modelToUse
-        })
-      });
+      while (attemptsCount < maxAttempts) {
+        if (abortControllerRef.current?.signal.aborted) break;
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server returned ${res.status}`);
-      }
+        const preset = currentPresetIndex >= 0 && currentPresetIndex < apiPresets.length ? apiPresets[currentPresetIndex] : null;
+        const apiToUse = preset ? preset.apiKey : apiKey;
 
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      let fullResponse = "";
-      const messageId = generateId();
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: abortControllerRef.current.signal,
+            body: JSON.stringify({
+              messages: updatedMessages.map(m => ({ 
+                role: m.role, 
+                content: m.content,
+                images: (m as any).images 
+              })),
+              systemPrompt: systemPrompt,
+              temperature: temperature,
+              agentId: activeAgent.id,
+              apiKey: apiToUse,
+              model: modelToUse
+            })
+          });
 
-      setMessages(prev => [...prev, {
-        id: messageId,
-        role: 'model',
-        content: ''
-      }]);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Server returned ${res.status}`);
+          }
 
-      if (reader) {
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder("utf-8");
+          
+          let fullResponse = "";
 
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || "";
+          if (reader) {
+            let buffer = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-          for (const part of parts) {
-            if (part.startsWith('data: ')) {
-              const data = part.slice(6);
-              if (data === '[DONE]') break;
-              
-              let parsed;
-              try {
-                parsed = JSON.parse(data);
-              } catch (e) {
-                // Ignore parse errors from partial chunks
-                continue;
-              }
-              
-              if (parsed.error) {
-                throw new Error(parsed.error);
-              }
-              if (parsed.text) {
-                fullResponse += parsed.text;
-                setMessages(prev => prev.map(m => 
-                  m.id === messageId ? { ...m, content: fullResponse } : m
-                ));
-                
-                // Extração de arquivos em tempo real (throttled)
-                if (Date.now() - lastExtractionTimeRef.current > 500) {
-                  lastExtractionTimeRef.current = Date.now();
-                  const currentFiles = extractFilesFromMarkdown(fullResponse);
-                  if (currentFiles.length > 0) {
-                    setGeneratedFiles(currentFiles);
-                    if (generatedFiles.length === 0 && currentFiles.length > 0) {
-                       setActiveFileIndex(currentFiles.length - 1);
+              buffer += decoder.decode(value, { stream: true });
+              const parts = buffer.split('\\n\\n');
+              buffer = parts.pop() || "";
+
+              for (const part of parts) {
+                if (part.startsWith('data: ')) {
+                  const data = part.slice(6);
+                  if (data === '[DONE]') break;
+                  
+                  let parsed;
+                  try {
+                    parsed = JSON.parse(data);
+                  } catch (e) {
+                    continue;
+                  }
+                  
+                  if (parsed.error) {
+                    throw new Error(parsed.error);
+                  }
+                  if (parsed.text) {
+                    fullResponse += parsed.text;
+                    setMessages(prev => prev.map(m => 
+                      m.id === messageId ? { ...m, content: fullResponse } : m
+                    ));
+                    
+                    if (Date.now() - lastExtractionTimeRef.current > 500) {
+                      lastExtractionTimeRef.current = Date.now();
+                      const currentFiles = extractFilesFromMarkdown(fullResponse);
+                      if (currentFiles.length > 0) {
+                        setGeneratedFiles(currentFiles);
+                        if (generatedFiles.length === 0 && currentFiles.length > 0) {
+                           setActiveFileIndex(currentFiles.length - 1);
+                        }
+                      }
                     }
                   }
                 }
               }
             }
           }
+          
+          const finalFiles = extractFilesFromMarkdown(fullResponse);
+          if (finalFiles.length > 0) {
+            setGeneratedFiles(finalFiles);
+          }
+          
+          break; // Sucesso, quebra o loop de tentativas
+
+        } catch (innerErr: any) {
+          const errMsg = (innerErr.message || "").toLowerCase();
+          const isQuota = errMsg.includes('cota') || errMsg.includes('quota') || errMsg.includes('exceeded') || errMsg.includes('limit: 0') || errMsg.includes('limite 0') || errMsg.includes('limite de cota');
+          
+          if (isQuota && apiPresets.length > 1) {
+            attemptsCount++;
+            if (attemptsCount < maxAttempts) {
+              const nextIndex = (currentPresetIndex + 1) % apiPresets.length;
+              currentPresetIndex = nextIndex;
+              const newPresetId = apiPresets[nextIndex].id;
+              console.warn(`Cota excedida. Alternando automaticamente para o preset ${apiPresets[nextIndex].name}`);
+              
+              setActivePresetId(newPresetId);
+              safeLocalStorageSet('nexus_active_preset_id', newPresetId);
+              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: `⚠️ **Cota excedida no preset atual.**\nAlternando automaticamente para o preset **${apiPresets[nextIndex].name}**...` } : m));
+              
+              await new Promise(r => setTimeout(r, 2000));
+              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: '' } : m));
+              
+              continue; // Tenta novamente com o proximo preset!
+            }
+          }
+          
+          throw innerErr; // Caso nao seja cota, ou caso esgotem os presets
         }
-      }
-      
-      // Extração final por segurança
-      const finalFiles = extractFilesFromMarkdown(fullResponse);
-      if (finalFiles.length > 0) {
-        setGeneratedFiles(finalFiles);
       }
     } catch (err: any) {
       console.error(err);
@@ -1042,8 +1074,20 @@ export default function App() {
              </div>
              <div className="w-px h-4 bg-white/10" />
              <div className="flex flex-col items-end">
-               <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">Motor</span>
-               <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter mt-1">{selectedModel.split('-')[1] || 'Flash'}</span>
+               <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Motor</span>
+               <Select value={selectedModel} onValueChange={setSelectedModel}>
+                 <SelectTrigger className="h-4 p-0 text-[9px] font-bold text-zinc-400 hover:text-white uppercase tracking-tighter bg-transparent border-0 focus:ring-0 gap-1 min-w-0">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl min-w-[150px]">
+                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                   <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
+                   <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                   <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                   <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                   <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                 </SelectContent>
+               </Select>
              </div>
           </div>
         </div>
@@ -1112,9 +1156,41 @@ export default function App() {
           {/* Chat Log */}
           <div 
             ref={scrollRef}
-            className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-smooth custom-scrollbar"
+            className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-smooth custom-scrollbar relative flex flex-col"
           >
-            {/* Empty state removed as requested */}
+            {messages.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-700 min-h-0">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                  <Brain size={24} className="text-blue-400" />
+                </div>
+                <h2 className="text-xl font-black text-white uppercase tracking-widest mb-2">Construa com o Nexus IA</h2>
+                <p className="text-[12px] font-medium text-[#8e918f] max-w-md mb-8 leading-relaxed">
+                  Descreva o que você quer criar. O Nexus selecionará automaticamente o especialista mais adequado para a tarefa.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3 w-full max-w-3xl">
+                  {[
+                    { label: "App de Clima com gráficos", prompt: "Crie um aplicativo de previsão do tempo responsivo com gráficos de temperatura dos últimos dias e visualização atual usando layout moderno e componentes do shadcn.", icon: Layout, color: "text-pink-400" },
+                    { label: "Dashboard Financeiro", prompt: "Construa um dashboard financeiro moderno contendo cards de resumo, gráfico de despesas e receitas, e uma tabela de transações recentes com filtro.", icon: Code, color: "text-blue-400" },
+                    { label: "Jogo da Velha Avançado", prompt: "Desenvolva um jogo da velha (Tic-Tac-Toe) com modo escuro, placar de vitórias, histórico de jogadas e uma interface animada.", icon: Terminal, color: "text-emerald-400" },
+                    { label: "Análise de Código Extrema", prompt: "Revise detalhadamente o meu código em busca de problemas de segurança, más práticas e gargalos de performance, sugerindo melhorias pontuais.", icon: Activity, color: "text-orange-400" }
+                  ].map((s, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => setInputMessage(s.prompt)}
+                      className="group flex flex-col items-start text-left p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/20 transition-all cursor-pointer w-full sm:w-[calc(50%-6px)] relative overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5 relative z-10">
+                        <s.icon size={14} className={s.color} />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{s.label}</span>
+                      </div>
+                      <p className="text-[11px] text-[#8e918f] font-medium line-clamp-2 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">
+                        "{s.prompt}"
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <AnimatePresence initial={false}>
               {messages.map((msg) => (
@@ -1341,12 +1417,31 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Send Button */}
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
-                    size="icon"
-                    className={cn(
+                  {/* Right Side Actions */}
+                  <div className="flex items-center gap-2">
+                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                      <SelectTrigger className="flex h-8 bg-transparent border-none text-[11px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Brain size={14} className="shrink-0" />
+                          <span className="truncate max-w-[120px]">{selectedModel.replace('gemini-', '').replace('-preview', '')}</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                        <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                        <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
+                        <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                        <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                        <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Send Button */}
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
+                      size="icon"
+                      className={cn(
                       "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none mr-0.5 mb-0.5",
                       (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
                         ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow" 
@@ -1355,6 +1450,7 @@ export default function App() {
                   >
                     {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} strokeWidth={2.5} />}
                   </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1646,24 +1742,30 @@ export default function App() {
                   )}
 
                   {settingsTab === 'general' && (
-                    <div className="space-y-8 animate-in fade-in duration-400">
+                    <div className="space-y-10 animate-in fade-in duration-500">
                       <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors">
                         <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
                         VOLTAR
                       </button>
-                      <div className="space-y-8">
-                        <div className="space-y-4">
-                          <div className="space-y-1 border-l border-white/10 pl-4">
-                             <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Motor IA</h3>
-                             <p className="text-[10px] text-[#8e918f] uppercase tracking-widest font-bold">Configuração básica</p>
+                      <div className="space-y-10">
+                        <div className="space-y-6">
+                          <div className="space-y-1 border-l-2 border-blue-500/50 pl-4">
+                             <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Motor IA</h3>
+                             <p className="text-[11px] text-[#8e918f] uppercase tracking-widest font-bold">Configuração Básica de API e Parametrização</p>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/[0.01] p-4 rounded-xl border border-white/5">
-                            <div className="space-y-3">
-                              <div className="space-y-1.5">
-                                <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">API Key</label>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6 overflow-hidden group hover:bg-white/[0.04] transition-colors">
+                              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <Key size={64} />
+                              </div>
+                              <div className="space-y-2 relative z-10">
+                                <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
+                                  <Key size={12} className="text-blue-400" /> API KEY PRINCIPAL
+                                </label>
                                 <div className="relative">
-                                  <Input type={showDraftApiKey ? "text" : "password"} value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso..." className="bg-white/[0.02] border-white/10 rounded-lg h-9 px-3 text-[12px] focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all pr-16" />
-                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center pr-1 gap-0.5">
+                                  <Input type={showDraftApiKey ? "text" : "password"} value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso principal..." className="bg-black/20 border-white/10 rounded-xl h-11 px-4 text-[13px] focus-visible:ring-1 focus-visible:border-blue-400/50 transition-all pr-20" />
+                                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                                     <button type="button" onClick={async () => {
                                       try {
                                         const text = await navigator.clipboard.readText();
@@ -1671,75 +1773,95 @@ export default function App() {
                                       } catch(e) {
                                         console.error('Failed to read clipboard', e);
                                       }
-                                    }} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title="Colar">
+                                    }} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Colar">
                                       <ClipboardPaste size={14} />
                                     </button>
-                                    <button type="button" onClick={() => setShowDraftApiKey(s => !s)} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title={showDraftApiKey ? "Ocultar" : "Mostrar"}>
+                                    <button type="button" onClick={() => setShowDraftApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showDraftApiKey ? "Ocultar" : "Mostrar"}>
                                       {showDraftApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                                     </button>
                                   </div>
                                 </div>
                               </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">Modelo</label>
+
+                              <div className="space-y-2 relative z-10">
+                                <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
+                                  <Brain size={12} className="text-blue-400" /> MODELO PADRÃO
+                                </label>
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
-                                  <SelectTrigger className="bg-white/[0.02] border-white/10 text-[#f1f3f4] h-9 text-[12px] rounded-lg px-3 focus:ring-1 focus:ring-blue-500/30"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11 px-4 text-[13px] focus:ring-1 focus:border-blue-400/50 transition-all hover:bg-black/40"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                    <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Flash Thinking</SelectItem>
-                                    <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</SelectItem>
-                                    <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                                    <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
+                                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
                                     <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                             </div>
-                            <div className="space-y-6 py-1">
-                              <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                  <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest">Criatividade</label>
-                                  <span className="text-[11px] font-mono font-bold text-blue-400 tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">{draftTemperature}</span>
+                            
+                            <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6 flex flex-col justify-center overflow-hidden group hover:bg-white/[0.04] transition-colors">
+                              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <Activity size={64} />
+                              </div>
+                              <div className="space-y-4 relative z-10">
+                                <div className="flex justify-between items-end border-b border-white/10 pb-3">
+                                  <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
+                                    <Activity size={12} className="text-blue-400" /> CRIATIVIDADE (TEMP)
+                                  </label>
+                                  <span className="text-[15px] font-mono font-bold text-blue-400">{draftTemperature.toFixed(1)}</span>
                                 </div>
-                                <div className="space-y-2">
-                                  <input type="range" min="0" max="1.5" step="0.1" value={draftTemperature} onChange={(e) => setDraftTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 transition-all hover:accent-blue-400" />
-                                  <div className="flex justify-between text-[8px] font-black text-[#5f6368] uppercase tracking-widest"><span>Precisão</span><span>Criatividade</span></div>
+                                <div className="space-y-4 pt-4">
+                                  <input type="range" min="0" max="2.0" step="0.1" value={draftTemperature} onChange={(e) => setDraftTemperature(parseFloat(e.target.value))} className="w-full h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-blue-500 transition-all hover:accent-blue-400" />
+                                  <div className="flex justify-between text-[9px] font-black text-[#5f6368] uppercase tracking-widest">
+                                    <span className={cn(draftTemperature < 0.7 ? "text-blue-400" : "")}>Exato (0.0)</span>
+                                    <span className={cn(draftTemperature >= 0.7 && draftTemperature <= 1.2 ? "text-blue-400" : "")}>Balanceado (1.0)</span>
+                                    <span className={cn(draftTemperature > 1.2 ? "text-blue-400" : "")}>Caótico (2.0)</span>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="space-y-1 mt-2">
-                                <p className="text-[10px] text-white/50 leading-tight uppercase font-bold tracking-tight">Controle de Variação de Resposta</p>
-                                <p className="text-[10px] text-[#5f6368] leading-tight uppercase font-bold opacity-80">Alterne entre o rigor de códigos técnicos (0.0) e a fluidez de escrita criativa (1.0+).</p>
+                              <div className="px-4 py-3 bg-blue-500/10 rounded-xl border border-blue-500/20 relative z-10">
+                                <p className="text-[11px] text-blue-200/70 leading-relaxed font-medium">Alta criatividade gera ideias inesperadas. Valores exatos aproximam-se de códigos e lógicas precisas.</p>
                               </div>
                             </div>
                           </div>
                         </div>
+
                         <div className="space-y-6">
-                          <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                             <div className="space-y-0.5"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Biblioteca Local</h3><p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest">Endpoints pré-configurados</p></div>
-                             <button onClick={() => { setEditingPreset(null); setPresetForm({ model: draftSelectedModel, apiKey: draftApiKey }); setIsPresetFormOpen(true); }} className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded uppercase tracking-widest">Novo Preset</button>
+                          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                             <div className="space-y-1.5 border-l-2 border-white/10 pl-4"><h3 className="text-[14px] font-black text-white uppercase tracking-widest">Biblioteca Local</h3><p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest">Endpoints Pré-Configurados</p></div>
+                             <button onClick={() => { setEditingPreset(null); setPresetForm({ apiKey: draftApiKey }); setIsPresetFormOpen(true); }} className="text-[10px] font-black bg-blue-500 hover:bg-blue-400 text-white rounded-lg px-4 py-2 transition-colors uppercase tracking-widest flex items-center gap-2"><Plus size={14} /> Novo Preset</button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
                             {apiPresets.map((preset) => (
-                              <div key={preset.id} onClick={() => setDraftActivePresetId(preset.id)} className={cn("group py-3 px-1 transition-all cursor-pointer flex flex-col gap-1 relative", draftActivePresetId === preset.id ? "border-l-2 border-white opacity-100 pl-3" : "border-l-2 border-transparent opacity-30 hover:opacity-100 hover:pl-3 transition-all")}>
-                                <span className="text-[11px] font-black text-white uppercase tracking-wider">{preset.name}</span>
-                                <span className="text-[9px] text-[#5f6368] font-mono tracking-tighter truncate uppercase">{preset.model}</span>
-                                <div className="absolute top-3 right-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={(e) => { e.stopPropagation(); setEditingPreset(preset); setPresetForm(preset); setIsPresetFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={12} /></button>
-                                  <button onClick={(e) => deletePreset(preset.id, e)} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={12} /></button>
+                              <div key={preset.id} onClick={() => setDraftActivePresetId(preset.id)} className={cn("group transition-all cursor-pointer flex flex-col gap-3 p-4 rounded-xl border", draftActivePresetId === preset.id ? "bg-blue-500/10 border-blue-500/40" : "bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]")}>
+                                <div className="flex items-center justify-between">
+                                  <span className={cn("text-[13px] font-black uppercase tracking-wider", draftActivePresetId === preset.id ? "text-white" : "text-white/70")}>{preset.name}</span>
+                                  {draftActivePresetId === preset.id && <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] animate-pulse" />}
+                                </div>
+                                <div className="flex items-center gap-3 mt-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={(e) => { e.stopPropagation(); setEditingPreset(preset); setPresetForm(preset); setIsPresetFormOpen(true); }} className="text-[10px] font-bold text-white hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center gap-1"><Edit2 size={10} /> Editar</button>
+                                  <button onClick={(e) => deletePreset(preset.id, e)} className="text-[10px] font-bold text-white hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1"><Trash2 size={10} /> Excluir</button>
                                 </div>
                               </div>
                             ))}
                           </div>
+                          
                           {isPresetFormOpen && (
-                            <div className="border-t border-white/5 pt-8 animate-in slide-in-from-top-2 duration-300">
-                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                                 <div className="space-y-6">
-                                   <div className="space-y-2"><label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Identificação</label><Input placeholder="Nome da Instância" value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" /></div>
+                            <div className="p-6 rounded-2xl bg-[#141517] border border-white/10 mt-6 animate-in slide-in-from-bottom-4 duration-300">
+                               <div className="max-w-md space-y-6">
+                                 <div className="space-y-4">
                                    <div className="space-y-2">
-                                     <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">API Key</label>
-                                     <div className="relative">
-                                       <Input type={showPresetApiKey ? "text" : "password"} placeholder="••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30 pr-16" />
-                                       <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center pr-1 gap-0.5">
+                                     <label className="text-[10px] font-black text-white/60 uppercase tracking-widest">Identificador do Preset</label>
+                                     <Input placeholder="Ex: Produção, Amb. Testes..." value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-black/30 border-white/10 rounded-xl h-11 px-4 text-[13px] text-white focus-visible:ring-1 focus-visible:border-blue-400 placeholder:text-white/20 transition-all" />
+                                   </div>
+                                   <div className="space-y-2">
+                                     <label className="text-[10px] font-black text-white/60 uppercase tracking-widest">Chave de API</label>
+                                     <div className="relative group">
+                                       <Input type={showPresetApiKey ? "text" : "password"} placeholder="••••••••••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-black/30 border-white/10 rounded-xl h-11 px-4 text-[13px] text-white focus-visible:ring-1 focus-visible:border-blue-400 placeholder:text-white/20 transition-all pr-20" />
+                                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <button type="button" onClick={async () => {
                                             try {
                                               const text = await navigator.clipboard.readText();
@@ -1747,32 +1869,19 @@ export default function App() {
                                             } catch(e) {
                                               console.error('Failed to read clipboard', e);
                                             }
-                                          }} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title="Colar">
+                                          }} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Colar">
                                             <ClipboardPaste size={14} />
                                           </button>
-                                          <button type="button" onClick={() => setShowPresetApiKey(s => !s)} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title={showPresetApiKey ? "Ocultar" : "Mostrar"}>
+                                          <button type="button" onClick={() => setShowPresetApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showPresetApiKey ? "Ocultar" : "Mostrar"}>
                                             {showPresetApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                                           </button>
                                        </div>
                                      </div>
                                    </div>
-                                   <div className="space-y-2">
-                                     <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Modelo</label>
-                                     <Select value={presetForm.model || ''} onValueChange={(val) => val && setPresetForm({ ...presetForm, model: val })}>
-                                       <SelectTrigger className="bg-transparent border-0 border-b border-white/10 h-8 rounded-none px-1 text-[11px] focus:ring-0 focus:border-white/30 text-white"><SelectValue placeholder="Selecione um modelo..." /></SelectTrigger>
-                                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                         <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
-                                         <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
-                                         <SelectItem value="gemini-2.5-flash-thinking">Gemini 2.5 Flash Thinking</SelectItem>
-                                         <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</SelectItem>
-                                         <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Exp</SelectItem>
-                                       </SelectContent>
-                                     </Select>
-                                   </div>
                                  </div>
-                                 <div className="flex items-end justify-end gap-8 mb-2">
-                                   <button onClick={() => setIsPresetFormOpen(false)} className="text-[10px] font-black text-[#8e918f] hover:text-white uppercase tracking-widest">Descartar</button>
-                                   <button onClick={addOrUpdatePreset} className="text-[10px] font-black text-white hover:bg-white hover:text-black transition-all uppercase tracking-widest border border-white/20 px-8 py-2 rounded">Gravar</button>
+                                 <div className="flex items-center gap-4 pt-2">
+                                   <button onClick={addOrUpdatePreset} className="text-[11px] font-black text-[#001d35] bg-[#c2e7ff] hover:bg-[#b5cffb] transition-colors uppercase tracking-widest px-6 py-2.5 rounded-xl">Gravar Preset</button>
+                                   <button onClick={() => setIsPresetFormOpen(false)} className="text-[11px] font-black text-white/50 hover:text-white transition-colors uppercase tracking-widest px-4 py-2.5">Descartar</button>
                                  </div>
                                </div>
                             </div>
@@ -1783,40 +1892,71 @@ export default function App() {
                   )}
 
                   {settingsTab === 'agent' && (
-                    <div className="space-y-6 animate-in fade-in duration-400">
-                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"><ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />VOLTAR</button>
-                      <div className="space-y-8">
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors">
+                        <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
+                        VOLTAR
+                      </button>
+                      <div className="space-y-10">
                         <div className="space-y-6">
-                          <div className="flex items-center justify-between border-l border-white/10 pl-4">
-                             <div className="space-y-0.5"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Identidade</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Perfis configurados</p></div>
-                             <button onClick={() => { setEditingAgent(null); setAgentForm({ iconName: 'Brain', color: 'bg-zinc-700' }); setIsAgentFormOpen(true); }} className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded-lg uppercase tracking-widest">NOVO</button>
+                          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                             <div className="space-y-1.5 border-l-2 border-purple-500/50 pl-4">
+                               <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Identidade IA</h3>
+                               <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Perfis e Capacidades Cognitivas</p>
+                             </div>
+                             <button onClick={() => { setEditingAgent(null); setAgentForm({ iconName: 'Brain', color: 'bg-indigo-500' }); setIsAgentFormOpen(true); }} className="text-[10px] font-black bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 transition-colors uppercase tracking-widest flex items-center gap-2"><Plus size={14} /> Novo Perfil</button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-1">
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
                             {allAgents.map(agent => {
                               const isDefault = AGENTS.some(a => a.id === agent.id);
                               const isSelected = draftActiveAgentId === agent.id;
                               return (
-                                <div key={agent.id} onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} className={cn("transition-all cursor-pointer flex items-center gap-3 group relative py-1.5", isSelected ? "opacity-100 pl-2 border-l border-blue-500" : "opacity-40 hover:opacity-100 hover:pl-2 border-l border-transparent transition-all")}>
-                                  <div className={cn("w-7 h-7 rounded flex items-center justify-center text-white shrink-0 transition-all", isSelected ? "bg-white text-black" : "bg-white/[0.05] text-[#5f6368] border border-white/5")}>
-                                       <AgentIcon iconName={agent.iconName} size={12} />
-                                  </div>
-                                  <div className="flex-1 min-w-0"><p className="text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">{agent.name}</p><p className="text-[8px] text-[#5f6368] font-bold uppercase tracking-widest leading-tight">{isDefault ? 'CORE' : 'CUSTOM'}</p></div>
-                                  {!isDefault && (
-                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={10} /></button>
-                                      <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={10} /></button>
+                                <div key={agent.id} onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} className={cn("group transition-all cursor-pointer flex flex-col p-5 rounded-2xl border relative overflow-hidden", isSelected ? "bg-purple-500/10 border-purple-500/40" : "bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]")}>
+                                  
+                                  {isSelected && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 to-blue-500" />}
+                                  
+                                  <div className="flex items-center gap-4 mb-4">
+                                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-inner", isSelected ? agent.color + " text-white" : "bg-white/5 text-[#8e918f]")}>
+                                         <AgentIcon iconName={agent.iconName} size={20} />
                                     </div>
-                                  )}
+                                    <div className="flex flex-col overflow-hidden">
+                                      <span className="text-[14px] font-black text-white uppercase tracking-wider truncate">{agent.name}</span>
+                                      <span className={cn("text-[9px] font-bold uppercase tracking-widest leading-none mt-1 inline-block px-2 py-0.5 rounded-full w-fit", isDefault ? "bg-white/10 text-white/70" : "bg-purple-500/20 text-purple-300")}>{isDefault ? 'SYSTEM CORE' : 'USER CUSTOM'}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  <p className="text-[11px] text-white/50 font-medium leading-relaxed line-clamp-2 mb-4">{agent.shortDescription || "Sem descrição disponível."}</p>
+                                  
+                                  <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity">
+                                    {!isDefault ? (
+                                      <div className="flex items-center gap-4 w-full">
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }} className="text-[10px] font-bold text-white hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center gap-1.5"><Edit2 size={12} /> Editar</button>
+                                        <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }} className="text-[10px] font-bold text-white hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1.5 ml-auto"><Trash2 size={12} /> Excluir</button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[9px] font-black text-white/30 uppercase tracking-widest flex items-center gap-1.5"><Shield size={12} /> Protegido</span>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
                         </div>
-                        <div className="space-y-5">
-                          <div className="space-y-1 border-l border-white/10 pl-4"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Procedimentos</h3><p className="text-[10px] text-[#8e918f] font-bold uppercase tracking-widest">Diretrizes de base do sistema</p></div>
-                          <div className="relative group">
-                            <Textarea value={draftSystemPrompt} onChange={(e) => setDraftSystemPrompt(e.target.value)} className="bg-white/[0.01] border border-white/5 focus:border-blue-500/50 min-h-[120px] text-[#f1f3f4] rounded-xl font-mono text-[11px] p-4 leading-relaxed resize-none shadow-none focus-visible:ring-1 focus-visible:ring-blue-500/20 transition-all scrollbar-hide" placeholder="Defina as diretrizes fundamentais..." />
-                            <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[8px] font-black text-[#5f6368] uppercase tracking-widest select-none pointer-events-none group-focus-within:text-blue-400 transition-colors"><div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />MODO_IA</div>
+                        
+                        <div className="space-y-4 pt-6">
+                          <div className="space-y-1.5 border-l-2 border-white/10 pl-4"><h3 className="text-[14px] font-black text-white uppercase tracking-widest">Procedimento Base (System Prompt)</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Instruções para o perfil selecionado</p></div>
+                          <div className="relative group bg-black/20 rounded-2xl border border-white/5 overflow-hidden transition-all focus-within:border-purple-500/50 focus-within:bg-black/40">
+                            <Textarea 
+                              value={draftSystemPrompt} 
+                              onChange={(e) => setDraftSystemPrompt(e.target.value)} 
+                              className="bg-transparent border-0 focus:ring-0 min-h-[250px] text-[#e3e3e3] rounded-none font-sans text-[14px] px-6 py-6 leading-relaxed resize-y scrollbar-hide placeholder:text-white/20" 
+                              placeholder="Defina as diretrizes fundamentais e operacionais..." 
+                            />
+                            <div className="absolute top-4 right-4 flex items-center gap-2 text-[9px] font-black bg-white/5 px-2 py-1 rounded-sm text-white/50 uppercase tracking-widest select-none pointer-events-none group-focus-within:text-purple-300 transition-colors">
+                              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                              PROMPT ATIVO
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1824,26 +1964,48 @@ export default function App() {
                   )}
 
                   {settingsTab === 'security' && (
-                    <div className="space-y-6 animate-in fade-in duration-400">
+                    <div className="space-y-8 animate-in fade-in duration-500">
                       <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"><ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />VOLTAR</button>
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <div className="space-y-1 border-l border-white/10 pl-4"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Privacidade</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Dados e sigilo</p></div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
+                      <div className="space-y-10">
+                        <div className="space-y-8">
+                          <div className="space-y-1.5 border-l-2 border-emerald-500/50 pl-4">
+                            <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Segurança & Privacidade</h3>
+                            <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Estrutura de dados e sigilo do sistema</p>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {[
                               { title: 'Offline-First', desc: 'Dados e logs confinados ao armazenamento local seguro do seu navegador.', icon: Shield, color: 'text-blue-400' },
-                              { title: 'Criptografia', desc: 'Comunicação com os motores Gemini utiliza TLS 1.3 para blindagem total.', icon: Key, color: 'text-blue-400' },
-                              { title: 'Zero Telemetria', desc: 'Sem rastreamento, sem telemetria e sem scripts de terceiros.', icon: Activity, color: 'text-blue-400' },
-                              { title: 'Expurgo', desc: 'Ao resetar, ocorre uma aniquilação completa de todas as chaves e memórias.', icon: Trash2, color: 'text-blue-400' }
+                              { title: 'Protocolo TLS', desc: 'Comunicação direta com os motores Gemini utiliza TLS 1.3 para blindagem total em trânsito.', icon: Key, color: 'text-emerald-400' },
+                              { title: 'Zero Telemetria', desc: 'Sem rastreamento de uso, sem telemetria embutida e sem scripts de captura de terceiros.', icon: Activity, color: 'text-purple-400' },
+                              { title: 'Expurgo Absoluto', desc: 'Ao iniciar o reset, ocorre uma aniquilação completa de todas as chaves e memórias locais.', icon: Trash2, color: 'text-red-400' }
                             ].map((item, i) => (
-                              <div key={i} className="space-y-2 group bg-white/[0.01] p-4 rounded-xl border border-white/5 hover:bg-white/[0.02] transition-colors"><div className="flex items-center gap-2"><div className={cn("w-7 h-7 flex items-center justify-center rounded bg-white/[0.03] border border-white/5 transition-transform", item.color)}><item.icon size={12} /></div><h4 className="text-[12px] font-black text-white uppercase tracking-widest leading-none">{item.title}</h4></div><p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold tracking-tight group-hover:text-[#8e918f] transition-colors">{item.desc}</p></div>
+                              <div key={i} className="flex gap-5 p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group">
+                                <div className={cn("p-3 rounded-xl bg-black/20 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", item.color)}>
+                                  <item.icon size={24} strokeWidth={2} />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <h4 className="text-[13px] font-black text-white uppercase tracking-widest leading-none mt-1">{item.title}</h4>
+                                  <p className="text-[11px] text-white/50 leading-relaxed font-medium transition-colors group-hover:text-white/70">{item.desc}</p>
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
-                        <div className="pt-6 border-t border-white/5">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-5 py-6 bg-red-500/[0.02] rounded-2xl border border-red-500/10 shadow-xl shadow-red-500/5">
-                            <div className="space-y-1"><h4 className="text-[14px] font-black text-red-500 uppercase tracking-widest">Célula de Expurgo</h4><p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold max-w-sm">Elimina chaves, presets e histórico sem deixar rastros digitais locais.</p></div>
-                            <button onClick={() => { if(confirm('Terminar permanentemente todas as configurações locais?')) { setChatHistory([]); resetChat(); setApiKey(''); setApiPresets([]); setActivePresetId(null); localStorage.clear(); window.location.reload(); } }} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white transition-all text-[11px] font-black uppercase tracking-widest px-8 py-2.5 rounded-lg border border-red-500/20 whitespace-nowrap">Resetar Nexus</button>
+                        
+                        <div className="pt-8 border-t border-white/10">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 p-6 rounded-2xl bg-red-500/5 border border-red-500/20 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-8 opacity-5">
+                              <Trash2 size={120} />
+                            </div>
+                            <div className="space-y-3 relative z-10 max-w-lg">
+                              <h4 className="text-[14px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
+                                <Shield size={16} /> Protócolo de Expurgo
+                              </h4>
+                              <p className="text-[12px] text-red-100/50 leading-relaxed font-medium">Acionar este mecanismo aniquila instantânea e permanentemente todas as suas chaves de API, presets salvos, histórico de conversões e preferências do sistema. Não há como reverter.</p>
+                            </div>
+                            <button onClick={() => { if(confirm('⚠️ TERMINAR PERMANENTEMENTE TODAS AS CONFIGURAÇÕES E DADOS LOCAIS?\n\nESTA AÇÃO É IRREVERSÍVEL.')) { setChatHistory([]); resetChat(); setApiKey(''); setApiPresets([]); setActivePresetId(null); localStorage.clear(); window.location.reload(); } }} className="relative z-10 bg-red-500 hover:bg-red-600 text-white transition-all transform hover:-translate-y-0.5 shadow-[0_0_20px_rgba(239,68,68,0.3)] text-[12px] font-black uppercase tracking-widest px-8 py-3.5 rounded-xl whitespace-nowrap">
+                              Resetar Nexus
+                            </button>
                           </div>
                         </div>
                       </div>
