@@ -1160,14 +1160,14 @@ export default function App() {
           >
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center py-4 px-2 text-center animate-in fade-in duration-700 w-full min-h-0">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] bg-blue-500/10 flex items-center justify-center mb-3 border border-blue-500/20 shrink-0">
-                  <Brain size={16} className="text-blue-400" />
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-3 border border-blue-500/20 shrink-0">
+                  <Brain size={20} className="text-blue-400" />
                 </div>
-                <h2 className="text-[12px] sm:text-[13px] font-black text-white uppercase tracking-widest mb-1 sm:mb-1.5 shrink-0">NEXUS IA</h2>
-                <p className="text-[9px] sm:text-[10px] font-bold text-[#8e918f] max-w-[260px] mb-4 sm:mb-6 leading-relaxed uppercase tracking-widest text-center shrink-0">
+                <h2 className="text-[13px] sm:text-[14px] font-black text-white uppercase tracking-widest mb-1.5 shrink-0">NEXUS IA</h2>
+                <p className="text-[10px] sm:text-[11px] font-medium text-[#8e918f] max-w-sm mb-4 leading-relaxed uppercase tracking-widest text-center shrink-0">
                   Descreva o seu app e o agente mais adequado será alocado.
                 </p>
-                <div className="flex flex-col gap-2 w-full max-w-lg overflow-y-auto pr-1 pb-4 custom-scrollbar flex-shrink">
+                <div className="grid grid-cols-1 gap-2 w-full max-w-lg shrink-0 pb-2">
                   {[
                     { label: "App de Clima Responsivo", prompt: "Crie um aplicativo de previsão do tempo responsivo com gráficos de temperatura dos últimos dias e visualização atual.", icon: Layout, color: "text-pink-400" },
                     { label: "Dashboard Financeiro", prompt: "Construa um dashboard financeiro moderno contendo cards de resumo, gráfico de despesas e receitas.", icon: Code, color: "text-blue-400" },
@@ -1177,12 +1177,12 @@ export default function App() {
                     <button 
                       key={i} 
                       onClick={() => setInputMessage(s.prompt)}
-                      className="group flex items-center text-left py-2.5 px-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all cursor-pointer w-full relative overflow-hidden"
+                      className="group flex items-center text-left py-2 px-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] hover:border-white/20 transition-all cursor-pointer w-full relative overflow-hidden gap-3"
                     >
-                      <s.icon size={12} className={cn("mr-2.5 shrink-0", s.color)} />
-                      <div className="flex flex-col min-w-0">
-                         <span className="text-[10px] font-black text-white/90 uppercase tracking-widest truncate leading-none mb-1">{s.label}</span>
-                         <span className="text-[9px] text-[#8e918f] font-medium truncate opacity-70 group-hover:opacity-100 transition-opacity">"{s.prompt}"</span>
+                      <s.icon size={14} className={cn("shrink-0", s.color)} />
+                      <div className="flex flex-col min-w-0 flex-1">
+                         <span className="text-[10px] sm:text-[11px] font-black text-white/90 uppercase tracking-widest truncate leading-none mb-1">{s.label}</span>
+                         <span className="text-[9px] sm:text-[10px] text-[#8e918f] font-medium truncate opacity-70 group-hover:opacity-100 transition-opacity">"{s.prompt}"</span>
                       </div>
                     </button>
                   ))}
