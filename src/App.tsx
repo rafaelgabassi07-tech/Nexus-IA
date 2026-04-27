@@ -4,8 +4,9 @@ import {
   Paperclip, Image as ImageIcon, Code, Terminal, Layout, Hexagon,
   Plus, MessageSquare, Trash2, X,
   Users, Edit2, Activity, Shield, Sparkles, Brain,
-  ArrowLeft, Copy, Check, ListChecks,
-  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen, ChevronDown
+  ArrowLeft, Copy, Check,
+  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen, ChevronDown,
+  Wrench, FileText, Lightbulb
 } from 'lucide-react';
 
 import { FileTree } from './components/FileTree';
@@ -52,6 +53,7 @@ export type Message = {
   role: 'user' | 'model';
   content: string;
   isError?: boolean;
+  steps?: TechnicalStep[];
 };
 
 export type APIPreset = {
@@ -227,27 +229,7 @@ const extractFilesFromMarkdown = (content: string) => {
 };
 
 export default function App() {
-  const [isRunning, setIsRunning] = useState(false);
-  const [runTime, setRunTime] = useState(0);
-
   const abortControllerRef = useRef<AbortController | null>(null);
-  const handleCancel = () => {
-    abortControllerRef.current?.abort();
-    setIsLoading(false);
-    setIsRunning(false);
-  };
-
-  useEffect(() => {
-    let interval: any;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setRunTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      setRunTime(0);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning]);
 
   const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
     if (typeof window !== 'undefined') {
@@ -306,7 +288,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
   const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-2.0-flash'));
-  const [temperature, setTemperature] = useState<number>(() => {
+   const [temperature, setTemperature] = useState<number>(() => {
     return safeStorageNumber('nexus_temperature', 0.7);
   });
   const [systemPrompt, setSystemPrompt] = useState(() => {
@@ -337,6 +319,25 @@ export default function App() {
   // Draft states for settings modal
   const [draftApiKey, setDraftApiKey] = useState(apiKey);
   const [draftSelectedModel, setDraftSelectedModel] = useState(selectedModel);
+
+  useEffect(() => {
+    // Lista de modelos suportados - Por favor, NÃO remova para evitar resets automáticos indesejados
+    const validModels = [
+      'gemini-3-flash-preview', 
+      'gemini-3-flash-lite-preview', 
+      'gemini-2.5-flash', 
+      'gemini-2.0-flash', 
+      'gemini-2.0-flash-lite', 
+      'gemini-1.5-flash', 
+      'gemini-1.5-pro', 
+      'gemini-1.0-pro'
+    ];
+    if (!validModels.includes(selectedModel)) {
+      setSelectedModel('gemini-2.0-flash');
+      setDraftSelectedModel('gemini-2.0-flash');
+      safeLocalStorageSet('nexus_selected_model', 'gemini-2.0-flash');
+    }
+  }, [selectedModel, setDraftSelectedModel]);
   const [draftTemperature, setDraftTemperature] = useState(temperature);
   const [draftSystemPrompt, setDraftSystemPrompt] = useState(systemPrompt);
   const [draftActiveAgentId, setDraftActiveAgentId] = useState(activeAgentId);
@@ -462,29 +463,6 @@ export default function App() {
     }
   };
   
-  const [activeStep, setActiveStep] = useState<number>(0);
-  const loadingSteps = useMemo(() => [
-    { label: 'Analysing core requirements...', icon: Brain, duration: 1500 },
-    { label: 'Inference context synthesis', icon: MessageSquare, duration: 2000 },
-    { label: 'Architecting system components', icon: Sparkles, duration: 2500 },
-    { label: 'Executing neural code synthesis', icon: Code, duration: 4000 },
-    { label: 'Static verification & linting', icon: Shield, duration: 1800 },
-    { label: 'Assembling artifacts', icon: ListChecks, duration: 1200 },
-  ], []);
-
-  useEffect(() => {
-    if (isLoading) {
-      setActiveStep(0);
-      const sequence = async () => {
-        for (let i = 0; i < loadingSteps.length; i++) {
-          if (!isLoading) break;
-          setActiveStep(i);
-          await new Promise(resolve => setTimeout(resolve, loadingSteps[i].duration));
-        }
-      };
-      sequence();
-    }
-  }, [isLoading, loadingSteps]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -952,7 +930,6 @@ export default function App() {
     setInputMessage('');
     setAttachedFiles([]);
     setIsLoading(true);
-    setIsRunning(true);
 
     abortControllerRef.current = new AbortController();
 
@@ -962,11 +939,31 @@ export default function App() {
     const maxAttempts = Math.max(1, apiPresets.length);
 
     const messageId = generateId();
+    const initialSteps: TechnicalStep[] = [
+      { id: generateId(), label: 'Conectando...', status: 'running', icon: Terminal }
+    ];
+
     setMessages(prev => [...prev, {
       id: messageId,
       role: 'model',
-      content: ''
+      content: '',
+      steps: initialSteps
     }]);
+
+    let steps = [...initialSteps];
+    const updateSteps = (newSteps: TechnicalStep[]) => {
+      steps = [...newSteps];
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, steps: [...newSteps] } : m));
+    };
+
+    const startTime = Date.now();
+    let lastThoughtUpdate = 0;
+    let hasStartedThinking = false;
+    let hasStartedCoding = false;
+    let thoughtStepId = '';
+    let lastContentLength = 0;
+    const detectedFiles = new Set<string>();
+    const detectedCommands = new Set<string>();
 
     try {
       while (attemptsCount < maxAttempts) {
@@ -1011,6 +1008,17 @@ export default function App() {
               if (done) break;
 
               buffer += decoder.decode(value, { stream: true });
+
+              if (!hasStartedThinking && buffer.length > 0) {
+                hasStartedThinking = true;
+                thoughtStepId = generateId();
+                const connectStep = { ...steps[0], status: 'success' as const };
+                updateSteps([
+                  connectStep,
+                  { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: Lightbulb }
+                ]);
+              }
+
               const parts = buffer.split('\n\n');
               buffer = parts.pop() || "";
 
@@ -1031,6 +1039,53 @@ export default function App() {
                   }
                   if (parsed.text) {
                     fullResponse += parsed.text;
+                    
+                    // Real-time step parsing logic
+                    if (hasStartedThinking && !hasStartedCoding && Date.now() - lastThoughtUpdate > 1000) {
+                      lastThoughtUpdate = Date.now();
+                      const elapsed = Math.round((Date.now() - startTime) / 1000);
+                      updateSteps(steps.map(s => 
+                        s.id === thoughtStepId ? { ...s, label: `Pensando... (${elapsed}s)` } : s
+                      ));
+                    }
+
+                    // Heuristic: Detect file reading/accessing in the text
+                    const newContent = fullResponse.slice(lastContentLength);
+                    if (newContent.length > 5) {
+                      const fileMatch = newContent.match(/(?:lendo|read|acessando|viewing)\s+arquivo\s+`?([\w\.\/\-]+)`?/i);
+                      if (fileMatch && !detectedFiles.has(fileMatch[1])) {
+                        detectedFiles.add(fileMatch[1]);
+                        const currentSteps = [...steps];
+                        const last = currentSteps[currentSteps.length - 1];
+                        if (last.status === 'running') last.status = 'success';
+                        currentSteps.push({ id: generateId(), label: `Leu arquivo: ${fileMatch[1]}`, status: 'success', icon: FileText });
+                        updateSteps(currentSteps);
+                      }
+
+                      const cmdMatch = newContent.match(/(?:executando|running|executing)\s+comando\s+`?([\w\s\.\/\-\_]+)`?/i);
+                      if (cmdMatch && !detectedCommands.has(cmdMatch[1])) {
+                        detectedCommands.add(cmdMatch[1]);
+                        const currentSteps = [...steps];
+                        const last = currentSteps[currentSteps.length - 1];
+                        if (last.status === 'running') last.status = 'success';
+                        currentSteps.push({ id: generateId(), label: `Executou comando: ${cmdMatch[1].trim()}`, status: 'success', icon: Terminal });
+                        updateSteps(currentSteps);
+                      }
+                      lastContentLength = fullResponse.length;
+                    }
+
+                    if (!hasStartedCoding && fullResponse.includes('```')) {
+                      hasStartedCoding = true;
+                      const thoughtDuration = Math.round((Date.now() - startTime) / 1000);
+                      const updatedSteps = steps.map(s => 
+                        s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
+                      );
+                      updateSteps([
+                        ...updatedSteps,
+                        { id: generateId(), label: 'Gerando código e componentes...', status: 'running', icon: Code }
+                      ]);
+                    }
+
                     setMessages(prev => prev.map(m => 
                       m.id === messageId ? { ...m, content: fullResponse } : m
                     ));
@@ -1111,7 +1166,18 @@ export default function App() {
       });
     } finally {
       setIsLoading(false);
-      setIsRunning(false);
+      // Finalize steps if not already done using the scoped update logic
+      const finalSteps = steps.map(s => ({ 
+        ...s, 
+        status: s.status === 'running' ? 'success' : s.status 
+      } as TechnicalStep));
+      
+      const lastStep = finalSteps[finalSteps.length - 1];
+      if (lastStep && lastStep.status === 'success' && !finalSteps.some(s => s.label === 'Build verificado')) {
+         finalSteps.push({ id: generateId(), label: 'Build verificado', status: 'success', icon: Wrench });
+      }
+
+      updateSteps(finalSteps);
     }
   };
 
@@ -1330,8 +1396,9 @@ export default function App() {
                    <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                   <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                   <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
                    <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                   <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                  </SelectContent>
                </Select>
              </div>
@@ -1349,55 +1416,7 @@ export default function App() {
           activeTab !== 'chat' && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          {/* Technical Execution Bar (Google AI Studio Style - Discreet) */}
-          <AnimatePresence>
-            {isLoading && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mx-5 my-2 p-3 border border-[#333538] bg-[#1e1e1f]/40 backdrop-blur-md rounded-xl overflow-hidden z-20 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <motion.div 
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                      className="w-4 h-4 rounded-full border-2 border-[#4285f4]/20 border-t-[#4285f4]"
-                    />
-                    <Sparkles size={8} className="absolute inset-0 m-auto text-[#4285f4]" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-[#e3e3e3] leading-none uppercase tracking-widest">{loadingSteps[activeStep].label}</span>
-                    <span className="text-[9px] text-[#5f6368] font-medium mt-1 uppercase tracking-tighter">{selectedModel} • {runTime}s</span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-1.5">
-                   {loadingSteps.map((_, i) => (
-                     <div key={i} className={cn(
-                       "w-1.5 h-1.5 rounded-full transition-colors duration-500",
-                       i < activeStep ? "bg-emerald-500/40" : i === activeStep ? "bg-blue-500 animate-pulse" : "bg-[#333538]"
-                     )} />
-                   ))}
-                   <div className="w-px h-3 bg-white/10 mx-1" />
-                   <button 
-                    onClick={handleCancel}
-                    className="flex items-center gap-1.5 h-6 px-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md text-[9px] font-black uppercase tracking-widest transition-all"
-                   >
-                     <motion.span 
-                       initial={{ opacity: 0 }} 
-                       animate={{ opacity: 1 }}
-                       className="flex items-center gap-1.5"
-                     >
-                       <X size={10} strokeWidth={3} />
-                       Parar
-                     </motion.span>
-                   </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Technical Execution Bar removed to be integrated in chat as per user request */}
 
           {/* Chat Log */}
           <div 
@@ -1460,38 +1479,111 @@ export default function App() {
                          </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-[14px] leading-[1.6] text-[#e3e3e3] pr-2">
-                        {/* Action History Visual (Google AI Studio Style) - Discrete */}
-                        {msg.role === 'model' && hasFiles && !msg.isError && (
-                          <div className="mb-3">
-                            <details className="group/accordion">
-                              <summary className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#282a2d]/60 border border-[#333538]/60 hover:bg-[#333538] transition-colors cursor-pointer list-none select-none text-[11px] font-medium text-[#c4c7c5]">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
-                                <span>{generatedFiles.length} arquivo(s) modificado(s)</span>
+                        {msg.role === 'model' && msg.steps && (
+                          <div className="mb-4 w-full max-w-2xl px-1">
+                            <details className="group/accordion border border-white/5 bg-white/[0.02] rounded-xl overflow-hidden shadow-sm" open={msg.steps.some(s => s.status === 'running')}>
+                              <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none text-[13px] font-semibold text-[#e3e3e3] hover:bg-white/[0.04] transition-all bg-white/[0.01]">
+                                <div className="relative shrink-0 flex items-center justify-center">
+                                  {msg.steps.some(s => s.status === 'running') ? (
+                                    <div className="relative">
+                                      <motion.div 
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                        className="w-4 h-4 rounded-full border-b-2 border-blue-400"
+                                      />
+                                      <Sparkles size={8} className="absolute inset-0 m-auto text-blue-400 opacity-80 animate-pulse" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-4 h-4 rounded-full bg-blue-400/10 flex items-center justify-center">
+                                      <Check size={10} className="text-blue-400" strokeWidth={3} />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="flex-1 tracking-tight text-[#e3e3e3]/90">
+                                  {msg.steps.some(s => s.status === 'running') ? 'Executando Tarefas' : 'Etapas de Execução'}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {msg.steps.some(s => s.status === 'running') && (
+                                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-400/10 border border-blue-400/20">Working</span>
+                                  )}
+                                  <ChevronDown size={14} className="text-[#8e918f]/50 transition-transform group-open/accordion:rotate-180 shrink-0" />
+                                </div>
                               </summary>
                               
-                              <div className="mt-2 pl-3 pb-2 pt-1 border-l-2 border-[#333538] ml-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
-                                {[
-                                  { label: `Geração concluída em ${runTime}s`, icon: Brain },
-                                  { label: `Leu ${messages.length} mensagens de contexto`, icon: MessageSquare },
-                                  { label: `Editou ${generatedFiles.length} arquivo(s)`, icon: Edit2, files: generatedFiles.map(f => f.name) },
-                                ].map((step, i) => (
-                                  <div key={i} className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                      <step.icon size={11} className="text-[#8e918f]" />
-                                      <span className="text-[12px] text-[#8e918f] font-medium">{step.label}</span>
-                                      <Check size={10} className="text-emerald-500/60" />
+                              <div className="px-5 pb-5 pt-3 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-300 relative">
+                                {/* Vertical line connector */}
+                                <div className="absolute left-[27px] top-4 bottom-8 w-px bg-white/5 z-0" />
+                                
+                                {msg.steps.map((step, i) => (
+                                  <div key={i} className="flex items-center gap-4 py-2 group/step relative z-10">
+                                    <div className={cn(
+                                      "shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-all duration-500",
+                                      step.status === 'running' 
+                                        ? "bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]" 
+                                        : step.status === 'success' 
+                                          ? "bg-white/[0.03] border-white/5 text-[#8e918f]" 
+                                          : "bg-transparent border-white/5 text-[#5f6368]"
+                                    )}>
+                                      <step.icon size={12} strokeWidth={2} />
                                     </div>
-                                    {step.files && (
-                                      <div className="flex flex-wrap gap-1.5 pl-5 pb-1">
-                                        {step.files.map((f, idx) => (
-                                          <span key={idx} className="text-[10px] font-mono bg-[#1a1b1e] text-[#8e918f] px-1.5 py-0.5 rounded border border-[#333538]">
-                                            {f}
-                                          </span>
+                                    <div className="flex-1 flex flex-col">
+                                      <span className={cn(
+                                        "text-[13px] font-medium transition-colors",
+                                        step.status === 'running' ? "text-white" : step.status === 'success' ? "text-[#8e918f]" : "text-[#5f6368]"
+                                      )}>
+                                        {step.label}
+                                      </span>
+                                    </div>
+                                    {step.status === 'running' && (
+                                      <div className="flex gap-1">
+                                        {[0, 1, 2].map(d => (
+                                          <motion.div 
+                                            key={d}
+                                            animate={{ opacity: [0.3, 1, 0.3] }}
+                                            transition={{ duration: 1, repeat: Infinity, delay: d * 0.2 }}
+                                            className="w-1 h-1 rounded-full bg-blue-400"
+                                          />
                                         ))}
                                       </div>
                                     )}
                                   </div>
                                 ))}
+                                
+                                {hasFiles && msg.id === messages[messages.length-1].id && generatedFiles.length > 0 && (
+                                  <div className="pt-4 mt-2 border-t border-white/5">
+                                    <div className="flex items-center gap-3 px-1 mb-4">
+                                      <div className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                        <Edit2 size={12} className="text-emerald-400" strokeWidth={2} />
+                                      </div>
+                                      <span className="text-[13px] font-bold text-[#e3e3e3] tracking-tight">
+                                        Arquivos Gerados <span className="ml-1 px-1.5 py-0.5 rounded-md bg-white/5 text-[10px] text-[#8e918f]">{generatedFiles.length}</span>
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {generatedFiles.map((f, idx) => (
+                                        <motion.div 
+                                          key={idx}
+                                          initial={{ opacity: 0, x: -10 }}
+                                          animate={{ opacity: 1, x: 0 }}
+                                          transition={{ delay: idx * 0.05 }}
+                                          onClick={() => {
+                                            setActiveFileIndex(idx);
+                                            setActiveTab('code');
+                                          }}
+                                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] font-medium text-[#c4c7c5] hover:text-[#a8c7fa] hover:bg-[#a8c7fa]/5 hover:border-[#a8c7fa]/20 transition-all cursor-pointer group/file"
+                                        >
+                                          <div className="flex items-center gap-2 truncate">
+                                            <FileText size={14} className="text-[#8e918f] group-hover/file:text-[#a8c7fa]" />
+                                            <span className="truncate">{f.name.split('/').pop()}</span>
+                                          </div>
+                                          <div className="w-4 h-4 rounded-full flex items-center justify-center bg-emerald-500/10 opacity-60">
+                                            <Check size={10} className="text-emerald-500" strokeWidth={3} />
+                                          </div>
+                                        </motion.div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </details>
                           </div>
@@ -1703,8 +1795,9 @@ export default function App() {
                         <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
                         <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                         <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                        <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                        <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
                         <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -2120,6 +2213,9 @@ export default function App() {
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
                                   <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11 px-4 text-[13px] focus:ring-1 focus:border-blue-400/50 transition-all hover:bg-black/40"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                                    <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
+                                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
                                     <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>

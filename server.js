@@ -44,8 +44,11 @@ app.post('/api/chat', limiter, async (req, res) => {
     return res.status(400).json({ error: 'Temperature inválida. Deve ser entre 0 e 2.' });
   }
 
-  // Whitelist de modelos permitidos
+  // Whitelist de modelos permitidos - Por favor, NÃO remova modelos válidos (como 2.5 ou 3.0) para evitar quebras
   const ALLOWED_MODELS = [
+    'gemini-3-flash-preview',
+    'gemini-3-flash-lite-preview',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
     'gemini-1.5-flash',
