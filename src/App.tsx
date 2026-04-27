@@ -53,7 +53,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash');
   const [temperature, setTemperature] = useState<number>(0.7);
   const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
 
@@ -310,85 +310,107 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] bg-[#131314] text-zinc-200 overflow-hidden font-sans relative pb-safe">
       
-      {/* Sidebar Overlay */}
-      <div 
-        onClick={() => setIsSidebarOpen(false)}
-        className={cn(
-          "fixed inset-0 bg-black/60 z-[9998] backdrop-blur-sm transition-opacity duration-300",
-          isSidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        )}
-      />
-
-      {/* Sidebar Drawer */}
-      <div 
-        className={cn(
-          "fixed right-0 top-0 bottom-0 w-[280px] bg-[#1a1b1e] border-l border-[#333538] flex flex-col z-[9999] shadow-[0_0_40px_rgba(0,0,0,0.8)] transition-transform duration-300 ease-out",
-          isSidebarOpen ? "translate-x-0" : "translate-x-full"
-        )}
-      >
-            <div className="p-4 h-[60px] border-b border-[#333538] flex justify-between items-center bg-[#131314]">
-               <h2 className="text-[#f1f3f4] font-medium flex items-center gap-2">
-                 <MessageSquare size={18} className="text-[#a8c7fa]" />
-                 Histórico
-               </h2>
-               <button onClick={() => setIsSidebarOpen(false)} className="p-1 hover:bg-[#333538] rounded-md text-[#8e918f] hover:text-[#f1f3f4]">
-                 <X size={18} />
-               </button>
-            </div>
-            
-            <div className="p-3">
-              <Button 
-                onClick={() => {
-                  resetChat();
-                  setIsSidebarOpen(false);
-                }}
-                className="w-full bg-[#333538] hover:bg-[#4a4d51] text-[#f1f3f4] justify-start gap-2 h-10 border-none relative overflow-hidden group"
-              >
-                <Plus size={16} className="text-[#a8c7fa]" />
-                <span>Novo Chat</span>
-              </Button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1 custom-scrollbar">
-              {chatHistory.length === 0 ? (
-                <div className="text-center text-[#8e918f] text-[13px] pt-8 bg-[#1a1b1e]">
-                  Nenhuma conversa anterior
-                </div>
-              ) : (
-                chatHistory.sort((a, b) => b.updatedAt - a.updatedAt).map(chat => (
-                  <div 
-                    key={chat.id}
-                    className={cn(
-                      "flex items-center justify-between p-2.5 rounded-lg border border-transparent hover:bg-[#333538]/50 group cursor-pointer transition-colors text-[13px]",
-                      currentChatId === chat.id ? "bg-[#333538] border-[#4a4d51] text-white" : "text-[#b2b5b4]"
-                    )}
-                    onClick={() => {
-                      setCurrentChatId(chat.id);
-                      setMessages(chat.messages);
-                      setIsSidebarOpen(false);
-                    }}
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden flex-1">
-                      <MessageSquare size={14} className="shrink-0 text-[#8e918f]" />
-                      <span className="truncate">{chat.title}</span>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setChatHistory(prev => prev.filter(c => c.id !== chat.id));
-                        if (currentChatId === chat.id) {
-                          resetChat();
-                        }
-                      }}
-                      className="p-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-black/20 rounded-md transition-all shrink-0"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+      {/* Sidebar Drawer - Moved to top for reliability */}
+      <AnimatePresence mode="wait">
+        {isSidebarOpen && (
+          <div className="fixed inset-0 z-[9999]" key="sidebar-overlay">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            {/* Content Drawer */}
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute right-0 top-0 bottom-0 w-[320px] max-w-[85%] bg-[#1a1b1e] border-l border-white/10 flex flex-col shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 h-[64px] border-b border-white/5 flex justify-between items-center bg-[#131314]">
+                <h2 className="text-[#f1f3f4] font-medium flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-[#a8c7fa]/10 text-[#a8c7fa]">
+                    <MessageSquare size={16} />
                   </div>
-                ))
-              )}
-            </div>
+                  <span>Histórico</span>
+                </h2>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)} 
+                  className="p-2 hover:bg-white/5 rounded-full text-[#8e918f] hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-4 pt-6">
+                <Button 
+                  onClick={() => {
+                    resetChat();
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full bg-[#333538] hover:bg-[#4a4d51] text-[#f1f3f4] justify-start gap-3 h-12 border-none rounded-xl font-medium transition-all group"
+                >
+                  <Plus size={18} className="text-[#a8c7fa] group-hover:scale-110 transition-transform" />
+                  <span>Nova conversa</span>
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 pb-8 space-y-2 custom-scrollbar">
+                {chatHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center pt-24 px-6 text-center space-y-4 opacity-40">
+                    <MessageSquare size={48} className="text-[#8e918f]" strokeWidth={1} />
+                    <p className="text-[14px] font-medium text-[#f1f3f4]">Nenhuma conversa</p>
+                    <p className="text-[12px] max-w-[180px]">Suas conversas anteriores aparecerão aqui.</p>
+                  </div>
+                ) : (
+                  chatHistory.sort((a, b) => b.updatedAt - a.updatedAt).map(chat => (
+                    <div 
+                      key={chat.id}
+                      className={cn(
+                        "group relative flex flex-col gap-1 p-3.5 rounded-xl border border-transparent cursor-pointer transition-all duration-200",
+                        currentChatId === chat.id 
+                          ? "bg-[#333538] border-[#4a4d51] text-white shadow-lg" 
+                          : "text-[#b2b5b4] hover:bg-[#333538]/40 hover:text-white"
+                      )}
+                      onClick={() => {
+                        setCurrentChatId(chat.id);
+                        setMessages(chat.messages);
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 pr-8">
+                        <MessageSquare size={14} className={cn("shrink-0", currentChatId === chat.id ? "text-[#a8c7fa]" : "text-[#8e918f]")} />
+                        <span className="text-[14px] font-medium truncate">{chat.title}</span>
+                      </div>
+                      <span className="text-[11px] opacity-50 pl-6">
+                        {new Date(chat.updatedAt).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if(confirm('Apagar conversa permanentemente?')) {
+                            setChatHistory(prev => prev.filter(c => c.id !== chat.id));
+                            if (currentChatId === chat.id) {
+                              resetChat();
+                            }
+                          }
+                        }}
+                        className="absolute right-2 top-3 p-2 opacity-0 group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
           </div>
+        )}
+      </AnimatePresence>
 
       {/* Header - AI Studio Style */}
       <header className="h-[64px] min-h-[64px] py-1 flex items-center justify-between px-4 md:px-6 bg-[#131314] flex-shrink-0 border-b border-[#333538] relative z-[60]">
@@ -676,6 +698,7 @@ export default function App() {
 
       </main>
 
+
       {/* Modern Global Mobile Bottom Navigation (Floating Pill) */}
       <div className="md:hidden fixed bottom-4 inset-x-0 px-4 flex justify-center z-40 pointer-events-none">
         <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-2 rounded-full shadow-2xl w-full max-w-[320px] pointer-events-auto ring-1 ring-black/20">
@@ -790,9 +813,9 @@ export default function App() {
                         </SelectTrigger>
                         <SelectContent className="bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] rounded-lg shadow-2xl z-[300]">
                           <SelectGroup>
-                            <SelectItem value="gemini-3.1-pro-preview" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 3.1 Pro</SelectItem>
-                            <SelectItem value="gemini-2.5-pro" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 2.5 Pro</SelectItem>
-                            <SelectItem value="gemini-2.5-flash" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 2.5 Flash</SelectItem>
+                            <SelectItem value="gemini-2.0-flash" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 2.0 Flash</SelectItem>
+                            <SelectItem value="gemini-1.5-pro" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 1.5 Pro</SelectItem>
+                            <SelectItem value="gemini-1.5-flash" className="focus:bg-[#282a2d] focus:text-white py-2 cursor-pointer">Gemini 1.5 Flash</SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>
