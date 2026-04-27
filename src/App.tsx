@@ -5,7 +5,7 @@ import {
   Plus, MessageSquare, Trash2, X,
   Users, Edit2, Activity, Shield, Sparkles, Brain,
   ArrowLeft, Copy, Check, ListChecks,
-  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen
+  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen, ChevronDown
 } from 'lucide-react';
 
 import { FileTree } from './components/FileTree';
@@ -68,7 +68,7 @@ export type ChatSession = {
   fileHistory?: { timestamp: number, files: {name: string, lang: string, code: string}[] }[];
 };
 
-const CodeBlock = ({ language, value, noMargin }: { language?: string; value: string; noMargin?: boolean }) => {
+const CodeBlock = ({ language, value, noMargin, fastMode }: { language?: string; value: string; noMargin?: boolean; fastMode?: boolean }) => {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = () => {
@@ -77,6 +77,16 @@ const CodeBlock = ({ language, value, noMargin }: { language?: string; value: st
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (fastMode) {
+    return (
+      <div className={cn("relative group border border-[#1a1b1e] bg-[#0d0d0d] overflow-hidden flex flex-col font-mono text-[13px] h-full", !noMargin && "my-4 rounded-xl shadow-2xl")}>
+        <div className="flex-1 overflow-auto p-5 text-[#8e918f]">
+          <pre><code className="whitespace-pre-wrap leading-relaxed">{value}</code></pre>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative group/code flex flex-col h-full", !noMargin && "my-4")}>
@@ -585,17 +595,21 @@ export default function App() {
 
   const [activeFileIndex, setActiveFileIndex] = useState(0);
 
-  const previewHtml = useMemo(() => {
-    const htmlFile = generatedFiles.find(f => f.lang === 'html');
-    if (htmlFile) return htmlFile.code;
+  const [previewHtml, setPreviewHtml] = useState<string>('');
 
-    if (generatedFiles.length > 0) {
-      // Find the best entry point or use the first file
-      const entryFile = generatedFiles.find(f => 
-        f.name.toLowerCase().includes('app') || 
-        f.name.toLowerCase().includes('main') || 
-        f.name.toLowerCase().includes('index')
-      ) || generatedFiles[0];
+  useEffect(() => {
+    const buildPreview = () => {
+      const htmlFile = generatedFiles.find(f => f.lang === 'html');
+      if (htmlFile) return htmlFile.code;
+
+      if (generatedFiles.length > 0) {
+        // Find the best entry point or use the first file
+        const entryFile = generatedFiles.find(f => 
+          f.name.toLowerCase().includes('app') || 
+          f.name.toLowerCase().includes('main') || 
+          f.name.toLowerCase().includes('index') ||
+          f.name.toLowerCase().includes('page')
+        ) || generatedFiles[0];
 
       // Robust module mapping for Babel
       // We convert all generated files into a "virtual" registry 
@@ -623,7 +637,37 @@ export default function App() {
                   "clsx": "https://esm.sh/clsx@2.1.0",
                   "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
                   "recharts": "https://esm.sh/recharts@2.12.2",
-                  "d3": "https://esm.sh/d3@7.8.5"
+                  "d3": "https://esm.sh/d3@7.8.5",
+                  "date-fns": "https://esm.sh/date-fns@3.6.0",
+                  "zod": "https://esm.sh/zod@3.22.4",
+                  "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
+                  "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.0.2",
+                  "@radix-ui/react-accordion": "https://esm.sh/@radix-ui/react-accordion@1.1.2",
+                  "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.0.5",
+                  "@radix-ui/react-aspect-ratio": "https://esm.sh/@radix-ui/react-aspect-ratio@1.0.3",
+                  "@radix-ui/react-avatar": "https://esm.sh/@radix-ui/react-avatar@1.0.4",
+                  "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.0.4",
+                  "@radix-ui/react-collapsible": "https://esm.sh/@radix-ui/react-collapsible@1.0.3",
+                  "@radix-ui/react-context-menu": "https://esm.sh/@radix-ui/react-context-menu@2.1.5",
+                  "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.0.5",
+                  "@radix-ui/react-dropdown-menu": "https://esm.sh/@radix-ui/react-dropdown-menu@2.0.6",
+                  "@radix-ui/react-hover-card": "https://esm.sh/@radix-ui/react-hover-card@1.0.7",
+                  "@radix-ui/react-label": "https://esm.sh/@radix-ui/react-label@2.0.2",
+                  "@radix-ui/react-menubar": "https://esm.sh/@radix-ui/react-menubar@1.0.4",
+                  "@radix-ui/react-navigation-menu": "https://esm.sh/@radix-ui/react-navigation-menu@1.1.4",
+                  "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.0.7",
+                  "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.0.3",
+                  "@radix-ui/react-radio-group": "https://esm.sh/@radix-ui/react-radio-group@1.1.3",
+                  "@radix-ui/react-scroll-area": "https://esm.sh/@radix-ui/react-scroll-area@1.0.5",
+                  "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.0.0",
+                  "@radix-ui/react-separator": "https://esm.sh/@radix-ui/react-separator@1.0.3",
+                  "@radix-ui/react-slider": "https://esm.sh/@radix-ui/react-slider@1.1.2",
+                  "@radix-ui/react-switch": "https://esm.sh/@radix-ui/react-switch@1.0.3",
+                  "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.0.4",
+                  "@radix-ui/react-toast": "https://esm.sh/@radix-ui/react-toast@1.1.5",
+                  "@radix-ui/react-toggle": "https://esm.sh/@radix-ui/react-toggle@1.0.3",
+                  "@radix-ui/react-toggle-group": "https://esm.sh/@radix-ui/react-toggle-group@1.0.4",
+                  "@radix-ui/react-tooltip": "https://esm.sh/@radix-ui/react-tooltip@1.0.7"
                 }
               }
             </script>
@@ -688,11 +732,48 @@ export default function App() {
                   }
                 }
               };
+
+              window.addEventListener('error', (e) => {
+                handleNexusError(e.error || e.message);
+              });
+              
+              window.addEventListener('unhandledrejection', (e) => {
+                handleNexusError(e.reason || 'Unhandled Promise Rejection');
+              });
+
+              function handleNexusError(err) {
+                const errorMsg = err?.message || String(err);
+                const trace = err?.stack?.split('\\n').slice(1).join('\\n') || 'Unknown source';
+                const safeMsg = errorMsg.replace(/[\`\$]/g, '');
+                const safeTrace = trace.replace(/[\`\$]/g, '');
+                
+                const root = document.getElementById('root');
+                if (root) {
+                  root.innerHTML = \`
+                    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: -apple-system, sans-serif; background: #0d0d0d;">
+                      <div style="background: #1a1b1e; border: 1px solid #ff5f56; color: #ff5f56; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                        <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
+                           <span style="font-size: 20px;">⚠️</span>
+                           Erro Encontrado (Syntax / Runtime)
+                        </h3>
+                        <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #ff9f9a; white-space: pre-wrap;">\${errorMsg}</pre>
+                        <details style="margin-top: 10px;">
+                           <summary style="font-size: 12px; color: #8e918f; cursor: pointer;">Ver rastreamento completo</summary>
+                           <pre style="font-size: 11px; color: #8e918f; margin-top: 5px; white-space: pre-wrap;">\${trace}</pre>
+                        </details>
+                        <button onclick="parent.postMessage({ type: 'NEXUS_FIX_ERROR', error: '\${safeMsg.replace(/'/g, "\\'")}\\n\\n\${safeTrace.replace(/'/g, "\\'")}' }, '*')" style="margin-top: 16px; padding: 8px 16px; background: rgba(255, 95, 86, 0.1); color: #ff5f56; border: 1px solid #ff5f56; border-radius: 6px; cursor: pointer; font-weight: 500; font-family: inherit; font-size: 13px; transition: all 0.2s;" onmouseover="this.style.background='#ff5f56'; this.style.color='#1a1b1e'" onmouseout="this.style.background='rgba(255, 95, 86, 0.1)'; this.style.color='#ff5f56'">
+                          Pedir para a IA investigar e corrigir
+                        </button>
+                      </div>
+                    </div>
+                  \`;
+                }
+              }
             </script>
           </head>
           <body>
             <div id="root"></div>
-            <script type="text/babel" data-type="module">
+            <script type="text/babel" data-type="module" data-presets="react,typescript">
               import React from 'react';
               import ReactDOM from 'react-dom/client';
               import * as Lucide from 'lucide-react';
@@ -707,7 +788,35 @@ export default function App() {
 
               // We'll create a registry for internal modules
               const __NEXUS_REGISTRY__ = {};
+              
+              const __NEXUS_REQUIRE__ = (path) => {
+                 let lookupPath = path.replace(/^[.\\/@~]+/, '');
+                 const fileKey = Object.keys(__NEXUS_REGISTRY__).find(k => k.replace(/\.[^/.]+$/, '').endsWith(lookupPath));
+                 if (fileKey && __NEXUS_REGISTRY__[fileKey]) {
+                    return __NEXUS_REGISTRY__[fileKey];
+                 }
+                 console.warn("Module not found in registry:", path);
+                 return new Proxy({}, { get: () => () => null });
+              };
 
+              const __NEXUS_IMPORT__ = async (path) => {
+                 if (path.startsWith('.') || path.startsWith('@/') || path.startsWith('~/')) {
+                     return __NEXUS_REQUIRE__(path);
+                 }
+                 try {
+                     return await import(path);
+                 } catch (e) {
+                     try {
+                         return await import(\`https://esm.sh/\${path}\`);
+                     } catch (err) {
+                         console.warn("Failed to import external module:", path, err);
+                         return new Proxy({}, { get: () => () => null });
+                     }
+                 }
+              };
+
+              // First, we initialize the async modules wrapper
+              const initModules = async () => {
               ${generatedFiles.map(f => {
                 // Safely convert common imports to destructuring from global object
                 let cleanCode = f.code
@@ -718,23 +827,26 @@ export default function App() {
                   .replace(/import\s+{([^}]+)}\s+from\s+['"]recharts['"];?/g, 'const { $1 } = Recharts;')
                   .replace(/import\s+{([^}]+)}\s+from\s+['"]framer-motion['"];?/g, 'const { $1 } = FramerMotion;')
                   .replace(/import\s+{([^}]+)}\s+from\s+['"]motion\/react['"];?/g, 'const { $1 } = MotionReact;')
-                  .replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, ''); // Erase any other imports like local components for now
+                  .replace(/import\s+([a-zA-Z0-9_]+)\s*,\s*{([^}]+)}\s+from\s+['"]([^'"]+)['"];?/g, 'const $1 = (await __NEXUS_IMPORT__("$3")).default || (await __NEXUS_IMPORT__("$3")); const { $2 } = await __NEXUS_IMPORT__("$3");')
+                  .replace(/import\s+([a-zA-Z0-9_]+)\s+from\s+['"]([^'"]+)['"];?/g, 'const $1 = (await __NEXUS_IMPORT__("$2")).default || (await __NEXUS_IMPORT__("$2"));')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]([^'"]+)['"];?/g, 'const { $1 } = await __NEXUS_IMPORT__("$2");')
+                  .replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, ''); // Erase any other unmatched imports
 
                 return `
-                  __NEXUS_REGISTRY__["${f.name}"] = (function(exports) {
+                  __NEXUS_REGISTRY__["${f.name}"] = await (async function(exports) {
                     try {
                       // Provide generic fallbacks for React
                       const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Suspense, lazy } = React;
-                      ${cleanCode.replace(/export\s+default\s+function\s+([a-zA-Z0-9_]+)/g, 'function $1')
-                               .replace(/export\s+default\s+([a-zA-Z0-9_]+)/g, 'return $1')
+                      ${cleanCode.replace(/export\s+default\s+function\s+([a-zA-Z0-9_]+)/g, 'const $1 = exports.default = function $1')
+                               .replace(/export\s+default\s+function\s*\(/g, 'exports.default = function(')
+                               .replace(/export\s+default\s+(?!function)(.+)/g, 'exports.default = $1')
                                .replace(/export\s+const\s+([a-zA-Z0-9_]+)\s*=\s*/g, 'const $1 = exports.$1 = ')
+                               .replace(/export\s+function\s+([a-zA-Z0-9_]+)/g, 'const $1 = exports.$1 = function $1')
+                               .replace(/export\s+type\s+[^;]+;?/g, '')
+                               .replace(/export\s+interface\s+[a-zA-Z0-9_]+\s*{[^}]+}/g, '')
+                               .replace(/export\s*{([^}]+)};?/g, 'Object.assign(exports, { $1 });')
                       }
-                      
-                      // Identify the component to return
-                      if (typeof App !== 'undefined') return App;
-                      if (typeof Main !== 'undefined') return Main;
-                      
-                      return exports.App || Object.values(exports)[0];
+                      return exports;
                     } catch (err) {
                       console.error("Error in module ${f.name}:", err);
                       // Throwing allows Babel error reporting to catch it or React error boundary
@@ -743,39 +855,45 @@ export default function App() {
                   })({});
                 `;
               }).join('\n')}
+              };
 
-              try {
-                const root = ReactDOM.createRoot(document.getElementById('root'));
-                // Use the entryFile defined above
-                const EntryComponent = __NEXUS_REGISTRY__["${entryFile.name}"];
-                
-                if (!EntryComponent) {
-                   throw new Error("No entry component found. Check if you exported a component as default.");
+              initModules().then(() => {
+                try {
+                  const root = ReactDOM.createRoot(document.getElementById('root'));
+                  // Use the entryFile defined above
+                  const EntryModule = __NEXUS_REGISTRY__["${entryFile.name}"];
+                  const EntryComponent = EntryModule ? (EntryModule.default || EntryModule.App || Object.values(EntryModule)[0]) : null;
+                  
+                  if (!EntryComponent || typeof EntryComponent !== 'function') {
+                     throw new Error("No entry component found. Make sure you have exported a default React component.");
+                  }
+                  
+                  root.render(<EntryComponent />);
+                } catch (e) {
+                  console.error("Nexus Runtime Error:", e);
+                  window.handleNexusError?.(e) || console.error(e);
                 }
-                
-                root.render(<EntryComponent />);
-              } catch (e) {
-                console.error("Nexus Runtime Error:", e);
-                document.getElementById('root').innerHTML = \`
-                  <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: -apple-system, sans-serif;">
-                    <div style="background: #1a1b1e; border: 1px solid #ff5f56; color: #ff5f56; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-                      <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
-                         <span style="font-size: 20px;">⚠️</span>
-                         Erro de Renderização
-                      </h3>
-                      <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #ff9f9a;">\${e.message}</pre>
-                      <p style="font-size: 12px; color: #8e918f; margin-bottom: 0;">Nexus Engine Runtime Trace: \${e.stack?.split('\\n')[1] || 'Unknown source'}</p>
-                    </div>
-                  </div>
-                \`;
-              }
+              }).catch(e => {
+                  console.error("Nexus Module Init Error:", e);
+                  window.handleNexusError?.(e) || console.error(e);
+              });
             </script>
           </body>
         </html>
       `;
     }
     return '';
-  }, [generatedFiles]);
+  };
+
+    if (!isLoading) {
+      setPreviewHtml(buildPreview());
+    } else {
+      const timeoutId = setTimeout(() => {
+        setPreviewHtml(buildPreview());
+      }, 2000); // 2 second debounce
+      return () => clearTimeout(timeoutId);
+    }
+  }, [generatedFiles, isLoading]);
 
   const hasFiles = generatedFiles.length > 0;
 
@@ -893,7 +1011,7 @@ export default function App() {
               if (done) break;
 
               buffer += decoder.decode(value, { stream: true });
-              const parts = buffer.split('\\n\\n');
+              const parts = buffer.split('\n\n');
               buffer = parts.pop() || "";
 
               for (const part of parts) {
@@ -996,6 +1114,23 @@ export default function App() {
       setIsRunning(false);
     }
   };
+
+  const handleSendMessageRef = useRef(handleSendMessage);
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  }, [handleSendMessage]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'NEXUS_FIX_ERROR' && e.data?.error) {
+        const errorMsg = `O seguinte erro ocorreu no preview:\n\`\`\`\n${e.data.error}\n\`\`\`\nPor favor, investigue e corrija.`;
+        setActiveTab('chat');
+        handleSendMessageRef.current(undefined, errorMsg);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
@@ -1373,15 +1508,46 @@ export default function App() {
                             components={{
                               code({ node, inline, className, children, ...props }: any) {
                                 if (!inline) {
-                                  const match = /language-(\w+)/.exec(className || '');
-                                  const lang = match ? match[1] : '';
-                                  return <CodeBlock language={lang} value={String(children).replace(/\n$/, '')} />;
+                                  return null;
                                 }
                                 return (
                                   <code className={cn("bg-white/10 px-1 rounded text-[#80bfff]", className)} {...props}>
                                     {children}
                                   </code>
                                 );
+                              },
+                              blockquote({ children }: any) {
+                                // Extract text safely depending on React element structure
+                                let text = '';
+                                try {
+                                  if (Array.isArray(children)) {
+                                    text = children.map((c: any) => c?.props?.children?.[0] || '').join(' ');
+                                  } else {
+                                    text = String(children?.props?.children?.[0] || '');
+                                  }
+                                } catch (e) {
+                                  // fallback
+                                }
+                                const isThought = text.includes('💭') || text.toLowerCase().includes('pensamento');
+                                
+                                if (isThought) {
+                                  return (
+                                    <details className="group/thought my-4">
+                                      <summary className="inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#282a2d] border border-[#333538] hover:bg-[#333538] transition-colors cursor-pointer list-none select-none text-[12px] font-medium text-[#c4c7c5] w-fit">
+                                        <div className="flex items-center gap-2 pr-4">
+                                          <Brain size={14} className="text-purple-400" />
+                                          <span>Processo de Pensamento Estratégico</span>
+                                        </div>
+                                        <ChevronDown size={14} className="opacity-50 transition-transform group-open/thought:rotate-180" />
+                                      </summary>
+                                      <div className="mt-2 pl-4 py-3 border-l-2 border-purple-500/30 bg-purple-500/5 text-[#b2b5b4] text-[13px] rounded-r-xl markdown-prose">
+                                        {children}
+                                      </div>
+                                    </details>
+                                  );
+                                }
+
+                                return <blockquote className="border-l-3 border-[#a8c7fa]/40 pl-4 py-1 italic text-[#8e918f] my-4">{children}</blockquote>;
                               },
                               p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed tracking-tight">{children}</p>
                             }}
@@ -1755,15 +1921,37 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden flex">
-                  {/* Sidebar for multiple files - professional */}
-                  <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                  {/* Sidebar for multiple files - desktop */}
+                  <div className="hidden md:flex h-full border-r border-[#1a1b1e]">
+                    <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
+                  </div>
+                  
+                  {/* Mobile File Navigator - scrollable tabs below breadcrumb */}
+                  <div className="flex md:hidden bg-[#0a0a0b] border-b border-[#1a1b1e] overflow-x-auto whitespace-nowrap px-4 py-2 gap-2 h-10 items-center hide-scrollbar">
+                    {generatedFiles.map((f, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveFileIndex(idx)}
+                        className={cn(
+                          "px-3 py-1 rounded-md text-[10px] font-medium transition-all flex items-center gap-1.5",
+                          activeFileIndex === idx 
+                            ? "bg-[#a8c7fa]/10 text-[#a8c7fa] border border-[#a8c7fa]/20 shadow-[0_0_10px_rgba(168,199,250,0.1)]" 
+                            : "text-[#5f6368] hover:text-[#8e918f]"
+                        )}
+                      >
+                        <FolderOpen size={10} className={activeFileIndex === idx ? "text-[#a8c7fa]" : "text-[#5f6368]"} />
+                        {f.name.split('/').pop()}
+                      </button>
+                    ))}
+                  </div>
 
-                  <div className="flex-1 overflow-auto custom-scrollbar bg-[#050505]">
+                  <div className="flex-1 overflow-auto custom-scrollbar bg-[#050505] relative">
                     <CodeBlock 
                       language={generatedFiles[activeFileIndex]?.lang} 
                       value={generatedFiles[activeFileIndex]?.code || ''} 
                       noMargin 
+                      fastMode={isLoading}
                     />
                   </div>
 

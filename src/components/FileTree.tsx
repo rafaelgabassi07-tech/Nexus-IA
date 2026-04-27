@@ -9,7 +9,7 @@ type FileNode = {
   originalIndex?: number;
 };
 
-export function FileTree({ files, activeFileIndex, onSelect }: { files: {name: string}[], activeFileIndex: number, onSelect: (idx: number) => void }) {
+export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { files: {name: string}[], activeFileIndex: number, onSelect: (idx: number) => void, fullWidth?: boolean }) {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({'root': true});
 
   const toggleFolder = (path: string, e: React.MouseEvent) => {
@@ -83,10 +83,15 @@ export function FileTree({ files, activeFileIndex, onSelect }: { files: {name: s
   };
 
   return (
-    <div className="w-60 border-r border-[#1a1b1e] bg-[#0c0c0d] flex flex-col py-2 overflow-y-auto custom-scrollbar flex-shrink-0">
-      <div className="px-4 py-2 mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Explorador</span>
-      </div>
+    <div className={cn(
+      "border-r border-[#1a1b1e] bg-[#0c0c0d] flex flex-col py-2 overflow-y-auto custom-scrollbar flex-shrink-0",
+      fullWidth ? "w-full" : "w-60"
+    )}>
+      {!fullWidth && (
+        <div className="px-4 py-2 mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Explorador</span>
+        </div>
+      )}
       <div className="pb-4">
         {Object.values(tree)
           .sort((a, b) => {

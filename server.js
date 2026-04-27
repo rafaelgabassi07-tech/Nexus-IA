@@ -93,55 +93,84 @@ app.post('/api/chat', limiter, async (req, res) => {
       ]
     }));
 
-    let retries = 3;
-    let delay = 2000;
+    let success = false;
     let lastError;
+    
+    // Lista de modelos para tentar (começa pelo requisitado e usa opções mais seguras de fallback)
+    const baseFallback = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = [...new Set([targetModel, ...baseFallback])];
 
-    while (retries >= 0) {
-      try {
-        const responseStream = await ai.models.generateContentStream({
-          model: targetModel,
-          contents: contents,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: temperature !== undefined ? parseFloat(temperature) : 0.7,
+    for (let mIndex = 0; mIndex < modelsToTry.length; mIndex++) {
+      if (success || clientClosed) break;
+      const currentModel = modelsToTry[mIndex];
+      
+      let retries = mIndex === 0 ? 2 : 1; // Tenta o modelo principal 2 vezes (total 3), fallbacks 1 vez
+      let delay = 2000;
+
+      while (retries >= 0) {
+        try {
+          const responseStream = await ai.models.generateContentStream({
+            model: currentModel,
+            contents: contents,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: temperature !== undefined ? parseFloat(temperature) : 0.7,
+            }
+          });
+
+          // Setup Server-Sent Events after stream is successfully initialized
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
           }
-        });
 
-        // Setup Server-Sent Events after stream is successfully initialized
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-
-        for await (const chunk of responseStream) {
-           if (clientClosed) break;
-           res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          for await (const chunk of responseStream) {
+             if (clientClosed) break;
+             res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          }
+          
+          if (!clientClosed) {
+            res.write('data: [DONE]\n\n');
+            res.end();
+          }
+          
+          success = true;
+          break; // Sucesso, sai do loop do while
+        } catch (err) {
+          lastError = err;
+          const msg = String(err.message || "").toLowerCase();
+          // Check if the error is a temporary infrastructure constraint
+          const isTemporary = msg.includes("503") || 
+                              msg.includes("unavailable") || 
+                              msg.includes("high demand") || 
+                              msg.includes("tempararily_unavailable") || 
+                              msg.includes("overloaded") ||
+                              msg.includes("429");
+                              
+          if (res.headersSent) {
+            throw err; // Se já enviou headers, não dá para fazer fallback silencioso
+          }
+          
+          if (!isTemporary) {
+            break; // Se não for um erro temporário (ex: erro de auth), avança para lançar o erro
+          }
+          
+          if (retries === 0) {
+            console.warn(`[Warning] Model ${currentModel} falhou com erro temporário. Tentando próximo modelo se houver.`);
+            break; // Fim das retentativas desse modelo
+          }
+          
+          console.warn(`[Warning] Model ${currentModel} overloaded or hit rate limit. Retrying in ${delay}ms... (${retries} retries left)`);
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 1.5;
+          retries--;
         }
-        
-        if (!clientClosed) {
-          res.write('data: [DONE]\n\n');
-          res.end();
-        }
-        
-        return; // Success, exit completely
-      } catch (err) {
-        lastError = err;
-        const msg = String(err.message || "").toLowerCase();
-        // Check if the error is a temporary infrastructure constraint
-        const isTemporary = msg.includes("503") || 
-                            msg.includes("unavailable") || 
-                            msg.includes("high demand") || 
-                            msg.includes("tempararily_unavailable") || 
-                            msg.includes("429");
-                            
-        if (retries === 0 || !isTemporary || res.headersSent) {
-          throw err; // Re-throw if out of retries, not a temporary error, or if stream already started
-        }
-        console.warn(`[Warning] Model ${targetModel} overloaded or hit rate limit. Retrying in ${delay}ms... (${retries} retries left)`);
-        await new Promise(r => setTimeout(r, delay));
-        delay *= 1.5;
-        retries--;
       }
+    }
+    
+    if (!success && lastError) {
+      throw lastError;
     }
 
   } catch (error) {
