@@ -244,10 +244,15 @@ export default function App() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
-  const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
-  const [temperature, setTemperature] = useState<number>(0.7);
-  const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('nexus_api_key') || '');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('nexus_selected_model') || 'gemini-3-flash-preview');
+  const [temperature, setTemperature] = useState<number>(() => {
+    const saved = localStorage.getItem('nexus_temperature');
+    return saved ? parseFloat(saved) : 0.7;
+  });
+  const [systemPrompt, setSystemPrompt] = useState(() => {
+    return localStorage.getItem('nexus_system_prompt') || activeAgent.systemPrompt;
+  });
   
   const [generatedFiles, setGeneratedFiles] = useState<{name: string, lang: string, code: string}[]>([]);
   const [previewKey, setPreviewKey] = useState(0);
@@ -305,6 +310,12 @@ export default function App() {
     setActiveAgentId(draftActiveAgentId);
     setActivePresetId(draftActivePresetId);
     setDraftActivePresetId(null); // Clear preset if manual settings are saved or handled
+    
+    safeLocalStorageSet('nexus_api_key', draftApiKey);
+    safeLocalStorageSet('nexus_selected_model', draftSelectedModel);
+    safeLocalStorageSet('nexus_temperature', draftTemperature.toString());
+    safeLocalStorageSet('nexus_system_prompt', draftSystemPrompt);
+    
     safeLocalStorageSet('nexus_active_agent_id', draftActiveAgentId);
     if (draftActivePresetId) safeLocalStorageSet('nexus_active_preset_id', draftActivePresetId);
     else localStorage.removeItem('nexus_active_preset_id');
