@@ -305,7 +305,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
-  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-3-flash-preview'));
+  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-2.0-flash'));
   const [temperature, setTemperature] = useState<number>(() => {
     return safeStorageNumber('nexus_temperature', 0.7);
   });
@@ -1929,6 +1929,7 @@ export default function App() {
                   
                   {/* Mobile File Navigator - scrollable tabs below breadcrumb */}
                   <div className="flex md:hidden bg-[#0a0a0b] border-b border-[#1a1b1e] overflow-x-auto whitespace-nowrap px-4 py-2 gap-2 h-10 items-center hide-scrollbar">
+                    <div className="text-[9px] font-black text-[#5f6368] uppercase tracking-tighter mr-1 border-r border-[#1a1b1e] pr-2">Files</div>
                     {generatedFiles.map((f, idx) => (
                       <button
                         key={idx}
@@ -2119,12 +2120,10 @@ export default function App() {
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
                                   <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11 px-4 text-[13px] focus:ring-1 focus:border-blue-400/50 transition-all hover:bg-black/40"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                                    <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
-                                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
                                     <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                                    <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
