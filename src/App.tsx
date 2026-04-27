@@ -1,39 +1,38 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  Loader2, ArrowUp, Key,
+  Loader2, ArrowUp,
   Paperclip, Image as ImageIcon, Terminal, Layout,
   Plus, Trash2, X,
-  Brain, Shield, ArrowLeft, Activity,
+  Brain, Activity,
   RotateCcw, FolderOpen, Layers,
-  Lock, EyeOff, CheckCircle2, ShieldCheck,
-  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster, toast } from 'sonner';
 
 import { FileTree } from './components/FileTree';
-import { AgentIcon } from './components/AgentIcon';
 import { CodeBlock } from './components/CodeBlock';
 import { Header } from './components/Header';
 import { ChatLog } from './components/ChatLog';
 import { FloatingNav } from './components/FloatingNav';
+import { SettingsPanel, SettingsDialogs } from './components/SettingsPanel';
 
 import { 
-  APIPreset, ChatSession 
+  APIPreset, ChatSession, AgentDefinition
 } from './types';
+import { Button } from './components/ui/button';
+import { Textarea } from './components/ui/textarea';
+import { 
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem 
+} from './components/ui/select';
+import { 
+  Dialog, DialogContent, DialogTitle 
+} from './components/ui/dialog';
 
 import { AGENTS } from './agents';
-import type { AgentDefinition } from './agents';
 import { 
   cn, generateId, safeLocalStorageSet, safeStorageString, safeStorageNumber, extractFilesFromMarkdown 
 } from './lib/utils';
 import { useChatSession } from './hooks/useChatSession';
-
-import { Button } from './components/ui/button';
-import { Textarea } from './components/ui/textarea';
-import { Input } from './components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 
 export default function App() {
   const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
@@ -115,6 +114,18 @@ export default function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
+  const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
+  const [chatInputHistoryIndex, setChatInputHistoryIndex] = useState(0);
+
+  const pushToInputHistory = (val: string) => {
+    if (val === chatInputHistory[chatInputHistoryIndex]) return;
+    const newHistory = chatInputHistory.slice(0, chatInputHistoryIndex + 1);
+    newHistory.push(val);
+    if (newHistory.length > 50) newHistory.shift();
+    setChatInputHistory(newHistory);
+    setChatInputHistoryIndex(newHistory.length - 1);
+  };
+
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [previewKey, setPreviewKey] = useState(0);
@@ -122,9 +133,6 @@ export default function App() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-
-  const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
-  const [chatInputHistoryIndex, setChatInputHistoryIndex] = useState(0);
 
   const [isSystemPromptExpanded, setIsSystemPromptExpanded] = useState(false);
 
@@ -592,6 +600,19 @@ export default function App() {
       e.preventDefault();
       handleSendMessage();
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      if (e.shiftKey) {
+        e.preventDefault();
+        redoInput();
+      } else {
+        e.preventDefault();
+        undoInput();
+      }
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+      e.preventDefault();
+      redoInput();
+    }
   };
 
   return (
@@ -775,21 +796,22 @@ export default function App() {
                   </div>
                 )}
 
-                <Textarea
-                  value={inputMessage}
-                  onChange={(e) => {
-                    setInputMessage(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = e.target.scrollHeight + 'px';
-                  }}
-                  onKeyDown={onKeyDown}
+                  <Textarea
+                    value={inputMessage}
+                    onChange={(e) => {
+                      setInputMessage(e.target.value);
+                      pushToInputHistory(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = e.target.scrollHeight + 'px';
+                    }}
+                    onKeyDown={onKeyDown}
                   placeholder="Descreva o que você quer construir..."
                   className={cn("w-full bg-transparent border-none text-base text-[#f1f3f4] px-4 py-3 min-h-[50px] max-h-[300px] resize-none outline-none leading-relaxed custom-scrollbar placeholder:text-[#8e918f] focus-visible:ring-0 shadow-none overflow-y-auto", attachedFiles.length > 0 && "pt-2")}
                   rows={1}
                 />
                 
                 <div className="flex items-end justify-between p-2 pt-0">
-                  <div className="flex items-center gap-1 text-[#8e918f]">
+                  <div className="flex items-center gap-1.5 text-[#8e918f]">
                     <input 
                       type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
                       onChange={(e) => {
@@ -799,7 +821,7 @@ export default function App() {
                         }
                       }}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center">
+                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Anexar arquivos">
                       <Paperclip size={18} strokeWidth={2} />
                     </label>
 
@@ -812,9 +834,14 @@ export default function App() {
                         }
                       }}
                     />
-                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex">
+                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" title="Anexar imagens">
                       <ImageIcon size={18} strokeWidth={2} />
                     </button>
+                    
+                    <div className="flex items-center gap-1.5 ml-2 border-l border-white/5 pl-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/20 animate-pulse" />
+                      <span className="text-[9px] uppercase font-bold tracking-[0.2em] opacity-40">Auto-save: ON</span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -832,13 +859,12 @@ export default function App() {
                         </div>
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                        <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
-                        <SelectItem value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</SelectItem>
-                        <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                        <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                        <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro (Exp)</SelectItem>
+                        <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Thinking</SelectItem>
                         <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                        <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                        <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
+                        <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Lite</SelectItem>
+                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -908,15 +934,26 @@ export default function App() {
                       </div>
                       
                       <div className="flex flex-col gap-3 pt-2">
-                        <Button 
-                          onClick={() => {
-                            setPreviewError(null);
-                            handleSendMessage(undefined, `Corrija o seguinte erro no código: ${previewError}`);
-                          }}
-                          className="w-full bg-red-500 hover:bg-red-600 text-white font-bold h-12 rounded-xl"
-                        >
-                          Tentar Corrigir com IA
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => {
+                              setPreviewKey(k => k + 1);
+                              setPreviewError(null);
+                            }}
+                            className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold h-12 rounded-xl"
+                          >
+                            Reiniciar
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              setPreviewError(null);
+                              handleSendMessage(undefined, `Corrija o seguinte erro no código que está falhando no preview: ${previewError}`);
+                            }}
+                            className="flex-[2] bg-red-500 hover:bg-red-600 text-white font-bold h-12 rounded-xl"
+                          >
+                            Corrigir com IA
+                          </Button>
+                        </div>
                         <Button 
                           variant="ghost"
                           onClick={() => setPreviewError(null)}
@@ -971,294 +1008,36 @@ export default function App() {
         </div>
 
         {activeTab === 'settings' && (
-          <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden animate-in fade-in duration-500">
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="max-w-3xl mx-auto px-6 py-10 pb-[120px]">
-                {settingsTab === 'overview' && (
-                  <div className="space-y-10 text-center">
-                    <h2 className="text-[18px] font-black text-white uppercase tracking-[0.3em]">Console de Orquestração</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {[
-                        { id: 'general', title: 'Motor', icon: Key, color: 'text-blue-400' },
-                        { id: 'agent', title: 'Identidade', icon: Brain, color: 'text-purple-400' },
-                        { id: 'security', title: 'Segurança', icon: Shield, color: 'text-emerald-400' }
-                      ].map(card => (
-                        <button key={card.id} onClick={() => setSettingsTab(card.id as any)} className="p-6 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] text-center space-y-4">
-                          <div className={cn("mx-auto w-10 h-10 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5", card.color)}><card.icon size={18} /></div>
-                          <h3 className="text-[12px] font-black text-white uppercase tracking-widest">{card.title}</h3>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {settingsTab === 'general' && (
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
-                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Motor de Inteligência</h3>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex justify-between">
-                          <span>API KEY Principal</span>
-                          <span className="text-[10px] text-blue-400/60 lowercase italic font-medium">armazenada localmente</span>
-                        </label>
-                        <Input type="password" value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} className="bg-black/20 border-white/10 rounded-xl px-4 text-[13px] h-11" placeholder="Insira sua chave Gemini..." />
-                      </div>
-
-                      <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest italic">Presets Rápidos</label>
-                            <span className="text-[8px] text-[#8e918f] uppercase font-bold tracking-tighter">{apiPresets.length}/5 Chaves</span>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            disabled={apiPresets.length >= 5}
-                            onClick={() => { setEditingPreset(null); setPresetForm({}); setIsPresetFormOpen(true); }}
-                            className="h-6 text-[9px] uppercase tracking-widest font-black text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 disabled:opacity-30"
-                          >
-                            <Plus size={10} className="mr-1" /> Novo
-                          </Button>
-                        </div>
-                        
-                        <div className="flex flex-wrap gap-2">
-                          {apiPresets.map(preset => (
-                            <div 
-                              key={preset.id} 
-                              onClick={() => setDraftApiKey(preset.apiKey)}
-                              className={cn(
-                                "group relative flex items-center gap-2 pl-3 pr-8 py-2 rounded-lg border transition-all cursor-pointer text-[12px] font-medium",
-                                draftApiKey === preset.apiKey ? "bg-blue-400/20 border-blue-400/40 text-blue-100" : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.04]"
-                              )}
-                            >
-                              <Key size={12} className="shrink-0" />
-                              <span className="truncate max-w-[80px]">{preset.name}</span>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); deletePreset(preset.id, e); }}
-                                className="absolute right-1.5 opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 transition-all"
-                              >
-                                <Trash2 size={10} />
-                              </button>
-                            </div>
-                          ))}
-                          {apiPresets.length === 0 && (
-                            <p className="text-[10px] text-[#8e918f] italic uppercase tracking-widest opacity-40 py-1">Nenhum preset salvo</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <label className="text-[11px] font-black text-white/60 uppercase tracking-widest">Modelo Gemini</label>
-                          <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
-                            <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-[#1a1b1e] border-white/10">
-                              <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro (Exp)</SelectItem>
-                              <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                              <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
-                              <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                              <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                              <SelectItem value="gemini-1.5-flash-8b">Gemini 1.5 Flash 8B</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-4">
-                          <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex justify-between">
-                            <span>Temperatura</span>
-                            <span className="text-blue-400">{draftTemperature}</span>
-                          </label>
-                          <div className="pt-2">
-                            <input 
-                              type="range" 
-                              min="0" max="1" step="0.1" 
-                              value={draftTemperature} 
-                              onChange={(e) => setDraftTemperature(parseFloat(e.target.value))}
-                              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-400"
-                            />
-                            <div className="flex justify-between text-[10px] text-[#8e918f] mt-1 font-medium italic">
-                              <span>Preciso</span>
-                              <span>Creativo</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <button 
-                          onClick={() => setIsSystemPromptExpanded(!isSystemPromptExpanded)}
-                          className="w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group"
-                        >
-                          <div className="flex items-center gap-2">
-                            <label className="text-[11px] font-black text-white/60 uppercase tracking-widest cursor-pointer group-hover:text-blue-400 transition-colors">Prompt de Sistema (Atual)</label>
-                            {!isSystemPromptExpanded && <span className="text-[10px] text-[#8e918f] italic truncate max-w-[200px] opacity-40"> — {draftSystemPrompt.slice(0, 30)}...</span>}
-                          </div>
-                          <ChevronDown size={14} className={cn("text-[#8e918f] transition-transform duration-300", isSystemPromptExpanded && "rotate-180")} />
-                        </button>
-                        
-                        <AnimatePresence>
-                          {isSystemPromptExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <Textarea 
-                                value={draftSystemPrompt} 
-                                onChange={(e) => setDraftSystemPrompt(e.target.value)} 
-                                className="bg-black/20 border-white/10 rounded-xl px-4 py-3 text-[12px] h-[80px] custom-scrollbar focus:ring-1 focus:ring-blue-500/30 resize-none" 
-                                placeholder="Instruções de base para a IA..."
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {settingsTab === 'agent' && (
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
-                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Identidades Nexus</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {allAgents.map(agent => (
-                        <div 
-                          key={agent.id} 
-                          onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} 
-                          className={cn(
-                            "group relative p-5 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden", 
-                            draftActiveAgentId === agent.id 
-                              ? "bg-gradient-to-br from-purple-500/20 to-blue-500/10 border-purple-500/40 shadow-lg shadow-purple-500/5 text-white" 
-                              : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.04] hover:text-white"
-                          )}
-                        >
-                          {draftActiveAgentId === agent.id && (
-                            <div className="absolute top-0 right-0 p-1.5 bg-purple-500 text-white rounded-bl-xl">
-                              <CheckCircle2 size={10} />
-                            </div>
-                          )}
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500 shadow-xl", 
-                              agent.color,
-                              draftActiveAgentId === agent.id ? "ring-2 ring-white/20" : ""
-                            )}>
-                              <AgentIcon iconName={agent.iconName} size={22} />
-                            </div>
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-[13px] font-black uppercase tracking-widest truncate">{agent.name}</span>
-                              <span className="text-[10px] font-medium opacity-50 truncate">{agent.shortDescription || 'Persona especializada'}</span>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-4 pt-4 border-t border-white/5">
-                            <p className="text-[10px] line-clamp-2 opacity-40 italic leading-relaxed">
-                              {agent.systemPrompt}
-                            </p>
-                          </div>
-                          
-                          {customAgents.some(a => a.id === agent.id) && (
-                            <div className="absolute bottom-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }}
-                                className="p-2 hover:bg-white/10 rounded-lg text-[#8e918f] hover:text-white transition-colors"
-                              >
-                                <Terminal size={12} />
-                              </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }}
-                                className="p-2 hover:bg-red-400/10 rounded-lg text-[#8e918f] hover:text-red-400 transition-colors"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      
-                      <button 
-                        onClick={() => { setEditingAgent(null); setAgentForm({}); setIsAgentFormOpen(true); }}
-                        className="p-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/20 transition-all flex flex-col items-center justify-center gap-4 group min-h-[140px]"
-                      >
-                        <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:bg-white/[0.08] transition-all group-hover:-translate-y-1">
-                          <Plus size={20} className="text-[#8e918f] group-hover:text-white transition-colors" />
-                        </div>
-                        <span className="text-[10px] font-black text-[#8e918f] group-hover:text-white uppercase tracking-[0.2em]">Sincronizar Nova Persona</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {settingsTab === 'security' && (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-10">
-                    <div className="flex items-center justify-between">
-                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
-                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Protocolos de Segurança</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                          <ShieldCheck size={20} />
-                        </div>
-                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Storage Local Isolado</h4>
-                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Suas chaves de API e histórico de conversas são armazenados exclusivamente na memória local do seu navegador (LocalStorage). Nenhum dado é enviado para nossos servidores.</p>
-                      </div>
-
-                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
-                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                          <Lock size={20} />
-                        </div>
-                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Criptografia em Trânsito</h4>
-                        <p className="text-[12px] text-[#8e918f] leading-relaxed">As comunicações com o modelo Gemini utilizam túneis HTTPS protegidos por TLS 1.3, garantindo que o conteúdo dos prompts seja inacessível por terceiros.</p>
-                      </div>
-
-                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
-                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                          <EyeOff size={20} />
-                        </div>
-                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Modo Privado Permanente</h4>
-                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Não utilizamos seus dados para treinamento de modelos de terceiros. Sua privacidade é o pilar central da arquitetura Nexus.</p>
-                      </div>
-
-                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                          <Activity size={20} />
-                        </div>
-                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Auditoria de Chamadas</h4>
-                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Você tem controle total sobre as chamadas de API, podendo monitorar o consumo e alternar entre diferentes chaves instantaneamente.</p>
-                      </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400/60">
-                      <CheckCircle2 size={14} />
-                      SISTEMA STATUS: PROTEGIDO
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {hasSettingsChanges && (
-              <div className="absolute bottom-20 inset-x-4 flex justify-center z-50">
-                <div className="bg-[#1a1b1e]/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between gap-4 w-full max-w-2xl">
-                  <span className="text-[12px] text-[#8e918f]">Modificações pendentes...</span>
-                  <div className="flex gap-3">
-                     <Button variant="ghost" onClick={() => setActiveTab('chat')} className="text-[#8e918f]">Cancelar</Button>
-                     <Button onClick={saveSettings} className="bg-[#c2e7ff] text-[#001d35] font-bold">Salvar</Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <SettingsPanel 
+            settingsTab={settingsTab}
+            setSettingsTab={setSettingsTab}
+            draftApiKey={draftApiKey}
+            setDraftApiKey={setDraftApiKey}
+            draftSelectedModel={draftSelectedModel}
+            setDraftSelectedModel={setDraftSelectedModel}
+            draftTemperature={draftTemperature}
+            setDraftTemperature={setDraftTemperature}
+            draftSystemPrompt={draftSystemPrompt}
+            setDraftSystemPrompt={setDraftSystemPrompt}
+            draftActiveAgentId={draftActiveAgentId}
+            setDraftActiveAgentId={setDraftActiveAgentId}
+            apiPresets={apiPresets}
+            deletePreset={deletePreset}
+            allAgents={allAgents}
+            customAgents={customAgents}
+            deleteAgent={deleteAgent}
+            isSystemPromptExpanded={isSystemPromptExpanded}
+            setIsSystemPromptExpanded={setIsSystemPromptExpanded}
+            setEditingPreset={setEditingPreset}
+            setPresetForm={setPresetForm}
+            setIsPresetFormOpen={setIsPresetFormOpen}
+            setEditingAgent={setEditingAgent}
+            setAgentForm={setAgentForm}
+            setIsAgentFormOpen={setIsAgentFormOpen}
+            hasSettingsChanges={hasSettingsChanges}
+            setActiveTab={setActiveTab}
+            saveSettings={saveSettings}
+          />
         )}
       </main>
 
@@ -1270,83 +1049,20 @@ export default function App() {
         hasFiles={hasFiles}
       />
 
-      <Dialog open={isPresetFormOpen} onOpenChange={setIsPresetFormOpen}>
-        <DialogContent className="max-w-md bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] p-6 rounded-2xl">
-          <DialogHeader><DialogTitle>{editingPreset ? 'Editar Preset API' : 'Novo Preset API'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-4">
-             <div className="space-y-2">
-               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Identificação</label>
-               <Input value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} placeholder="Ex: Produção, Testes..." className="bg-transparent border-[#333538]" />
-             </div>
-             <div className="space-y-2">
-               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Gemini API Key</label>
-               <Input type="password" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} placeholder="Past key here..." className="bg-transparent border-[#333538]" />
-             </div>
-             <div className="flex justify-end gap-3 pt-4">
-                <Button variant="ghost" onClick={() => setIsPresetFormOpen(false)}>Cancelar</Button>
-                <Button onClick={addOrUpdatePreset} className="bg-blue-400 text-[#001d35] font-bold">Confirmar</Button>
-             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isAgentFormOpen} onOpenChange={setIsAgentFormOpen}>
-        <DialogContent className="max-w-md bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] p-6 rounded-2xl">
-          <DialogHeader><DialogTitle className="uppercase tracking-widest font-black text-sm">{editingAgent ? 'Ajustar Parâmetros de Identidade' : 'Forjar Nova Identidade'}</DialogTitle></DialogHeader>
-          <div className="space-y-6 pt-6">
-             <div className="space-y-2">
-               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Nomenclatura</label>
-               <Input value={agentForm.name || ''} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} placeholder="Ex: Engenheiro de React, Designer..." className="bg-transparent border-[#333538] h-11" />
-             </div>
-             
-             <div className="space-y-2">
-               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Breve Descrição</label>
-               <Input value={agentForm.shortDescription || ''} onChange={(e) => setAgentForm({ ...agentForm, shortDescription: e.target.value })} placeholder="Ex: Especialista em UI/UX..." className="bg-transparent border-[#333538] h-11" />
-             </div>
-
-             <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                 <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Ícone (Lucide)</label>
-                 <Select value={agentForm.iconName || 'Brain'} onValueChange={(val: string | null) => val && setAgentForm({ ...agentForm, iconName: val })}>
-                   <SelectTrigger className="bg-transparent border-[#333538] h-11"><SelectValue /></SelectTrigger>
-                   <SelectContent className="bg-[#1a1b1e] border-white/10">
-                     <SelectItem value="Brain">Brain</SelectItem>
-                     <SelectItem value="Code">Code</SelectItem>
-                     <SelectItem value="Terminal">Terminal</SelectItem>
-                     <SelectItem value="Layout">Layout</SelectItem>
-                     <SelectItem value="Shield">Shield</SelectItem>
-                     <SelectItem value="Zap">Zap</SelectItem>
-                   </SelectContent>
-                 </Select>
-               </div>
-               <div className="space-y-2">
-                 <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Sinalização Visual</label>
-                 <Select value={agentForm.color || 'bg-purple-500'} onValueChange={(val: string | null) => val && setAgentForm({ ...agentForm, color: val })}>
-                   <SelectTrigger className="bg-transparent border-[#333538] h-11"><SelectValue /></SelectTrigger>
-                   <SelectContent className="bg-[#1a1b1e] border-white/10">
-                     <SelectItem value="bg-purple-500">Púrpura</SelectItem>
-                     <SelectItem value="bg-blue-500">Azul</SelectItem>
-                     <SelectItem value="bg-emerald-500">Esmeralda</SelectItem>
-                     <SelectItem value="bg-amber-500">Âmbar</SelectItem>
-                     <SelectItem value="bg-rose-500">Rosa</SelectItem>
-                     <SelectItem value="bg-zinc-500">Zinco</SelectItem>
-                   </SelectContent>
-                 </Select>
-               </div>
-             </div>
-
-             <div className="space-y-2">
-               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Matriz de Comportamento (System Prompt)</label>
-               <Textarea value={agentForm.systemPrompt || ''} onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })} placeholder="Defina como este agente deve se comportar..." className="bg-[#131314] border-[#333538] min-h-[150px] custom-scrollbar focus:ring-1 focus:ring-purple-500/30" />
-             </div>
-
-             <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <Button variant="ghost" onClick={() => setIsAgentFormOpen(false)} className="text-[#8e918f]">Abortar</Button>
-                <Button onClick={addOrUpdateAgent} className="bg-purple-500 text-white font-black uppercase tracking-widest text-[11px] h-11 px-8">Sincronizar</Button>
-             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SettingsDialogs 
+        isPresetFormOpen={isPresetFormOpen}
+        setIsPresetFormOpen={setIsPresetFormOpen}
+        editingPreset={editingPreset}
+        presetForm={presetForm}
+        setPresetForm={setPresetForm}
+        addOrUpdatePreset={addOrUpdatePreset}
+        isAgentFormOpen={isAgentFormOpen}
+        setIsAgentFormOpen={setIsAgentFormOpen}
+        editingAgent={editingAgent}
+        agentForm={agentForm}
+        setAgentForm={setAgentForm}
+        addOrUpdateAgent={addOrUpdateAgent}
+      />
 
       <Dialog open={isClearHistoryModalOpen} onOpenChange={setIsClearHistoryModalOpen}>
         <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 rounded-2xl">

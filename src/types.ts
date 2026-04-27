@@ -35,6 +35,15 @@ export type GeneratedFile = {
   code: string;
 };
 
+export type AgentDefinition = {
+  id: string;
+  name: string;
+  iconName: string;
+  color: string;
+  shortDescription: string;
+  systemPrompt: string;
+};
+
 export type FileHistoryEntry = {
   timestamp: number;
   files: GeneratedFile[];
