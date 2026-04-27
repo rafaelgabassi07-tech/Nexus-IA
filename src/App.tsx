@@ -39,7 +39,7 @@ const AgentIcon = ({ iconName, size = 18 }: { iconName?: string; size?: number }
 
 import { AGENTS, defaultWelcomeMessage } from './agents';
 import type { AgentDefinition } from './agents';
-import { cn } from './lib/utils';
+import { cn, generateId } from './lib/utils';
 import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
 import { Input } from './components/ui/input';
@@ -246,7 +246,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro-preview');
   const [temperature, setTemperature] = useState<number>(0.7);
   const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
   
@@ -265,6 +265,9 @@ export default function App() {
   const [isAgentFormOpen, setIsAgentFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
   const [agentForm, setAgentForm] = useState<Partial<AgentDefinition>>({});
+
+  const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Draft states for settings modal
   const [draftApiKey, setDraftApiKey] = useState(apiKey);
@@ -424,6 +427,13 @@ export default function App() {
         setIsSidebarOpen(false);
       }
       
+      // Ctrl+K to search history
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSidebarOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
+      }
+
       // Escape to close everything
       if (e.key === 'Escape') {
         setIsSidebarOpen(false);
@@ -445,14 +455,7 @@ export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  
-  const generateId = () => {
-    try {
-      return crypto.randomUUID();
-    } catch (e) {
-      return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    }
-  };
+  const lastExtractionTimeRef = useRef<number>(0);
 
   const resetChat = () => {
     setCurrentChatId(generateId());
@@ -464,6 +467,16 @@ export default function App() {
       }
     ]);
   };
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [messages]);
 
   // Save to local storage when chat history changes
   useEffect(() => {
@@ -536,9 +549,9 @@ export default function App() {
             <script type="importmap">
               {
                 "imports": {
-                  "react": "https://esm.sh/react@18.2.0",
-                  "react-dom": "https://esm.sh/react-dom@18.2.0/client",
-                  "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+                  "react": "https://esm.sh/react@19.0.0",
+                  "react-dom": "https://esm.sh/react-dom@19.0.0",
+                  "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
                   "lucide-react": "https://esm.sh/lucide-react@0.344.0",
                   "motion/react": "https://esm.sh/motion@11.11.13/react",
                   "framer-motion": "https://esm.sh/framer-motion@11.11.13",
@@ -715,7 +728,7 @@ export default function App() {
           } catch (e) {
             console.error('Failed to read image', file.name);
           }
-        } else if (file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.ts') || file.name.endsWith('.tsx') || file.name.endsWith('.json') || file.name.endsWith('.md')) {
+        } else if (file.type.startsWith('text/') || /\.(js|jsx|ts|tsx|json|md|py|css|html|yaml|yml|sh|sql|env|env\.example|toml|rs|go)$/i.test(file.name)) {
           try {
             const text = await file.text();
             finalMessage += `\n\n\`\`\`${file.name}\n${text}\n\`\`\``;
@@ -816,11 +829,16 @@ export default function App() {
                   m.id === messageId ? { ...m, content: fullResponse } : m
                 ));
                 
-                // Extração de arquivos em tempo real
-                const currentFiles = extractFilesFromMarkdown(fullResponse);
-                if (currentFiles.length > 0) {
-                  setGeneratedFiles(currentFiles);
-                  setActiveFileIndex(currentFiles.length - 1);
+                // Extração de arquivos em tempo real (throttled)
+                if (Date.now() - lastExtractionTimeRef.current > 500) {
+                  lastExtractionTimeRef.current = Date.now();
+                  const currentFiles = extractFilesFromMarkdown(fullResponse);
+                  if (currentFiles.length > 0) {
+                    setGeneratedFiles(currentFiles);
+                    if (generatedFiles.length === 0 && currentFiles.length > 0) {
+                       setActiveFileIndex(currentFiles.length - 1);
+                    }
+                  }
                 }
               }
             }
@@ -855,7 +873,7 @@ export default function App() {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -916,10 +934,11 @@ export default function App() {
               <div className="px-4 mb-2">
                 <input
                   type="text"
-                  placeholder="Buscar conversas..."
+                  ref={searchInputRef}
+                  placeholder="Buscar conversas... (Ctrl+K)"
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
-                  className="w-full bg-[#282a2d] border border-[#333538] rounded-xl px-3 py-2 text-[13px] text-[#f1f3f4] placeholder:text-[#8e918f] outline-none"
+                  className="w-full bg-[#282a2d] border border-[#333538] rounded-xl px-3 py-2 text-[13px] text-[#f1f3f4] placeholder:text-[#8e918f] outline-none focus:ring-1 focus:ring-[#a8c7fa]/30"
                 />
               </div>
 
@@ -978,9 +997,7 @@ export default function App() {
                 <div className="p-4 border-t border-white/5 bg-[#131314]/50">
                   <button 
                     onClick={() => {
-                      setChatHistory([]);
-                      localStorage.removeItem('nexus_chat_history');
-                      resetChat();
+                      setIsClearHistoryModalOpen(true);
                       setIsSidebarOpen(false);
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 text-[12px] text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-all font-medium"
@@ -1668,7 +1685,7 @@ export default function App() {
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
                                   <SelectTrigger className="bg-white/[0.02] border-white/10 text-[#f1f3f4] h-9 text-[12px] rounded-lg px-3 focus:ring-1 focus:ring-blue-500/30"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash Preview</SelectItem>
+                                    <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</SelectItem>
                                     <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Flash Thinking</SelectItem>
                                     <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</SelectItem>
@@ -1957,6 +1974,40 @@ export default function App() {
                   {editingAgent ? 'Salvar Alterações' : 'Criar Subagente'}
                 </Button>
              </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isClearHistoryModalOpen} onOpenChange={setIsClearHistoryModalOpen}>
+        <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 shadow-2xl backdrop-blur-3xl rounded-2xl">
+          <DialogHeader className="mb-4 text-left">
+            <DialogTitle className="text-[18px] font-black tracking-widest uppercase flex items-center gap-2 text-white">
+              <Trash2 className="text-red-400" size={20} />
+              Limpar Histórico
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-[13px] text-[#b2b5b4] leading-relaxed">
+            Tem certeza de que deseja apagar permanentemente todas as suas conversas? Esta ação não pode ser desfeita.
+          </div>
+          <div className="flex justify-end gap-3 mt-8">
+            <Button 
+              variant="ghost" 
+              onClick={() => setIsClearHistoryModalOpen(false)} 
+              className="text-[#8e918f] hover:text-white hover:bg-white/5 h-10 px-4 rounded-xl font-medium"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => {
+                setChatHistory([]);
+                localStorage.removeItem('nexus_chat_history');
+                resetChat();
+                setIsClearHistoryModalOpen(false);
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white font-bold h-10 px-6 rounded-xl shadow-lg border border-red-400/20"
+            >
+              Excluir Tudo
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

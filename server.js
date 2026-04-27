@@ -51,7 +51,7 @@ app.post('/api/chat', limiter, async (req, res) => {
     'gemini-2.0-pro-exp-02-05', 
     'gemini-1.5-pro', 
     'gemini-1.5-flash',
-    'gemini-3-flash-preview' // Adicionando o que já estava sendo usado como fallback
+    'gemini-3.1-pro-preview' // Adicionando o que já estava sendo usado como fallback
   ];
   if (model && !ALLOWED_MODELS.includes(model)) {
     return res.status(400).json({ error: `Modelo '${model}' não permitido.` });
@@ -62,7 +62,7 @@ app.post('/api/chat', limiter, async (req, res) => {
     return res.status(400).json({ error: 'Campo messages inválido.' });
   }
 
-  const targetModel = model || 'gemini-3-flash-preview';
+  const targetModel = model || 'gemini-3.1-pro-preview';
 
   let clientClosed = false;
   req.on('close', () => {
