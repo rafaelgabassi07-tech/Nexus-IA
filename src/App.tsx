@@ -171,8 +171,7 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code'>('chat');
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
   const [temperature, setTemperature] = useState<number>(0.7);
@@ -205,18 +204,17 @@ export default function App() {
            draftActivePresetId !== activePresetId;
   }, [apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId, draftApiKey, draftSelectedModel, draftTemperature, draftSystemPrompt, draftActiveAgentId, draftActivePresetId]);
 
-  // Sync draft states when opening modal
+  // Sync draft states when opening settings tab
   useEffect(() => {
-    if (showSettings) {
+    if (activeTab === 'settings') {
       setDraftApiKey(apiKey);
       setDraftSelectedModel(selectedModel);
       setDraftTemperature(temperature);
       setDraftSystemPrompt(systemPrompt);
       setDraftActiveAgentId(activeAgentId);
       setDraftActivePresetId(activePresetId);
-      setSettingsTab('overview');
     }
-  }, [showSettings, apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId]);
+  }, [activeTab, apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId]);
 
   const saveSettings = () => {
     setApiKey(draftApiKey);
@@ -224,11 +222,12 @@ export default function App() {
     setTemperature(draftTemperature);
     setSystemPrompt(draftSystemPrompt);
     setActiveAgentId(draftActiveAgentId);
+    setDraftActivePresetId(null); // Clear preset if manual settings are saved or handled
     setActivePresetId(draftActivePresetId);
     localStorage.setItem('nexus_active_agent_id', draftActiveAgentId);
     if (draftActivePresetId) localStorage.setItem('nexus_active_preset_id', draftActivePresetId);
     else localStorage.removeItem('nexus_active_preset_id');
-    setShowSettings(false);
+    setActiveTab('chat');
   };
 
   const saveApiPresets = (presets: APIPreset[]) => {
@@ -719,7 +718,8 @@ export default function App() {
         {/* Chat / Prompt Section */}
         <div className={cn(
           "flex flex-col flex-1 bg-[#131314] border-r border-[#333538] min-h-0",
-          activeTab !== 'chat' && "hidden md:flex"
+          activeTab !== 'chat' && "hidden md:flex",
+          activeTab === 'settings' && "md:hidden"
         )}>
           {/* Technical Execution Bar (Simulating the image) */}
           <AnimatePresence>
@@ -979,7 +979,8 @@ export default function App() {
         {/* Preview / Canvas Section */}
         <div className={cn(
           "flex-1 flex flex-col bg-[#131314] min-h-0",
-          activeTab === 'chat' && "hidden md:flex"
+          (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
+          activeTab === 'settings' && "md:hidden"
         )}>
           {/* Section Header */}
           <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 relative z-10 shadow-sm w-full">
@@ -1103,16 +1104,15 @@ export default function App() {
           </div>
         </div>
 
-      </main>
 
 
       {/* Modern Global Bottom Navigation (Floating Pill) */}
       <div className="fixed bottom-4 inset-x-0 px-4 flex justify-center z-40 pointer-events-none">
-        <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-3 rounded-full shadow-2xl w-full max-w-[440px] pointer-events-auto ring-1 ring-black/20">
+        <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-3 rounded-full shadow-2xl w-full max-w-[480px] pointer-events-auto ring-1 ring-black/20">
           {[
             { id: 'chat', icon: MessageSquare, label: 'Chat' },
             { id: 'preview', icon: Layout, label: 'Canvas' },
-            { id: 'code', icon: Terminal, label: 'Código', dot: hasFiles }
+            { id: 'code', icon: Terminal, label: 'Código', dot: hasFiles },
           ].map((item) => (
             <button
               key={item.id}
@@ -1130,8 +1130,8 @@ export default function App() {
                 />
               )}
               <div className="relative">
-                <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} className={activeTab === item.id ? "text-[#a8c7fa]" : ""} />
-                {item.dot && <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-[#a8c7fa] border-2 border-[#1e1e1f]" />}
+                <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} className={cn(activeTab === item.id ? "text-[#a8c7fa]" : "")} />
+                {item.id === 'code' && item.dot && <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-[#a8c7fa] border-2 border-[#1e1e1f]" />}
               </div>
               <span className="text-[10px] font-medium tracking-wide leading-none">{item.label}</span>
             </button>
@@ -1139,441 +1139,257 @@ export default function App() {
 
           <div className="w-[1px] h-6 bg-[#333538] mx-1 z-10"></div>
 
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="relative flex flex-col items-center justify-center p-2 min-w-[64px] gap-1 text-[#8e918f] hover:text-[#f1f3f4] transition-colors z-10 group"
-          >
-            <HistoryIcon size={20} className="group-hover:-rotate-12 transition-transform duration-300" strokeWidth={2} />
-            <span className="text-[10px] font-medium tracking-wide leading-none">Histórico</span>
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                setActiveTab('settings');
+                setSettingsTab('overview');
+              }}
+              className={cn(
+                "relative flex flex-col items-center justify-center p-2 min-w-[56px] gap-1 transition-colors z-10",
+                activeTab === 'settings' ? "text-white" : "text-[#8e918f] hover:text-[#f1f3f4]"
+              )}
+            >
+              {activeTab === 'settings' && (
+                <motion.div
+                  layoutId="bottom-nav-indicator"
+                  className="absolute inset-0 bg-[#a8c7fa]/20 rounded-full -z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <div className="relative">
+                <Settings size={20} strokeWidth={activeTab === 'settings' ? 2.5 : 2} className={cn(activeTab === 'settings' ? "text-[#a8c7fa] rotate-45 transition-transform duration-500" : "")} />
+              </div>
+              <span className="text-[10px] font-medium tracking-wide leading-none">Ajustes</span>
+            </button>
 
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="relative flex flex-col items-center justify-center p-2 min-w-[64px] gap-1 text-[#8e918f] hover:text-[#f1f3f4] transition-colors z-10 group"
-          >
-            <Settings size={20} className="group-hover:rotate-45 transition-transform duration-300" strokeWidth={2} />
-            <span className="text-[10px] font-medium tracking-wide leading-none">Ajustes</span>
-          </button>
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="relative flex flex-col items-center justify-center p-2 min-w-[64px] gap-1 text-[#8e918f] hover:text-[#f1f3f4] transition-colors z-10 group"
+            >
+              <HistoryIcon size={20} className="group-hover:-rotate-12 transition-transform duration-300" strokeWidth={2} />
+              <span className="text-[10px] font-medium tracking-wide leading-none">Histórico</span>
+            </button>
+          </div>
         </nav>
       </div>
 
-      <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent showCloseButton={false} className="fixed inset-0 !max-w-none !w-full !h-[100dvh] !translate-x-0 !translate-y-0 !top-0 !left-0 m-0 !rounded-none bg-[#09090b] border-0 text-[#f1f3f4] p-0 overflow-hidden shadow-none z-[100] flex flex-col font-sans">
-          <DialogHeader className="h-[64px] min-h-[64px] bg-[#09090b]/80 backdrop-blur-md px-4 md:px-6 border-b border-white/5 flex-shrink-0 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 flex items-center justify-center text-blue-400 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                <Settings size={18} />
-              </div>
-              <div className="flex flex-col">
-                <DialogTitle className="text-[14px] font-black text-white uppercase tracking-[0.2em] leading-none focus:outline-none">
-                  Nexus Console
-                </DialogTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-                  <p className="text-[8px] text-[#5f6368] font-black uppercase tracking-[0.4em] leading-none">System Core Configuration</p>
+      {/* Settings Section */}
+      {activeTab === 'settings' && (
+          <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden animate-in fade-in duration-500 font-sans">
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="max-w-3xl mx-auto px-6 py-10 pb-[120px]">
+                  {settingsTab === 'overview' && (
+                    <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
+                      <div className="space-y-1.5 text-center px-4">
+                        <h2 className="text-[18px] font-black text-white uppercase tracking-[0.3em]">Console de Orquestração</h2>
+                        <p className="text-[#8e918f] text-[10px] uppercase font-bold tracking-[0.4em]">Configuração de modelos, agentes e protocolos</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
+                        {[
+                          { id: 'general', title: 'Motor', desc: 'Conectividade', icon: Key, color: 'text-blue-400', border: 'hover:border-blue-500/20' },
+                          { id: 'agent', title: 'Identidade', desc: 'Comportamento', icon: Brain, color: 'text-purple-400', border: 'hover:border-purple-500/20' },
+                          { id: 'security', title: 'Segurança', desc: 'Privacidade', icon: Shield, color: 'text-emerald-400', border: 'hover:border-emerald-500/20' }
+                        ].map((card) => (
+                          <button
+                            key={card.id}
+                            onClick={() => setSettingsTab(card.id as any)}
+                            className={cn(
+                              "group p-3.5 rounded-xl border border-white/5 transition-all duration-300 text-left flex items-center gap-3.5 bg-white/[0.01] hover:bg-white/[0.03] active:scale-[0.98]",
+                              card.border
+                            )}
+                          >
+                            <div className={cn("w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5 transition-all duration-300 group-hover:scale-105", card.color)}>
+                              <card.icon size={13} />
+                            </div>
+                            <div className="flex-1 space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-[10.5px] font-black text-white uppercase tracking-[0.12em] leading-none">{card.title}</h3>
+                                <ArrowUp size={7} className="rotate-45 text-white/10 group-hover:text-white/40 transition-colors" />
+                              </div>
+                              <p className="text-[#8e918f] text-[8.5px] uppercase font-bold tracking-tight">{card.desc}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'general' && (
+                    <div className="space-y-8 animate-in fade-in duration-400">
+                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors">
+                        <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
+                        VOLTAR
+                      </button>
+                      <div className="space-y-8">
+                        <div className="space-y-4">
+                          <div className="space-y-1 border-l border-white/10 pl-4">
+                             <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Motor IA</h3>
+                             <p className="text-[10px] text-[#8e918f] uppercase tracking-widest font-bold">Configuração básica</p>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/[0.01] p-4 rounded-xl border border-white/5">
+                            <div className="space-y-3">
+                              <div className="space-y-1.5">
+                                <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">API Key</label>
+                                <Input type="password" value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso..." className="bg-white/[0.02] border-white/10 rounded-lg h-9 px-3 text-[12px] focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all" />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">Modelo</label>
+                                <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
+                                  <SelectTrigger className="bg-white/[0.02] border-white/10 text-[#f1f3f4] h-9 text-[12px] rounded-lg px-3 focus:ring-1 focus:ring-blue-500/30"><SelectValue /></SelectTrigger>
+                                  <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                                    <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="space-y-6 py-1">
+                              <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest">Criatividade</label>
+                                  <span className="text-[11px] font-mono font-bold text-blue-400 tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">{draftTemperature}</span>
+                                </div>
+                                <div className="space-y-2">
+                                  <input type="range" min="0" max="1.5" step="0.1" value={draftTemperature} onChange={(e) => setDraftTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 transition-all hover:accent-blue-400" />
+                                  <div className="flex justify-between text-[8px] font-black text-[#5f6368] uppercase tracking-widest"><span>Precisão</span><span>Criatividade</span></div>
+                                </div>
+                              </div>
+                              <div className="space-y-1 mt-2">
+                                <p className="text-[10px] text-white/50 leading-tight uppercase font-bold tracking-tight">Controle de Variação de Resposta</p>
+                                <p className="text-[10px] text-[#5f6368] leading-tight uppercase font-bold opacity-80">Alterne entre o rigor de códigos técnicos (0.0) e a fluidez de escrita criativa (1.0+).</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                             <div className="space-y-0.5"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Biblioteca Local</h3><p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest">Endpoints pré-configurados</p></div>
+                             <button onClick={() => { setEditingPreset(null); setPresetForm({ model: draftSelectedModel, apiKey: draftApiKey }); setIsPresetFormOpen(true); }} className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded uppercase tracking-widest">Novo Preset</button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {apiPresets.map((preset) => (
+                              <div key={preset.id} onClick={() => setDraftActivePresetId(preset.id)} className={cn("group py-3 px-1 transition-all cursor-pointer flex flex-col gap-1 relative", draftActivePresetId === preset.id ? "border-l-2 border-white opacity-100 pl-3" : "border-l-2 border-transparent opacity-30 hover:opacity-100 hover:pl-3 transition-all")}>
+                                <span className="text-[11px] font-black text-white uppercase tracking-wider">{preset.name}</span>
+                                <span className="text-[9px] text-[#5f6368] font-mono tracking-tighter truncate uppercase">{preset.model}</span>
+                                <div className="absolute top-3 right-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={(e) => { e.stopPropagation(); setEditingPreset(preset); setPresetForm(preset); setIsPresetFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={12} /></button>
+                                  <button onClick={(e) => deletePreset(preset.id, e)} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={12} /></button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {isPresetFormOpen && (
+                            <div className="border-t border-white/5 pt-8 animate-in slide-in-from-top-2 duration-300">
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+                                 <div className="space-y-6">
+                                   <div className="space-y-2"><label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Identificação</label><Input placeholder="Nome da Instância" value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" /></div>
+                                   <div className="space-y-2"><label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">API Key</label><Input type="password" placeholder="••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" /></div>
+                                 </div>
+                                 <div className="flex items-end justify-end gap-8 mb-2">
+                                   <button onClick={() => setIsPresetFormOpen(false)} className="text-[10px] font-black text-[#8e918f] hover:text-white uppercase tracking-widest">Descartar</button>
+                                   <button onClick={addOrUpdatePreset} className="text-[10px] font-black text-white hover:bg-white hover:text-black transition-all uppercase tracking-widest border border-white/20 px-8 py-2 rounded">Gravar</button>
+                                 </div>
+                               </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'agent' && (
+                    <div className="space-y-6 animate-in fade-in duration-400">
+                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"><ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />VOLTAR</button>
+                      <div className="space-y-8">
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between border-l border-white/10 pl-4">
+                             <div className="space-y-0.5"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Identidade</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Perfis configurados</p></div>
+                             <button onClick={() => { setEditingAgent(null); setAgentForm({ iconName: 'Brain', color: 'bg-zinc-700' }); setIsAgentFormOpen(true); }} className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded-lg uppercase tracking-widest">NOVO</button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-1">
+                            {allAgents.map(agent => {
+                              const isDefault = AGENTS.some(a => a.id === agent.id);
+                              const isSelected = draftActiveAgentId === agent.id;
+                              return (
+                                <div key={agent.id} onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} className={cn("transition-all cursor-pointer flex items-center gap-3 group relative py-1.5", isSelected ? "opacity-100 pl-2 border-l border-blue-500" : "opacity-40 hover:opacity-100 hover:pl-2 border-l border-transparent transition-all")}>
+                                  <div className={cn("w-7 h-7 rounded flex items-center justify-center text-white shrink-0 transition-all", isSelected ? "bg-white text-black" : "bg-white/[0.05] text-[#5f6368] border border-white/5")}>
+                                       {agent.iconName === 'Hexagon' && <Hexagon size={12} />}{agent.iconName === 'Brain' && <Brain size={12} />}{agent.iconName === 'Sparkles' && <Sparkles size={12} />}{agent.iconName === 'Shield' && <Shield size={12} />}{agent.iconName === 'Terminal' && <Terminal size={12} />}{agent.iconName === 'Activity' && <Activity size={12} />}{agent.iconName === 'Users' && <Users size={12} />}
+                                       {(!agent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(agent.iconName)) && <MessageSquare size={12} />}
+                                  </div>
+                                  <div className="flex-1 min-w-0"><p className="text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">{agent.name}</p><p className="text-[8px] text-[#5f6368] font-bold uppercase tracking-widest leading-tight">{isDefault ? 'CORE' : 'CUSTOM'}</p></div>
+                                  {!isDefault && (
+                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={10} /></button>
+                                      <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={10} /></button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-5">
+                          <div className="space-y-1 border-l border-white/10 pl-4"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Procedimentos</h3><p className="text-[10px] text-[#8e918f] font-bold uppercase tracking-widest">Diretrizes de base do sistema</p></div>
+                          <div className="relative group">
+                            <Textarea value={draftSystemPrompt} onChange={(e) => setDraftSystemPrompt(e.target.value)} className="bg-white/[0.01] border border-white/5 focus:border-blue-500/50 min-h-[120px] text-[#f1f3f4] rounded-xl font-mono text-[11px] p-4 leading-relaxed resize-none shadow-none focus-visible:ring-1 focus-visible:ring-blue-500/20 transition-all scrollbar-hide" placeholder="Defina as diretrizes fundamentais..." />
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[8px] font-black text-[#5f6368] uppercase tracking-widest select-none pointer-events-none group-focus-within:text-blue-400 transition-colors"><div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />MODO_IA</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'security' && (
+                    <div className="space-y-6 animate-in fade-in duration-400">
+                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"><ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />VOLTAR</button>
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <div className="space-y-1 border-l border-white/10 pl-4"><h3 className="text-[13px] font-black text-white uppercase tracking-widest">Privacidade</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Dados e sigilo</p></div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
+                            {[
+                              { title: 'Offline-First', desc: 'Dados e logs confinados ao armazenamento local seguro do seu navegador.', icon: Shield, color: 'text-blue-400' },
+                              { title: 'Criptografia', desc: 'Comunicação com os motores Gemini utiliza TLS 1.3 para blindagem total.', icon: Key, color: 'text-blue-400' },
+                              { title: 'Zero Telemetria', desc: 'Sem rastreamento, sem telemetria e sem scripts de terceiros.', icon: Activity, color: 'text-blue-400' },
+                              { title: 'Expurgo', desc: 'Ao resetar, ocorre uma aniquilação completa de todas as chaves e memórias.', icon: Trash2, color: 'text-blue-400' }
+                            ].map((item, i) => (
+                              <div key={i} className="space-y-2 group bg-white/[0.01] p-4 rounded-xl border border-white/5 hover:bg-white/[0.02] transition-colors"><div className="flex items-center gap-2"><div className={cn("w-7 h-7 flex items-center justify-center rounded bg-white/[0.03] border border-white/5 transition-transform", item.color)}><item.icon size={12} /></div><h4 className="text-[12px] font-black text-white uppercase tracking-widest leading-none">{item.title}</h4></div><p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold tracking-tight group-hover:text-[#8e918f] transition-colors">{item.desc}</p></div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="pt-6 border-t border-white/5">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-5 py-6 bg-red-500/[0.02] rounded-2xl border border-red-500/10 shadow-xl shadow-red-500/5">
+                            <div className="space-y-1"><h4 className="text-[14px] font-black text-red-500 uppercase tracking-widest">Célula de Expurgo</h4><p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold max-w-sm">Elimina chaves, presets e histórico sem deixar rastros digitais locais.</p></div>
+                            <button onClick={() => { if(confirm('Terminar permanentemente todas as configurações locais?')) { setChatHistory([]); resetChat(); setApiKey(''); setApiPresets([]); setActivePresetId(null); localStorage.clear(); window.location.reload(); } }} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white transition-all text-[11px] font-black uppercase tracking-widest px-8 py-2.5 rounded-lg border border-red-500/20 whitespace-nowrap">Resetar Nexus</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-            <button 
-              onClick={() => setShowSettings(false)}
-              className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-all"
-              aria-label="Fechar configurações"
-            >
-              <X size={18} />
-            </button>
-          </DialogHeader>
 
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="max-w-3xl mx-auto px-6 py-10 pb-20">
-                
-                {settingsTab === 'overview' && (
-                  <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
-                    <div className="space-y-1.5 text-center px-4">
-                      <h2 className="text-[18px] font-black text-white uppercase tracking-[0.3em]">Console de Orquestração</h2>
-                      <p className="text-[#8e918f] text-[10px] uppercase font-bold tracking-[0.4em]">Configuração de modelos, agentes e protocolos</p>
+              {hasSettingsChanges && (
+                <div className="absolute bottom-20 inset-x-4 flex justify-center z-50 pointer-events-none">
+                  <div className="bg-[#1a1b1e]/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 w-full max-w-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto">
+                    <div className="flex items-center gap-2 text-[12px] text-[#8e918f]">
+                      <Activity size={14} className="text-blue-400 animate-pulse" />
+                      <span>Nexus Engine: Há modificações pendentes</span>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
-                      {[
-                        { 
-                          id: 'general', 
-                          title: 'Motor', 
-                          desc: 'Conectividade', 
-                          icon: Key,
-                          color: 'text-blue-400',
-                          border: 'hover:border-blue-500/20'
-                        },
-                        { 
-                          id: 'agent', 
-                          title: 'Identidade', 
-                          desc: 'Comportamento', 
-                          icon: Brain,
-                          color: 'text-purple-400',
-                          border: 'hover:border-purple-500/20'
-                        },
-                        { 
-                          id: 'security', 
-                          title: 'Segurança', 
-                          desc: 'Privacidade', 
-                          icon: Shield,
-                          color: 'text-emerald-400',
-                          border: 'hover:border-emerald-500/20'
-                        }
-                      ].map((card) => (
-                        <button
-                          key={card.id}
-                          onClick={() => setSettingsTab(card.id as any)}
-                          className={cn(
-                            "group p-3.5 rounded-xl border border-white/5 transition-all duration-300 text-left flex items-center gap-3.5 bg-white/[0.01] hover:bg-white/[0.03] active:scale-[0.98]",
-                            card.border
-                          )}
-                        >
-                          <div className={cn("w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5 transition-all duration-300 group-hover:scale-105", card.color)}>
-                            <card.icon size={13} />
-                          </div>
-                          <div className="flex-1 space-y-0.5">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-[10.5px] font-black text-white uppercase tracking-[0.12em] leading-none">{card.title}</h3>
-                              <ArrowUp size={7} className="rotate-45 text-white/10 group-hover:text-white/40 transition-colors" />
-                            </div>
-                            <p className="text-[#8e918f] text-[8.5px] uppercase font-bold tracking-tight">{card.desc}</p>
-                          </div>
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                      <Button variant="ghost" onClick={() => setActiveTab('chat')} className="flex-1 md:flex-none text-[#8e918f] hover:text-white">Cancelar</Button>
+                      <Button onClick={saveSettings} className="flex-1 md:flex-none font-bold px-8 h-10 rounded-xl bg-[#c2e7ff] text-[#001d35] hover:bg-[#b5cffb]">Salvar Alterações</Button>
                     </div>
                   </div>
-                )}
-
-                {settingsTab === 'general' && (
-                  <div className="space-y-8 animate-in fade-in duration-400">
-                    <button 
-                      onClick={() => setSettingsTab('overview')}
-                      className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"
-                    >
-                      <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-                      VOLTAR
-                    </button>
-                    
-                    <div className="space-y-8">
-                      <div className="space-y-4">
-                        <div className="space-y-1 border-l border-white/10 pl-4">
-                           <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Motor IA</h3>
-                           <p className="text-[10px] text-[#8e918f] uppercase tracking-widest font-bold">Configuração básica</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/[0.01] p-4 rounded-xl border border-white/5">
-                          <div className="space-y-3">
-                            <div className="space-y-1.5">
-                              <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">API Key</label>
-                              <Input
-                                type="password"
-                                value={draftApiKey}
-                                onChange={(e) => setDraftApiKey(e.target.value)}
-                                placeholder="Chave de acesso..."
-                                className="bg-white/[0.02] border-white/10 rounded-lg h-9 px-3 text-[12px] focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">Modelo</label>
-                              <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
-                                <SelectTrigger className="bg-white/[0.02] border-white/10 text-[#f1f3f4] h-9 text-[12px] rounded-lg px-3 focus:ring-1 focus:ring-blue-500/30">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                  <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                                  <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                                  <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="space-y-6 py-1">
-                            <div className="space-y-4">
-                              <div className="flex justify-between items-center">
-                                <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest">Criatividade</label>
-                                <span className="text-[11px] font-mono font-bold text-blue-400 tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">{draftTemperature}</span>
-                              </div>
-                              <div className="space-y-2">
-                                <input 
-                                  type="range" min="0" max="1.5" step="0.1" 
-                                  value={draftTemperature} 
-                                  onChange={(e) => setDraftTemperature(parseFloat(e.target.value))}
-                                  className="w-full h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 transition-all hover:accent-blue-400"
-                                />
-                                <div className="flex justify-between text-[8px] font-black text-[#5f6368] uppercase tracking-widest">
-                                  <span>Precisão</span>
-                                  <span>Criatividade</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="space-y-1 mt-2">
-                              <p className="text-[10px] text-white/50 leading-tight uppercase font-bold tracking-tight">
-                                Controle de Variação de Resposta
-                              </p>
-                              <p className="text-[10px] text-[#5f6368] leading-tight uppercase font-bold opacity-80">
-                                Alterne entre o rigor de códigos técnicos (0.0) e a fluidez de escrita criativa (1.0+).
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 2: API Presets */}
-                      <div className="space-y-6">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                           <div className="space-y-0.5">
-                             <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Biblioteca Local</h3>
-                             <p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest">Endpoints pré-configurados</p>
-                           </div>
-                           <button 
-                             onClick={() => {
-                               setEditingPreset(null);
-                               setPresetForm({ model: draftSelectedModel, apiKey: draftApiKey });
-                               setIsPresetFormOpen(true);
-                             }}
-                             className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded uppercase tracking-widest"
-                           >
-                               Novo Preset
-                           </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {apiPresets.map((preset) => (
-                            <div 
-                              key={preset.id}
-                              onClick={() => setDraftActivePresetId(preset.id)}
-                              className={cn(
-                                "group py-3 px-1 transition-all cursor-pointer flex flex-col gap-1 relative",
-                                draftActivePresetId === preset.id 
-                                  ? "border-l-2 border-white opacity-100 pl-3" 
-                                  : "border-l-2 border-transparent opacity-30 hover:opacity-100 hover:pl-3 transition-all"
-                              )}
-                            >
-                              <span className="text-[11px] font-black text-white uppercase tracking-wider">{preset.name}</span>
-                              <span className="text-[9px] text-[#5f6368] font-mono tracking-tighter truncate uppercase">{preset.model}</span>
-                              <div className="absolute top-3 right-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); setEditingPreset(preset); setPresetForm(preset); setIsPresetFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={12} /></button>
-                                <button onClick={(e) => deletePreset(preset.id, e)} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={12} /></button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        {isPresetFormOpen && (
-                          <div className="border-t border-white/5 pt-8 animate-in slide-in-from-top-2 duration-300">
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                               <div className="space-y-6">
-                                 <div className="space-y-2">
-                                   <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Identificação</label>
-                                   <Input placeholder="Nome da Instância" value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" />
-                                 </div>
-                                 <div className="space-y-2">
-                                   <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">API Key</label>
-                                   <Input type="password" placeholder="••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" />
-                                 </div>
-                               </div>
-                               <div className="flex items-end justify-end gap-8 mb-2">
-                                 <button onClick={() => setIsPresetFormOpen(false)} className="text-[10px] font-black text-[#8e918f] hover:text-white uppercase tracking-widest">Descartar</button>
-                                 <button onClick={addOrUpdatePreset} className="text-[10px] font-black text-white hover:bg-white hover:text-black transition-all uppercase tracking-widest border border-white/20 px-8 py-2 rounded">Gravar</button>
-                               </div>
-                             </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {settingsTab === 'agent' && (
-                  <div className="space-y-6 animate-in fade-in duration-400">
-                    <button 
-                      onClick={() => setSettingsTab('overview')}
-                      className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"
-                    >
-                      <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-                      VOLTAR
-                    </button>
-                    
-                    <div className="space-y-8">
-                      <div className="space-y-6">
-                        <div className="flex items-center justify-between border-l border-white/10 pl-4">
-                           <div className="space-y-0.5">
-                             <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Identidade</h3>
-                             <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Perfis configurados</p>
-                           </div>
-                           <button 
-                             onClick={() => { setEditingAgent(null); setAgentForm({ iconName: 'Brain', color: 'bg-zinc-700' }); setIsAgentFormOpen(true); }}
-                             className="text-[10px] font-black text-white hover:opacity-70 transition-all border border-white/20 px-3 py-1.5 rounded-lg uppercase tracking-widest"
-                           >
-                             NOVO
-                           </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-1">
-                          {allAgents.map(agent => {
-                            const isDefault = AGENTS.some(a => a.id === agent.id);
-                            const isSelected = draftActiveAgentId === agent.id;
-                            return (
-                              <div 
-                                key={agent.id}
-                                onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }}
-                                className={cn(
-                                  "transition-all cursor-pointer flex items-center gap-3 group relative py-1.5",
-                                  isSelected ? "opacity-100 pl-2 border-l border-blue-500" : "opacity-40 hover:opacity-100 hover:pl-2 border-l border-transparent transition-all"
-                                )}
-                              >
-                                <div className={cn("w-7 h-7 rounded flex items-center justify-center text-white shrink-0 transition-all", isSelected ? "bg-white text-black" : "bg-white/[0.05] text-[#5f6368] border border-white/5")}>
-                                     {agent.iconName === 'Hexagon' && <Hexagon size={12} />}
-                                     {agent.iconName === 'Brain' && <Brain size={12} />}
-                                     {agent.iconName === 'Sparkles' && <Sparkles size={12} />}
-                                     {agent.iconName === 'Shield' && <Shield size={12} />}
-                                     {agent.iconName === 'Terminal' && <Terminal size={12} />}
-                                     {agent.iconName === 'Activity' && <Activity size={12} />}
-                                     {agent.iconName === 'Users' && <Users size={12} />}
-                                     {(!agent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(agent.iconName)) && <MessageSquare size={12} />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">{agent.name}</p>
-                                  <p className="text-[8px] text-[#5f6368] font-bold uppercase tracking-widest leading-tight">{isDefault ? 'CORE' : 'CUSTOM'}</p>
-                                </div>
-                                {!isDefault && (
-                                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }} className="hover:text-white text-[#5f6368]"><Edit2 size={10} /></button>
-                                    <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }} className="hover:text-red-400 text-[#5f6368]"><Trash2 size={10} /></button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="space-y-5">
-                        <div className="space-y-1 border-l border-white/10 pl-4">
-                           <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Procedimentos</h3>
-                           <p className="text-[10px] text-[#8e918f] font-bold uppercase tracking-widest">Diretrizes de base do sistema</p>
-                        </div>
-                        <div className="relative group">
-                          <Textarea 
-                              value={draftSystemPrompt}
-                              onChange={(e) => setDraftSystemPrompt(e.target.value)}
-                              className="bg-white/[0.01] border border-white/5 focus:border-blue-500/50 min-h-[120px] text-[#f1f3f4] rounded-xl font-mono text-[11px] p-4 leading-relaxed resize-none shadow-none focus-visible:ring-1 focus-visible:ring-blue-500/20 transition-all scrollbar-hide"
-                              placeholder="Defina as diretrizes fundamentais..."
-                          />
-                          <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[8px] font-black text-[#5f6368] uppercase tracking-widest select-none pointer-events-none group-focus-within:text-blue-400 transition-colors">
-                             <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-                             MODO_IA
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-[#5f6368] uppercase tracking-widest font-bold text-center opacity-70">
-                           Filtragem Nexus ativa
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {settingsTab === 'security' && (
-                  <div className="space-y-6 animate-in fade-in duration-400">
-                    <button 
-                      onClick={() => setSettingsTab('overview')}
-                      className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"
-                    >
-                      <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-                      VOLTAR
-                    </button>
-                    
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="space-y-1 border-l border-white/10 pl-4">
-                           <h3 className="text-[13px] font-black text-white uppercase tracking-widest">Privacidade</h3>
-                           <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Dados e sigilo</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
-                          {[
-                            { title: 'Offline-First', desc: 'Dados e logs confinados ao armazenamento local seguro do seu navegador.', icon: Shield, color: 'text-blue-400' },
-                            { title: 'Criptografia', desc: 'Comunicação com os motores Gemini utiliza TLS 1.3 para blindagem total.', icon: Key, color: 'text-blue-400' },
-                            { title: 'Zero Telemetria', desc: 'Sem rastreamento, sem telemetria e sem scripts de terceiros.', icon: Activity, color: 'text-blue-400' },
-                            { title: 'Expurgo', desc: 'Ao resetar, ocorre uma aniquilação completa de todas as chaves e memórias.', icon: Trash2, color: 'text-blue-400' }
-                          ].map((item, i) => (
-                            <div key={i} className="space-y-2 group bg-white/[0.01] p-4 rounded-xl border border-white/5 hover:bg-white/[0.02] transition-colors">
-                              <div className="flex items-center gap-2">
-                                <div className={cn("w-7 h-7 flex items-center justify-center rounded bg-white/[0.03] border border-white/5 transition-transform", item.color)}>
-                                  <item.icon size={12} />
-                                </div>
-                                <h4 className="text-[12px] font-black text-white uppercase tracking-widest leading-none">{item.title}</h4>
-                              </div>
-                              <p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold tracking-tight group-hover:text-[#8e918f] transition-colors">{item.desc}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
- 
-                      <div className="pt-6 border-t border-white/5">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-5 py-6 bg-red-500/[0.02] rounded-2xl border border-red-500/10 shadow-xl shadow-red-500/5">
-                          <div className="space-y-1">
-                            <h4 className="text-[14px] font-black text-red-500 uppercase tracking-widest">Célula de Expurgo</h4>
-                            <p className="text-[11px] text-[#5f6368] leading-tight uppercase font-bold max-w-sm">
-                              Elimina chaves, presets e histórico sem deixar rastros digitais locais.
-                            </p>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              if(confirm('Terminar permanentemente todas as configurações locais?')) {
-                                setChatHistory([]);
-                                resetChat();
-                                setShowSettings(false);
-                                setApiKey('');
-                                setApiPresets([]);
-                                setActivePresetId(null);
-                                localStorage.clear();
-                                window.location.reload();
-                              }
-                            }}
-                            className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white transition-all text-[11px] font-black uppercase tracking-widest px-8 py-2.5 rounded-lg border border-red-500/20 whitespace-nowrap"
-                          >
-                            Resetar Nexus
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Settings Footer */}
-          {hasSettingsChanges && (
-            <div className="p-5 md:p-6 bg-[#1a1b1e] border-t border-[#333538] flex flex-col md:flex-row items-center justify-between gap-4 flex-shrink-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
-               <div className="flex items-center gap-2 text-[12px] text-[#8e918f]">
-                 <Activity size={14} className="text-green-500" />
-                 <span>Nexus Engine v2.5.0 estável (Há modificações pendentes)</span>
-               </div>
-               
-               <div className="flex items-center gap-3 w-full md:w-auto">
-                 <Button 
-                  variant="ghost" 
-                  onClick={() => setShowSettings(false)}
-                  className="flex-1 md:flex-none text-[#8e918f] hover:text-white"
-                 >
-                   Cancelar
-                 </Button>
-                 <Button 
-                  onClick={saveSettings}
-                  className="flex-1 md:flex-none font-bold px-10 h-11 rounded-xl shadow-lg bg-[#c2e7ff] text-[#001d35] hover:bg-[#b5cffb]"
-                 >
-                   Salvar Alterações
-                 </Button>
-               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        )}
+      </main>
 
       {/* Subagent Editor Dialog */}
       <Dialog open={isAgentFormOpen} onOpenChange={setIsAgentFormOpen}>
