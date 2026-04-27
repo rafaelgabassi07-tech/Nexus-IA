@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Loader2, ArrowUp, Settings, Key,
+  Loader2, ArrowUp, Key, Settings,
   Paperclip, Image as ImageIcon, Code, Terminal, Layout, Hexagon,
   Plus, MessageSquare, Trash2, X,
   Users, Edit2, Activity, Shield, Sparkles, Brain,
-  ArrowLeft, Copy, Check,
-  History as HistoryIcon, ListChecks
+  ArrowLeft, Copy, Check, ListChecks,
+  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, ClipboardPaste
 } from 'lucide-react';
+
+import { FileTree } from './components/FileTree';
 
 export type TechnicalStep = {
   id: string;
@@ -20,6 +22,20 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
+
+const AgentIcon = ({ iconName, size = 18 }: { iconName?: string; size?: number }) => {
+  const props = { size, strokeWidth: 2.5 };
+  const icons: Record<string, React.ReactNode> = {
+    Hexagon: <Hexagon {...props} />,
+    Brain: <Brain {...props} />,
+    Sparkles: <Sparkles {...props} />,
+    Shield: <Shield {...props} />,
+    Terminal: <Terminal {...props} />,
+    Activity: <Activity {...props} />,
+    Users: <Users {...props} />,
+  };
+  return <>{icons[iconName || ''] || <Hexagon {...props} />}</>;
+};
 
 import { AGENTS, defaultWelcomeMessage } from './agents';
 import type { AgentDefinition } from './agents';
@@ -35,6 +51,7 @@ export type Message = {
   id: string;
   role: 'user' | 'model';
   content: string;
+  isError?: boolean;
 };
 
 export type APIPreset = {
@@ -62,33 +79,45 @@ const CodeBlock = ({ language, value, noMargin }: { language?: string; value: st
   };
 
   return (
-    <div className={cn("relative group/code", !noMargin && "my-4")}>
-      <div className="absolute right-3 top-3 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-2">
-        {language && (
-          <span className="text-[10px] font-bold text-[#8e918f] uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded border border-white/5">
-            {language}
-          </span>
-        )}
-        <button
-          onClick={copyToClipboard}
-          className="p-1.5 rounded-lg bg-[#2d2e31] border border-white/10 text-zinc-400 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
-          title="Copiar código"
-        >
-          {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-        </button>
-      </div>
+    <div className={cn("relative group/code flex flex-col h-full", !noMargin && "my-4")}>
+      {!noMargin && (
+        <div className="absolute right-3 top-3 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-2">
+          {language && (
+            <span className="text-[10px] font-bold text-[#8e918f] uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded border border-white/5">
+              {language}
+            </span>
+          )}
+          <button
+            onClick={copyToClipboard}
+            className="p-1.5 rounded-lg bg-[#2d2e31] border border-white/10 text-zinc-400 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
+            title="Copiar código"
+          >
+            {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+          </button>
+        </div>
+      )}
       <SyntaxHighlighter
         language={language || 'text'}
         style={vscDarkPlus}
         PreTag="div"
+        showLineNumbers={true}
+        lineNumberStyle={{ 
+          minWidth: '2.5em', 
+          paddingRight: '1em', 
+          color: '#5f6368', 
+          textAlign: 'right',
+          userSelect: 'none',
+          fontSize: '12px'
+        }}
         customStyle={{
           margin: 0,
           padding: '1.25rem',
           borderRadius: noMargin ? '0' : '0.75rem',
           fontSize: '13px',
-          background: noMargin ? 'transparent' : '#0d0d0d',
-          border: noMargin ? 'none' : '1px solid #333538',
-          lineHeight: '1.6'
+          background: 'transparent',
+          border: 'none',
+          lineHeight: '1.7',
+          flex: 1
         }}
         codeTagProps={{
           style: {
@@ -102,9 +131,53 @@ const CodeBlock = ({ language, value, noMargin }: { language?: string; value: st
   );
 };
 
+/**
+ * Utilitário para salvar no localStorage com segurança contra QuotaExceededError.
+ * Se o limite for atingido, remove os chats mais antigos e tenta novamente.
+ */
+function safeLocalStorageSet(key: string, value: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError' && key === 'nexus_chat_history') {
+      const history = JSON.parse(localStorage.getItem('nexus_chat_history') || '[]');
+      if (history.length > 2) {
+        // Remove metade dos chats mais antigos
+        const pruned = history.slice(0, Math.ceil(history.length / 2));
+        localStorage.setItem('nexus_chat_history', JSON.stringify(pruned));
+        // Tenta salvar o novo item novamente
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    } else {
+      console.error('LocalStorage storage failed:', e);
+    }
+  }
+}
+
+const extractFilesFromMarkdown = (content: string) => {
+  const files: { name: string, lang: string, code: string }[] = [];
+  const regex = /```(\w+)?(?:[:\s]+([\w.-/:\\\\]+))?\n([\s\S]*?)(?:```|$)/g;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    files.push({
+      lang: match[1] || 'text',
+      name: match[2] || `file_${files.length + 1}.${match[1] || 'txt'}`,
+      code: match[3]
+    });
+  }
+  return files;
+};
+
 export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [runTime, setRunTime] = useState(0);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const handleCancel = () => {
+    abortControllerRef.current?.abort();
+    setIsLoading(false);
+    setIsRunning(false);
+  };
 
   useEffect(() => {
     let interval: any;
@@ -176,11 +249,17 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
   const [temperature, setTemperature] = useState<number>(0.7);
   const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
+  
+  const [generatedFiles, setGeneratedFiles] = useState<{name: string, lang: string, code: string}[]>([]);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [historySearch, setHistorySearch] = useState('');
 
   const [settingsTab, setSettingsTab] = useState<'overview' | 'general' | 'agent' | 'security'>('overview');
   const [isPresetFormOpen, setIsPresetFormOpen] = useState(false);
   const [editingPreset, setEditingPreset] = useState<APIPreset | null>(null);
   const [presetForm, setPresetForm] = useState<Partial<APIPreset>>({});
+  const [showPresetApiKey, setShowPresetApiKey] = useState(false);
+  const [showDraftApiKey, setShowDraftApiKey] = useState(false);
 
   // Subagents management state
   const [isAgentFormOpen, setIsAgentFormOpen] = useState(false);
@@ -222,17 +301,17 @@ export default function App() {
     setTemperature(draftTemperature);
     setSystemPrompt(draftSystemPrompt);
     setActiveAgentId(draftActiveAgentId);
-    setDraftActivePresetId(null); // Clear preset if manual settings are saved or handled
     setActivePresetId(draftActivePresetId);
-    localStorage.setItem('nexus_active_agent_id', draftActiveAgentId);
-    if (draftActivePresetId) localStorage.setItem('nexus_active_preset_id', draftActivePresetId);
+    setDraftActivePresetId(null); // Clear preset if manual settings are saved or handled
+    safeLocalStorageSet('nexus_active_agent_id', draftActiveAgentId);
+    if (draftActivePresetId) safeLocalStorageSet('nexus_active_preset_id', draftActivePresetId);
     else localStorage.removeItem('nexus_active_preset_id');
     setActiveTab('chat');
   };
 
   const saveApiPresets = (presets: APIPreset[]) => {
     setApiPresets(presets);
-    localStorage.setItem('nexus_api_presets', JSON.stringify(presets));
+    safeLocalStorageSet('nexus_api_presets', presets);
   };
 
   const addOrUpdatePreset = () => {
@@ -251,7 +330,7 @@ export default function App() {
       saveApiPresets([...apiPresets, newPreset]);
       if (!activePresetId) {
         setActivePresetId(newPreset.id);
-        localStorage.setItem('nexus_active_preset_id', newPreset.id);
+        safeLocalStorageSet('nexus_active_preset_id', newPreset.id);
       }
     }
     setIsPresetFormOpen(false);
@@ -267,7 +346,7 @@ export default function App() {
       if (activePresetId === id) {
         const nextId = updated.length > 0 ? updated[0].id : null;
         setActivePresetId(nextId);
-        if (nextId) localStorage.setItem('nexus_active_preset_id', nextId);
+        if (nextId) safeLocalStorageSet('nexus_active_preset_id', nextId);
         else localStorage.removeItem('nexus_active_preset_id');
       }
     }
@@ -275,7 +354,7 @@ export default function App() {
 
   const saveCustomAgents = (agents: AgentDefinition[]) => {
     setCustomAgents(agents);
-    localStorage.setItem('nexus_custom_agents', JSON.stringify(agents));
+    safeLocalStorageSet('nexus_custom_agents', agents);
   };
 
   const addOrUpdateAgent = () => {
@@ -310,8 +389,62 @@ export default function App() {
     }
   };
   
+  const [activeStep, setActiveStep] = useState<number>(0);
+  const loadingSteps = useMemo(() => [
+    { label: 'Analysing core requirements...', icon: Brain, duration: 1500 },
+    { label: 'Inference context synthesis', icon: MessageSquare, duration: 2000 },
+    { label: 'Architecting system components', icon: Sparkles, duration: 2500 },
+    { label: 'Executing neural code synthesis', icon: Code, duration: 4000 },
+    { label: 'Static verification & linting', icon: Shield, duration: 1800 },
+    { label: 'Assembling artifacts', icon: ListChecks, duration: 1200 },
+  ], []);
+
+  useEffect(() => {
+    if (isLoading) {
+      setActiveStep(0);
+      const sequence = async () => {
+        for (let i = 0; i < loadingSteps.length; i++) {
+          if (!isLoading) break;
+          setActiveStep(i);
+          await new Promise(resolve => setTimeout(resolve, loadingSteps[i].duration));
+        }
+      };
+      sequence();
+    }
+  }, [isLoading, loadingSteps]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+L or Cmd+L for new chat
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        resetChat();
+        setActiveTab('chat');
+        setIsSidebarOpen(false);
+      }
+      
+      // Escape to close everything
+      if (e.key === 'Escape') {
+        setIsSidebarOpen(false);
+        setIsPresetFormOpen(false);
+        setIsAgentFormOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isSidebarOpen, isPresetFormOpen, isAgentFormOpen]);
+
+  // Dynamic Browser Tab Title
+  useEffect(() => {
+    const currentChat = chatHistory.find(c => c.id === currentChatId);
+    document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
+  }, [currentChatId, chatHistory]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   
   const generateId = () => {
     try {
@@ -334,7 +467,7 @@ export default function App() {
 
   // Save to local storage when chat history changes
   useEffect(() => {
-    localStorage.setItem('nexus_chat_history', JSON.stringify(chatHistory));
+    safeLocalStorageSet('nexus_chat_history', chatHistory);
   }, [chatHistory]);
 
   // Auto-save current messages to the active chat session
@@ -372,52 +505,217 @@ export default function App() {
     }
   }, [messages, currentChatId]);
 
-  // Clear conversation when switching agents (only on mount now since there's 1 agent)
-  useEffect(() => {
-    resetChat();
-  }, []);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
 
-  // Scroll to bottom on new message
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  const previewHtml = useMemo(() => {
+    const htmlFile = generatedFiles.find(f => f.lang === 'html');
+    if (htmlFile) return htmlFile.code;
+
+    if (generatedFiles.length > 0) {
+      // Find the best entry point or use the first file
+      const entryFile = generatedFiles.find(f => 
+        f.name.toLowerCase().includes('app') || 
+        f.name.toLowerCase().includes('main') || 
+        f.name.toLowerCase().includes('index')
+      ) || generatedFiles[0];
+
+      // Robust module mapping for Babel
+      // We convert all generated files into a "virtual" registry 
+      // where we manually resolve imports if they refer to our generated files.
+      // Or we just use a trick: bundle them by concatenating but wrapping in scopes.
+      
+      return `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Nexus Canvas Preview</title>
+            <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script type="importmap">
+              {
+                "imports": {
+                  "react": "https://esm.sh/react@18.2.0",
+                  "react-dom": "https://esm.sh/react-dom@18.2.0/client",
+                  "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+                  "lucide-react": "https://esm.sh/lucide-react@0.344.0",
+                  "motion/react": "https://esm.sh/motion@11.11.13/react",
+                  "framer-motion": "https://esm.sh/framer-motion@11.11.13",
+                  "clsx": "https://esm.sh/clsx@2.1.0",
+                  "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
+                  "recharts": "https://esm.sh/recharts@2.12.2",
+                  "d3": "https://esm.sh/d3@7.8.5"
+                }
+              }
+            </script>
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+              
+              :root { --font-sans: 'Inter', system-ui, sans-serif; --font-mono: 'JetBrains Mono', monospace; }
+              body { 
+                margin: 0; padding: 0; min-height: 100vh;
+                background-color: #0d0d0d; color: #f1f3f4;
+                font-family: var(--font-sans);
+                -webkit-font-smoothing: antialiased;
+              }
+              #root { min-height: 100vh; }
+              * { box-sizing: border-box; }
+              
+              /* Custom Scrollbar for Previews */
+              ::-webkit-scrollbar { width: 8px; height: 8px; }
+              ::-webkit-scrollbar-track { background: transparent; }
+              ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+              ::-webkit-scrollbar-thumb:hover { background: #444; }
+            </style>
+            <script>
+              window.tailwind.config = {
+                theme: {
+                  extend: {
+                    colors: {
+                      border: "hsl(var(--border))",
+                      input: "hsl(var(--input))",
+                      ring: "hsl(var(--ring))",
+                      background: "hsl(var(--background))",
+                      foreground: "hsl(var(--foreground))",
+                      primary: {
+                        DEFAULT: "hsl(var(--primary))",
+                        foreground: "hsl(var(--primary-foreground))",
+                      },
+                      secondary: {
+                        DEFAULT: "hsl(var(--secondary))",
+                        foreground: "hsl(var(--secondary-foreground))",
+                      },
+                      destructive: {
+                        DEFAULT: "hsl(var(--destructive))",
+                        foreground: "hsl(var(--destructive-foreground))",
+                      },
+                      muted: {
+                        DEFAULT: "hsl(var(--muted))",
+                        foreground: "hsl(var(--muted-foreground))",
+                      },
+                      accent: {
+                        DEFAULT: "hsl(var(--accent))",
+                        foreground: "hsl(var(--accent-foreground))",
+                      },
+                      popover: {
+                        DEFAULT: "hsl(var(--popover))",
+                        foreground: "hsl(var(--popover-foreground))",
+                      },
+                      card: {
+                        DEFAULT: "hsl(var(--card))",
+                        foreground: "hsl(var(--card-foreground))",
+                      },
+                    },
+                  }
+                }
+              };
+            </script>
+          </head>
+          <body>
+            <div id="root"></div>
+            <script type="text/babel" data-type="module">
+              import React from 'react';
+              import ReactDOM from 'react-dom/client';
+              import * as Lucide from 'lucide-react';
+              import { motion, AnimatePresence } from 'motion/react';
+              import { clsx } from 'clsx';
+              import { twMerge } from 'tailwind-merge';
+
+              // Shared utilities
+              const cn = (...inputs) => twMerge(clsx(inputs));
+
+              // We'll create a registry for internal modules
+              const __NEXUS_REGISTRY__ = {};
+
+              ${generatedFiles.map(f => {
+                // Handles multiline imports and complex patterns
+                const cleanCode = f.code.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, '');
+                
+                return `
+                  __NEXUS_REGISTRY__["${f.name}"] = (function(exports) {
+                    try {
+                      ${cleanCode.replace(/export\s+default\s+function\s+([\w]+)/g, 'function $1')
+                               .replace(/export\s+default\s+([\w]+)/g, 'return $1')
+                               .replace(/export\s+const\s+([\w]+)\s+=\s+/g, 'const $1 = exports.$1 = ')
+                      }
+                      if (typeof App !== 'undefined') return App;
+                      // Fallback for named exports if default is missing
+                      return exports.App || Object.values(exports)[0];
+                    } catch (err) {
+                      console.error("Error in module ${f.name}:", err);
+                      throw err;
+                    }
+                  })({});
+                `;
+              }).join('\n')}
+
+              try {
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                // Use the entryFile defined above
+                const EntryComponent = __NEXUS_REGISTRY__["${entryFile.name}"];
+                
+                if (!EntryComponent) {
+                   throw new Error("No entry component found. Check if you exported a component as default.");
+                }
+                
+                root.render(<EntryComponent />);
+              } catch (e) {
+                console.error("Nexus Runtime Error:", e);
+                document.getElementById('root').innerHTML = \`
+                  <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: -apple-system, sans-serif;">
+                    <div style="background: #1a1b1e; border: 1px solid #ff5f56; color: #ff5f56; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+                      <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
+                         <span style="font-size: 20px;">⚠️</span>
+                         Erro de Renderização
+                      </h3>
+                      <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #ff9f9a;">\${e.message}</pre>
+                      <p style="font-size: 12px; color: #8e918f; margin-bottom: 0;">Nexus Engine Runtime Trace: \${e.stack?.split('\\n')[1] || 'Unknown source'}</p>
+                    </div>
+                  </div>
+                \`;
+              }
+            </script>
+          </body>
+        </html>
+      `;
     }
-  }, [messages]);
+    return '';
+  }, [generatedFiles]);
 
-  // Extract Files from the latest model message
-  const generatedFiles = useMemo(() => {
-    const reversedMessages = [...messages].reverse();
-    const files: { name: string, lang: string, code: string }[] = [];
-    
-    for (const msg of reversedMessages) {
-      if (msg.role === 'model') {
-        const regex = /```(\w+)?(?:[:\s]([\w.-]+))?\n([\s\S]*?)```/g;
-        let match;
-        while ((match = regex.exec(msg.content)) !== null) {
-          files.push({
-            lang: match[1] || 'text',
-            name: match[2] || `file_${files.length + 1}.${match[1] || 'txt'}`,
-            code: match[3]
-          });
-        }
-        if (files.length > 0) break; // Use files from the latest message that has them
-      }
-    }
-    return files;
-  }, [messages]);
-
-  const previewHtml = generatedFiles.find(f => f.lang === 'html')?.code || '';
   const hasFiles = generatedFiles.length > 0;
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent, overrideMessage?: string) => {
     e?.preventDefault();
-    if ((!inputMessage.trim() && attachedFiles.length === 0) || isLoading) return;
+    const messageToUse = overrideMessage || inputMessage.trim();
+    if ((!messageToUse && attachedFiles.length === 0) || isLoading) return;
 
-    let finalMessage = inputMessage.trim();
+    let finalMessage = messageToUse;
+    const imageAttachments: { mimeType: string; data: string }[] = [];
+
+    // Remove error messages if retrying
+    if (overrideMessage) {
+      setMessages(prev => prev.filter(m => !m.isError));
+    }
 
     if (attachedFiles.length > 0) {
       for (const file of attachedFiles) {
-        if (file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.ts') || file.name.endsWith('.tsx') || file.name.endsWith('.json') || file.name.endsWith('.md')) {
+        if (file.type.startsWith('image/')) {
+          try {
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result.split(',')[1]); // Only data part
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            imageAttachments.push({ mimeType: file.type, data: base64 });
+          } catch (e) {
+            console.error('Failed to read image', file.name);
+          }
+        } else if (file.type.startsWith('text/') || file.name.endsWith('.js') || file.name.endsWith('.ts') || file.name.endsWith('.tsx') || file.name.endsWith('.json') || file.name.endsWith('.md')) {
           try {
             const text = await file.text();
             finalMessage += `\n\n\`\`\`${file.name}\n${text}\n\`\`\``;
@@ -430,10 +728,11 @@ export default function App() {
       }
     }
 
-    const userMessage: Message = {
+    const userMessage: Message & { images?: any[] } = {
       id: generateId(),
       role: 'user',
-      content: finalMessage || 'Veja os arquivos anexos.'
+      content: finalMessage || 'Veja os arquivos anexos.',
+      ...(imageAttachments.length > 0 ? { images: imageAttachments } : {})
     };
 
     const updatedMessages = [...messages, userMessage];
@@ -447,12 +746,19 @@ export default function App() {
     const apiToUse = activePreset ? activePreset.apiKey : apiKey;
     const modelToUse = activePreset ? activePreset.model : selectedModel;
 
+    abortControllerRef.current = new AbortController();
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({
-          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          messages: updatedMessages.map(m => ({ 
+            role: m.role, 
+            content: m.content,
+            images: (m as any).images 
+          })),
           systemPrompt: systemPrompt,
           temperature: temperature,
           agentId: activeAgent.id,
@@ -493,40 +799,52 @@ export default function App() {
               const data = part.slice(6);
               if (data === '[DONE]') break;
               
+              let parsed;
               try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  throw new Error(parsed.error);
-                }
-                if (parsed.text) {
-                  fullResponse += parsed.text;
-                  setMessages(prev => prev.map(m => 
-                    m.id === messageId ? { ...m, content: fullResponse } : m
-                  ));
-                }
+                parsed = JSON.parse(data);
               } catch (e) {
                 // Ignore parse errors from partial chunks
+                continue;
+              }
+              
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+              if (parsed.text) {
+                fullResponse += parsed.text;
+                setMessages(prev => prev.map(m => 
+                  m.id === messageId ? { ...m, content: fullResponse } : m
+                ));
+                
+                // Extração de arquivos em tempo real
+                const currentFiles = extractFilesFromMarkdown(fullResponse);
+                if (currentFiles.length > 0) {
+                  setGeneratedFiles(currentFiles);
+                  setActiveFileIndex(currentFiles.length - 1);
+                }
               }
             }
           }
         }
       }
       
-      // Auto-switch to preview tab if the response contains HTML (mobile only behavior, harmless on desktop)
-      if (fullResponse.includes('```html')) {
-        setActiveTab('preview');
+      // Extração final por segurança
+      const finalFiles = extractFilesFromMarkdown(fullResponse);
+      if (finalFiles.length > 0) {
+        setGeneratedFiles(finalFiles);
       }
     } catch (err: any) {
       console.error(err);
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg && lastMsg.role === 'model' && lastMsg.content === '') {
-           return prev.map(m => m.id === lastMsg.id ? { ...m, content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}` } : m);
+           return prev.map(m => m.id === lastMsg.id ? { ...m, content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}`, isError: true } : m);
         } else {
            return [...prev, {
             id: crypto.randomUUID(),
             role: 'model',
-            content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}`
+            content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}`,
+            isError: true
           }];
         }
       });
@@ -595,6 +913,16 @@ export default function App() {
                 </Button>
               </div>
 
+              <div className="px-4 mb-2">
+                <input
+                  type="text"
+                  placeholder="Buscar conversas..."
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  className="w-full bg-[#282a2d] border border-[#333538] rounded-xl px-3 py-2 text-[13px] text-[#f1f3f4] placeholder:text-[#8e918f] outline-none"
+                />
+              </div>
+
               <div className="flex-1 overflow-y-auto px-3 pb-8 space-y-2 custom-scrollbar">
                 {chatHistory.length === 0 ? (
                   <div className="flex flex-col items-center justify-center pt-24 px-6 text-center space-y-4 opacity-40">
@@ -603,7 +931,10 @@ export default function App() {
                     <p className="text-[12px] max-w-[180px]">Suas conversas anteriores aparecerão aqui.</p>
                   </div>
                 ) : (
-                  [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt).map(chat => (
+                  chatHistory
+                    .filter(c => c.title.toLowerCase().includes(historySearch.toLowerCase()))
+                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                    .map(chat => (
                     <div 
                       key={chat.id}
                       className={cn(
@@ -628,16 +959,15 @@ export default function App() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if(confirm('Apagar conversa permanentemente?')) {
-                            setChatHistory(prev => prev.filter(c => c.id !== chat.id));
-                            if (currentChatId === chat.id) {
-                              resetChat();
-                            }
+                          setChatHistory(prev => prev.filter(c => c.id !== chat.id));
+                          if (currentChatId === chat.id) {
+                            resetChat();
                           }
                         }}
-                        className="absolute right-2 top-3 p-2 opacity-0 group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all z-20"
+                        title="Excluir conversa"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   ))
@@ -648,12 +978,10 @@ export default function App() {
                 <div className="p-4 border-t border-white/5 bg-[#131314]/50">
                   <button 
                     onClick={() => {
-                      if(confirm('Limpar todo o histórico? Esta ação não pode ser desfeita.')) {
-                        setChatHistory([]);
-                        localStorage.removeItem('nexus_chat_history');
-                        resetChat();
-                        setIsSidebarOpen(false);
-                      }
+                      setChatHistory([]);
+                      localStorage.removeItem('nexus_chat_history');
+                      resetChat();
+                      setIsSidebarOpen(false);
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 text-[12px] text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-all font-medium"
                   >
@@ -675,14 +1003,7 @@ export default function App() {
             activeAgent.color || "bg-gradient-to-tr from-blue-600 to-indigo-600"
           )}>
             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            {activeAgent.iconName === 'Hexagon' && <Hexagon size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Brain' && <Brain size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Sparkles' && <Sparkles size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Shield' && <Shield size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Terminal' && <Terminal size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Activity' && <Activity size={18} strokeWidth={2.5} className="relative z-10" />}
-            {activeAgent.iconName === 'Users' && <Users size={18} strokeWidth={2.5} className="relative z-10" />}
-            {(!activeAgent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(activeAgent.iconName)) && <Hexagon size={18} strokeWidth={2.5} className="relative z-10" />}
+            <AgentIcon iconName={activeAgent.iconName} size={18} />
           </div>
           <div className="flex flex-col">
             <h1 className="text-[14px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2 leading-none">
@@ -721,53 +1042,51 @@ export default function App() {
           activeTab !== 'chat' && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          {/* Technical Execution Bar (Simulating the image) */}
+          {/* Technical Execution Bar (Google AI Studio Style - Discreet) */}
           <AnimatePresence>
             {isLoading && (
               <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="bg-[#1e1f20] border-b border-[#333538] px-5 py-4 overflow-hidden z-20 shadow-md"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mx-5 my-2 p-3 border border-[#333538] bg-[#1e1e1f]/40 backdrop-blur-md rounded-xl overflow-hidden z-20 flex items-center justify-between"
               >
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3 text-[12px] text-[#8e918f]">
-                     <span className="text-white font-black uppercase tracking-widest text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/10">{selectedModel}</span>
-                     <span className="text-[#333538] font-bold">•</span>
-                     <span className="flex items-center gap-1.5 font-bold uppercase tracking-tighter text-[10px] text-blue-400">
-                       Running for {runTime}s
-                     </span>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      className="w-4 h-4 rounded-full border-2 border-[#4285f4]/20 border-t-[#4285f4]"
+                    />
+                    <Sparkles size={8} className="absolute inset-0 m-auto text-[#4285f4]" />
                   </div>
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="relative flex items-center justify-center shrink-0">
-                        <div className="w-6 h-6 rounded-full border-2 border-dashed border-blue-500/20 border-t-blue-400 animate-[spin_4s_linear_infinite]" />
-                        <div className="absolute w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center">
-                          <ListChecks size={10} className="text-blue-400" />
-                        </div>
-                      </div>
-                      <div className="flex-1 flex items-center justify-between bg-[#131314] p-3 rounded-lg border border-white/5 shadow-sm">
-                        <div className="flex flex-col">
-                          <span className="text-[12px] font-black text-[#f1f3f4] uppercase tracking-tighter">Linter check</span>
-                          <span className="text-[10px] text-[#5f6368] font-mono leading-none">src/App.tsx</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                           <div className="hidden sm:block w-[60px] h-1 bg-[#1e1f20] rounded-full overflow-hidden border border-white/5">
-                              <motion.div 
-                                initial={{ width: 0 }}
-                                animate={{ width: '100%' }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                                className="h-full bg-blue-500"
-                              />
-                           </div>
-                           <div className="w-5 h-5 rounded-full border border-emerald-500/30 flex items-center justify-center bg-emerald-500/5">
-                             <Check size={12} className="text-emerald-400" />
-                           </div>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-[#e3e3e3] leading-none uppercase tracking-widest">{loadingSteps[activeStep].label}</span>
+                    <span className="text-[9px] text-[#5f6368] font-medium mt-1 uppercase tracking-tighter">{selectedModel} • {runTime}s</span>
                   </div>
+                </div>
+                
+                <div className="flex items-center gap-1.5">
+                   {loadingSteps.map((_, i) => (
+                     <div key={i} className={cn(
+                       "w-1.5 h-1.5 rounded-full transition-colors duration-500",
+                       i < activeStep ? "bg-emerald-500/40" : i === activeStep ? "bg-blue-500 animate-pulse" : "bg-[#333538]"
+                     )} />
+                   ))}
+                   <div className="w-px h-3 bg-white/10 mx-1" />
+                   <button 
+                    onClick={handleCancel}
+                    className="flex items-center gap-1.5 h-6 px-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md text-[9px] font-black uppercase tracking-widest transition-all"
+                   >
+                     <motion.span 
+                       initial={{ opacity: 0 }} 
+                       animate={{ opacity: 1 }}
+                       className="flex items-center gap-1.5"
+                     >
+                       <X size={10} strokeWidth={3} />
+                       Parar
+                     </motion.span>
+                   </button>
                 </div>
               </motion.div>
             )}
@@ -776,7 +1095,7 @@ export default function App() {
           {/* Chat Log */}
           <div 
             ref={scrollRef}
-            className="flex-1 overflow-y-auto px-5 py-4 space-y-5 scroll-smooth custom-scrollbar"
+            className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-smooth custom-scrollbar"
           >
             {/* Empty state removed as requested */}
 
@@ -787,86 +1106,109 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, ease: 'easeOut' }}
-                  className={cn("flex w-full mb-6", msg.role === 'user' ? "justify-end" : "justify-start")}
+                  className={cn("flex w-full mb-4", msg.role === 'user' ? "justify-end" : "justify-start")}
                 >
                   {msg.role === 'user' ? (
                     <div className="bg-[#282a2d] text-[#e3e3e3] px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[85%] text-[14px] leading-relaxed whitespace-pre-wrap">
                       {msg.content}
                     </div>
                   ) : (
-                    <div className="flex flex-row gap-3 w-full max-w-3xl items-start group">
+                    <div className="flex flex-row gap-2 w-full max-w-none items-start group">
                       <Avatar className={cn(
                         "w-6 h-6 rounded-md shrink-0 mt-0.5 shadow-sm",
                         activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
                       )}>
                          <AvatarFallback className="bg-transparent text-white">
-                           {activeAgent.iconName === 'Hexagon' && <Hexagon size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Brain' && <Brain size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Sparkles' && <Sparkles size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Shield' && <Shield size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Terminal' && <Terminal size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Activity' && <Activity size={12} strokeWidth={2.5} />}
-                           {activeAgent.iconName === 'Users' && <Users size={12} strokeWidth={2.5} />}
-                           {(!activeAgent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(activeAgent.iconName)) && <Hexagon size={12} strokeWidth={2.5} />}
+                           <AgentIcon iconName={activeAgent.iconName} size={12} />
                          </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 text-[14px] leading-[1.6] text-[#e3e3e3] pr-4">
+                      <div className="flex-1 text-[14px] leading-[1.6] text-[#e3e3e3] pr-2">
+                        {/* Action History Visual (Google AI Studio Style) - Discrete */}
+                        {msg.role === 'model' && hasFiles && !msg.isError && (
+                          <div className="mb-3">
+                            <details className="group/accordion">
+                              <summary className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#282a2d]/60 border border-[#333538]/60 hover:bg-[#333538] transition-colors cursor-pointer list-none select-none text-[11px] font-medium text-[#c4c7c5]">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
+                                <span>{generatedFiles.length} arquivo(s) modificado(s)</span>
+                              </summary>
+                              
+                              <div className="mt-2 pl-3 pb-2 pt-1 border-l-2 border-[#333538] ml-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                                {[
+                                  { label: `Geração concluída em ${runTime}s`, icon: Brain },
+                                  { label: `Leu ${messages.length} mensagens de contexto`, icon: MessageSquare },
+                                  { label: `Editou ${generatedFiles.length} arquivo(s)`, icon: Edit2, files: generatedFiles.map(f => f.name) },
+                                ].map((step, i) => (
+                                  <div key={i} className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <step.icon size={11} className="text-[#8e918f]" />
+                                      <span className="text-[12px] text-[#8e918f] font-medium">{step.label}</span>
+                                      <Check size={10} className="text-emerald-500/60" />
+                                    </div>
+                                    {step.files && (
+                                      <div className="flex flex-wrap gap-1.5 pl-5 pb-1">
+                                        {step.files.map((f, idx) => (
+                                          <span key={idx} className="text-[10px] font-mono bg-[#1a1b1e] text-[#8e918f] px-1.5 py-0.5 rounded border border-[#333538]">
+                                            {f}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
                         <div className="markdown-prose">
                           <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             components={{
                               code({ node, inline, className, children, ...props }: any) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                return !inline && match ? (
-                                  <CodeBlock
-                                    language={match[1]}
-                                    value={String(children).replace(/\n$/, '')}
-                                    {...props}
-                                  />
-                                ) : (
-                                  <code className={className} {...props}>
+                                if (!inline) {
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  const lang = match ? match[1] : '';
+                                  return <CodeBlock language={lang} value={String(children).replace(/\n$/, '')} />;
+                                }
+                                return (
+                                  <code className={cn("bg-white/10 px-1 rounded text-[#80bfff]", className)} {...props}>
                                     {children}
                                   </code>
                                 );
-                              }
+                              },
+                              p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed tracking-tight">{children}</p>
                             }}
                           >
                             {msg.content}
                           </ReactMarkdown>
                         </div>
+
+                        <button
+                          onClick={() => navigator.clipboard.writeText(msg.content)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 mt-1 self-start"
+                          title="Copiar mensagem"
+                        >
+                          <Copy size={14} />
+                        </button>
+
+                          {msg.isError && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => {
+                                const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+                                if (lastUserMsg) {
+                                  handleSendMessage(undefined, lastUserMsg.content);
+                                }
+                              }} 
+                              className="mt-4 border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 gap-2 h-8 rounded-lg text-[12px] font-bold uppercase tracking-widest"
+                            >
+                              <RotateCcw size={14} />
+                              Tentar Novamente
+                            </Button>
+                          )}
+                        </div>
                         
-                        {/* Action History Visual (from Image 2) */}
-                        {msg.content.includes('Edit') && (
-                          <div className="mt-4 bg-[#111113] border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="px-4 py-3 border-b border-white/5 bg-[#161618] flex items-center gap-2">
-                              <HistoryIcon size={14} className="text-blue-400" />
-                              <span className="text-[12px] font-bold text-white uppercase tracking-widest">History</span>
-                            </div>
-                            <div className="p-4 space-y-4">
-                               <p className="text-[12px] text-[#8e918f] font-bold uppercase tracking-wider">Aqui estão os passos realizados:</p>
-                               <div className="space-y-3">
-                                  <div className="flex items-start gap-4 p-4 rounded-xl bg-[#09090b] border border-white/5">
-                                     <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
-                                       <Edit2 size={16} />
-                                     </div>
-                                     <div className="flex-1">
-                                        <p className="text-[14px] font-bold text-[#f1f3f4]">Arquivo Editado</p>
-                                        <div className="mt-2 pl-3 border-l-2 border-white/5 py-1">
-                                           <div className="flex items-center justify-between text-[12px] text-[#8e918f]">
-                                              <span className="font-mono">src/App.tsx</span>
-                                              <div className="w-4 h-4 rounded-full border border-emerald-500/50 flex items-center justify-center bg-emerald-500/5">
-                                                <Check size={10} className="text-emerald-400" />
-                                              </div>
-                                           </div>
-                                        </div>
-                                     </div>
-                                  </div>
-                               </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
                   )}
                 </motion.div>
               ))}
@@ -876,23 +1218,16 @@ export default function App() {
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-row gap-3 w-full max-w-3xl items-start mb-6"
+                className="flex flex-row gap-2 w-full max-w-none items-start mb-4 px-2"
               >
-                 <Avatar className={cn(
+                         <Avatar className={cn(
                         "w-6 h-6 rounded-md shrink-0 mt-0.5 shadow-sm",
                         activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
                       )}>
-                   <AvatarFallback className="bg-transparent text-white">
-                     {activeAgent.iconName === 'Hexagon' && <Hexagon size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Brain' && <Brain size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Sparkles' && <Sparkles size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Shield' && <Shield size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Terminal' && <Terminal size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Activity' && <Activity size={12} strokeWidth={2.5} />}
-                     {activeAgent.iconName === 'Users' && <Users size={12} strokeWidth={2.5} />}
-                     {(!activeAgent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(activeAgent.iconName)) && <Hexagon size={12} strokeWidth={2.5} />}
-                   </AvatarFallback>
-                 </Avatar>
+                           <AvatarFallback className="bg-transparent text-white">
+                             <AgentIcon iconName={activeAgent.iconName} size={12} />
+                           </AvatarFallback>
+                         </Avatar>
                  <div className="py-1 flex items-center gap-3">
                    <div className="w-3.5 h-3.5 rounded-full border-[2px] border-[#a8c7fa] border-t-transparent animate-spin" />
                    <span className="text-[13px] text-[#8e918f]">Gerando código...</span>
@@ -944,14 +1279,47 @@ export default function App() {
                       ref={fileInputRef}
                       onChange={(e) => {
                         if (e.target.files) {
-                          setAttachedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                          const MAX_SIZE_MB = 10;
+                          const validFiles = Array.from(e.target.files).filter(f => {
+                            if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+                              alert(`"${f.name}" excede ${MAX_SIZE_MB}MB e não pode ser anexado.`);
+                              return false;
+                            }
+                            return true;
+                          });
+                          setAttachedFiles(prev => [...prev, ...validFiles]);
                         }
                       }}
                     />
                     <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Anexar arquivo">
                       <Paperclip size={18} strokeWidth={2} />
                     </label>
-                    <button className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" title="Adicionar imagem">
+
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple 
+                      hidden 
+                      ref={imageInputRef}
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          const MAX_SIZE_MB = 10;
+                          const validFiles = Array.from(e.target.files).filter(f => {
+                            if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+                              alert(`"${f.name}" excede ${MAX_SIZE_MB}MB e não pode ser anexado.`);
+                              return false;
+                            }
+                            return true;
+                          });
+                          setAttachedFiles(prev => [...prev, ...validFiles]);
+                        }
+                      }}
+                    />
+                    <button 
+                      onClick={() => imageInputRef.current?.click()}
+                      className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" 
+                      title="Adicionar imagem"
+                    >
                       <ImageIcon size={18} strokeWidth={2} />
                     </button>
                   </div>
@@ -983,7 +1351,7 @@ export default function App() {
           activeTab === 'settings' && "md:hidden"
         )}>
           {/* Section Header */}
-          <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 relative z-10 shadow-sm w-full">
+          <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 relative z-[60] shadow-sm w-full">
              {/* Modern top segmented control for Canvas vs Code */}
              <div className="bg-[#282a2d] p-1 rounded-lg flex items-center">
                <button
@@ -1008,8 +1376,31 @@ export default function App() {
                </button>
              </div>
              
-             <div className="bg-[#131314] border border-[#333538] rounded-md text-[11px] px-2.5 py-1.5 text-[#8e918f] font-mono tracking-wide hidden sm:block">
-               localhost:3000
+             <div className="flex-1 max-w-md bg-[#131314] border border-[#333538] rounded-full text-[11px] px-4 py-1.5 text-[#5f6368] font-mono tracking-wide hidden lg:flex items-center gap-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
+               <span className="truncate">localhost:3000/app-preview</span>
+             </div>
+
+             <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    const blob = new Blob([previewHtml], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                  }}
+                  className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg hover:bg-white/5 transition-colors" 
+                  title="Abrir em nova aba"
+                >
+                  <ArrowUp size={16} className="rotate-45" />
+                </button>
+                <div className="w-px h-4 bg-white/10 mx-1" />
+                <button 
+                  onClick={() => setPreviewKey(k => k + 1)}
+                  className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg hover:bg-white/5 transition-colors"
+                  title="Recarregar preview"
+                >
+                  <RotateCcw size={16} />
+                </button>
              </div>
           </div>
 
@@ -1058,6 +1449,7 @@ export default function App() {
 
             {previewHtml && activeTab === 'preview' && (
               <iframe 
+                key={previewKey}
                 srcDoc={previewHtml}
                 className="w-full h-full border-none bg-white relative z-20" 
                 title="Application Preview"
@@ -1072,33 +1464,52 @@ export default function App() {
             
             {hasFiles && activeTab === 'code' && (
               <div 
-                className="absolute inset-0 z-20 overflow-auto p-4 md:p-6 custom-scrollbar flex flex-col gap-6"
-                style={{ 
-                  backgroundColor: '#080809',
-                  backgroundImage: 'linear-gradient(#161617 1px, transparent 1px), linear-gradient(90deg, #161617 1px, transparent 1px)',
-                  backgroundSize: '32px 32px'
-                }}
+                className="absolute inset-0 z-20 flex flex-col bg-[#050505]"
               >
-                {generatedFiles.map((file, i) => (
-                  <div key={i} className="flex flex-col border border-[#333538] rounded-xl overflow-hidden shadow-2xl bg-[#1e1f20]">
-                    <div className="bg-[#282a2d] border-b border-[#333538] px-4 py-3 flex items-center justify-between text-xs font-mono text-[#e3e3e3]">
-                      <div className="flex items-center gap-3">
-                        <div className="flex gap-1.5">
-                          <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                          <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                          <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                        </div>
-                        <div className="flex items-center gap-2 ml-2">
-                          <Code size={14} className="text-[#a8c7fa]" />
-                          <span className="font-medium tracking-wide text-[#f1f3f4]">{file.name}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-[#0b0b0c] p-1">
-                       <CodeBlock language={file.lang} value={file.code} noMargin />
-                    </div>
+                {/* Image 3 Breadcrumb Bar */}
+                <div className="h-10 border-b border-[#1a1b1e] bg-[#0d0d0d] flex items-center px-4 gap-2 text-[11px] font-medium justify-between">
+                   <div className="flex items-center gap-2">
+                     <span className="text-[#5f6368]">Preview</span>
+                     <span className="text-[#333538]">/</span>
+                     <span className="text-[#8e918f]">{generatedFiles[activeFileIndex]?.name || 'src/main.tsx'}</span>
+                   </div>
+                   <button
+                    onClick={() => {
+                      if (!generatedFiles[activeFileIndex]) return;
+                      const blob = new Blob([generatedFiles[activeFileIndex].code], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = generatedFiles[activeFileIndex].name;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    title="Baixar arquivo"
+                    className="p-1.5 text-[#8e918f] hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-hidden flex">
+                  {/* Sidebar for multiple files - professional */}
+                  <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
+
+                  <div className="flex-1 overflow-auto custom-scrollbar bg-[#050505]">
+                    <CodeBlock 
+                      language={generatedFiles[activeFileIndex]?.lang} 
+                      value={generatedFiles[activeFileIndex]?.code || ''} 
+                      noMargin 
+                    />
                   </div>
-                ))}
+
+                  {/* Image 3 Red bar on the right */}
+                  <div className="w-[12px] h-full flex flex-col gap-[2px] py-4 px-[2px]">
+                    {Array.from({ length: 15 }).map((_, i) => (
+                      <div key={i} className={cn("w-full h-4 rounded-[1px]", i % 4 === 0 ? "bg-red-900/40" : "bg-transparent")} />
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1107,8 +1518,8 @@ export default function App() {
 
 
       {/* Modern Global Bottom Navigation (Floating Pill) */}
-      <div className="fixed bottom-4 inset-x-0 px-4 flex justify-center z-40 pointer-events-none">
-        <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-3 rounded-full shadow-2xl w-full max-w-[480px] pointer-events-auto ring-1 ring-black/20">
+      <div className="fixed bottom-4 inset-x-0 px-4 flex justify-center z-[100] pointer-events-none">
+        <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-3 rounded-full shadow-2xl w-full max-w-[500px] pointer-events-auto ring-1 ring-black/20">
           {[
             { id: 'chat', icon: MessageSquare, label: 'Chat' },
             { id: 'preview', icon: Layout, label: 'Canvas' },
@@ -1131,7 +1542,7 @@ export default function App() {
               )}
               <div className="relative">
                 <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} className={cn(activeTab === item.id ? "text-[#a8c7fa]" : "")} />
-                {item.id === 'code' && item.dot && <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-[#a8c7fa] border-2 border-[#1e1e1f]" />}
+                {item.id === 'code' && item.dot && <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-red-500 border-2 border-[#1e1e1f]" />}
               </div>
               <span className="text-[10px] font-medium tracking-wide leading-none">{item.label}</span>
             </button>
@@ -1233,15 +1644,35 @@ export default function App() {
                             <div className="space-y-3">
                               <div className="space-y-1.5">
                                 <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">API Key</label>
-                                <Input type="password" value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso..." className="bg-white/[0.02] border-white/10 rounded-lg h-9 px-3 text-[12px] focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all" />
+                                <div className="relative">
+                                  <Input type={showDraftApiKey ? "text" : "password"} value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso..." className="bg-white/[0.02] border-white/10 rounded-lg h-9 px-3 text-[12px] focus-visible:ring-1 focus-visible:ring-blue-500/30 focus-visible:border-blue-500/50 transition-all pr-16" />
+                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center pr-1 gap-0.5">
+                                    <button type="button" onClick={async () => {
+                                      try {
+                                        const text = await navigator.clipboard.readText();
+                                        setDraftApiKey(text);
+                                      } catch(e) {
+                                        console.error('Failed to read clipboard', e);
+                                      }
+                                    }} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title="Colar">
+                                      <ClipboardPaste size={14} />
+                                    </button>
+                                    <button type="button" onClick={() => setShowDraftApiKey(s => !s)} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title={showDraftApiKey ? "Ocultar" : "Mostrar"}>
+                                      {showDraftApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                               <div className="space-y-1.5">
                                 <label className="text-[12px] font-black text-[#8e918f] uppercase tracking-widest px-1">Modelo</label>
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
                                   <SelectTrigger className="bg-white/[0.02] border-white/10 text-[#f1f3f4] h-9 text-[12px] rounded-lg px-3 focus:ring-1 focus:ring-blue-500/30"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash Preview</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash</SelectItem>
+                                    <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Flash Thinking</SelectItem>
+                                    <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</SelectItem>
+                                    <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                                     <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -1287,7 +1718,40 @@ export default function App() {
                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
                                  <div className="space-y-6">
                                    <div className="space-y-2"><label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Identificação</label><Input placeholder="Nome da Instância" value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" /></div>
-                                   <div className="space-y-2"><label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">API Key</label><Input type="password" placeholder="••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30" /></div>
+                                   <div className="space-y-2">
+                                     <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">API Key</label>
+                                     <div className="relative">
+                                       <Input type={showPresetApiKey ? "text" : "password"} placeholder="••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-transparent border-0 border-b border-white/10 rounded-none h-8 text-[11px] focus-visible:ring-0 focus-visible:border-white/30 pr-16" />
+                                       <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center pr-1 gap-0.5">
+                                          <button type="button" onClick={async () => {
+                                            try {
+                                              const text = await navigator.clipboard.readText();
+                                              setPresetForm(prev => ({ ...prev, apiKey: text }));
+                                            } catch(e) {
+                                              console.error('Failed to read clipboard', e);
+                                            }
+                                          }} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title="Colar">
+                                            <ClipboardPaste size={14} />
+                                          </button>
+                                          <button type="button" onClick={() => setShowPresetApiKey(s => !s)} className="p-1.5 hover:bg-white/10 rounded-md text-[#8e918f] hover:text-[#e3e3e3] transition-colors" title={showPresetApiKey ? "Ocultar" : "Mostrar"}>
+                                            {showPresetApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                          </button>
+                                       </div>
+                                     </div>
+                                   </div>
+                                   <div className="space-y-2">
+                                     <label className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest px-1">Modelo</label>
+                                     <Select value={presetForm.model || ''} onValueChange={(val) => val && setPresetForm({ ...presetForm, model: val })}>
+                                       <SelectTrigger className="bg-transparent border-0 border-b border-white/10 h-8 rounded-none px-1 text-[11px] focus:ring-0 focus:border-white/30 text-white"><SelectValue placeholder="Selecione um modelo..." /></SelectTrigger>
+                                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                                         <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                                         <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                                         <SelectItem value="gemini-2.5-flash-thinking">Gemini 2.5 Flash Thinking</SelectItem>
+                                         <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</SelectItem>
+                                         <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro Exp</SelectItem>
+                                       </SelectContent>
+                                     </Select>
+                                   </div>
                                  </div>
                                  <div className="flex items-end justify-end gap-8 mb-2">
                                    <button onClick={() => setIsPresetFormOpen(false)} className="text-[10px] font-black text-[#8e918f] hover:text-white uppercase tracking-widest">Descartar</button>
@@ -1317,8 +1781,7 @@ export default function App() {
                               return (
                                 <div key={agent.id} onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} className={cn("transition-all cursor-pointer flex items-center gap-3 group relative py-1.5", isSelected ? "opacity-100 pl-2 border-l border-blue-500" : "opacity-40 hover:opacity-100 hover:pl-2 border-l border-transparent transition-all")}>
                                   <div className={cn("w-7 h-7 rounded flex items-center justify-center text-white shrink-0 transition-all", isSelected ? "bg-white text-black" : "bg-white/[0.05] text-[#5f6368] border border-white/5")}>
-                                       {agent.iconName === 'Hexagon' && <Hexagon size={12} />}{agent.iconName === 'Brain' && <Brain size={12} />}{agent.iconName === 'Sparkles' && <Sparkles size={12} />}{agent.iconName === 'Shield' && <Shield size={12} />}{agent.iconName === 'Terminal' && <Terminal size={12} />}{agent.iconName === 'Activity' && <Activity size={12} />}{agent.iconName === 'Users' && <Users size={12} />}
-                                       {(!agent.iconName || !['Hexagon', 'Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].includes(agent.iconName)) && <MessageSquare size={12} />}
+                                       <AgentIcon iconName={agent.iconName} size={12} />
                                   </div>
                                   <div className="flex-1 min-w-0"><p className="text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">{agent.name}</p><p className="text-[8px] text-[#5f6368] font-bold uppercase tracking-widest leading-tight">{isDefault ? 'CORE' : 'CUSTOM'}</p></div>
                                   {!isDefault && (

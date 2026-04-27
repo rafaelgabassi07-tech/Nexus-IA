@@ -3,49 +3,149 @@ import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
+import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 
+// Configuração do CORS
+const corsOptions = {
+  origin: process.env.ALLOWED_ORIGIN || 'http://localhost:3000',
+  methods: ['POST'],
+  allowedHeaders: ['Content-Type'],
+};
+app.use(cors(corsOptions));
+
+// Configuração do Rate Limit
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minuto
+  max: 20, // limite de 20 requisições
+  message: { error: "Muitas requisições. Aguarde um momento." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // API Route for interacting with the Gemini-powered Agents
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', limiter, async (req, res) => {
+  // Adiciona timeout de 60 segundos
+  req.setTimeout(60000);
+  res.setTimeout(60000);
+
   const { messages, apiKey, model, systemPrompt, temperature } = req.body || {};
+
+  // Validar temperature
+  const temp = parseFloat(temperature);
+  if (isNaN(temp) || temp < 0 || temp > 2) {
+    return res.status(400).json({ error: 'Temperature inválida. Deve ser entre 0 e 2.' });
+  }
+
+  // Whitelist de modelos permitidos
+  const ALLOWED_MODELS = [
+    'gemini-2.0-flash-exp', 
+    'gemini-2.0-flash-thinking-exp-01-21', 
+    'gemini-2.0-pro-exp-02-05', 
+    'gemini-1.5-pro', 
+    'gemini-1.5-flash',
+    'gemini-3-flash-preview' // Adicionando o que já estava sendo usado como fallback
+  ];
+  if (model && !ALLOWED_MODELS.includes(model)) {
+    return res.status(400).json({ error: `Modelo '${model}' não permitido.` });
+  }
+
+  // Validar messages
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Campo messages inválido.' });
+  }
+
   const targetModel = model || 'gemini-3-flash-preview';
+
+  let clientClosed = false;
+  req.on('close', () => {
+    clientClosed = true;
+  });
 
   try {
     // Use Google Gen AI (Gemini) API
-    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.GEMINI_API_KEY });
+    const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
+    if (!apiKeyToUse) {
+      throw new Error("GEMINI_API_KEY not configured");
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
     
-    const contents = messages.map(msg => ({
-      role: msg.role,
-      parts: [{ text: msg.content }]
+    // Truncar histórico para as últimas 20 mensagens
+    const recentMessages = (messages || []).slice(-20);
+
+    const contents = recentMessages.map(msg => ({
+      role: msg.role === 'model' ? 'model' : 'user',
+      parts: [
+        ...(msg.images || []).map(img => ({
+          inlineData: {
+            mimeType: img.mimeType,
+            data: img.data
+          }
+        })),
+        { text: msg.content }
+      ]
     }));
 
-    // Setup Server-Sent Events
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    let retries = 3;
+    let delay = 2000;
+    let lastError;
 
-    const responseStream = await ai.models.generateContentStream({
-      model: targetModel,
-      contents: contents,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: temperature !== undefined ? parseFloat(temperature) : 0.7,
+    while (retries >= 0) {
+      try {
+        const responseStream = await ai.models.generateContentStream({
+          model: targetModel,
+          contents: contents,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: temperature !== undefined ? parseFloat(temperature) : 0.7,
+          }
+        });
+
+        // Setup Server-Sent Events after stream is successfully initialized
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        for await (const chunk of responseStream) {
+           if (clientClosed) break;
+           res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+        }
+        
+        if (!clientClosed) {
+          res.write('data: [DONE]\n\n');
+          res.end();
+        }
+        
+        return; // Success, exit completely
+      } catch (err) {
+        lastError = err;
+        const msg = String(err.message || "").toLowerCase();
+        // Check if the error is a temporary infrastructure constraint
+        const isTemporary = msg.includes("503") || 
+                            msg.includes("unavailable") || 
+                            msg.includes("high demand") || 
+                            msg.includes("tempararily_unavailable") || 
+                            msg.includes("429");
+                            
+        if (retries === 0 || !isTemporary || res.headersSent) {
+          throw err; // Re-throw if out of retries, not a temporary error, or if stream already started
+        }
+        console.warn(`[Warning] Model ${targetModel} overloaded or hit rate limit. Retrying in ${delay}ms... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 1.5;
+        retries--;
       }
-    });
-
-    for await (const chunk of responseStream) {
-       res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
     }
-    
-    res.write('data: [DONE]\n\n');
-    res.end();
 
   } catch (error) {
+    if (clientClosed) return;
     console.error('Error generating content:', error);
     let errorMessage = error.message || "Failed to generate content";
     try {
@@ -59,12 +159,14 @@ app.post('/api/chat', async (req, res) => {
     } catch(e) {}
     
     // Custom logic to handle quota and invalid API key errors for UX
-    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID")) {
-      errorMessage = "Chave da API inválida. Por favor, verifique se a sua Chave de API nas configurações (ícone de engrenagem) está correta.";
+    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GEMINI_API_KEY not configured")) {
+      errorMessage = "Chave da API não configurada ou inválida. Por favor, certifique-se de que a variável GEMINI_API_KEY foi definida nas configurações do ambiente.";
     } else if (errorMessage.includes("limit: 0")) {
       errorMessage = `A Chave de API utilizada não tem permissão para usar o modelo '${targetModel}' (limite 0). Tente usar o modelo Gemini 3 Flash.`;
     } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("exceeded")) {
       errorMessage = "Limite de cota ou tokens excedido. O prompt é muito grande e consome muitos tokens de contexto, ultrapassando o limite da cota gratuita da sua Chave de API imediatamente. Para resolver: adicione um cartão de crédito no Google AI Studio (faturamento ativado) para remover a restrição de tokens por minuto.";
+    } else if (errorMessage.includes("UNAVAILABLE") || errorMessage.includes("503") || errorMessage.includes("high demand")) {
+      errorMessage = "O modelo está com alta demanda no momento (Erro 503). Isso geralmente é temporário. Por favor, aguarde alguns instantes e tente enviar sua mensagem novamente.";
     }
 
     if (!res.headersSent) {

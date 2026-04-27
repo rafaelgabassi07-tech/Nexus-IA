@@ -1,6 +1,6 @@
 {
   "name": "Nexus IA",
-  "description": "Um assistente inteligente (Nexus IA) com agentes focados em revisão, simplificação, arquitetura e segurança de código. Suporta PWA.",
+  "description": "Um estúdio de desenvolvimento alimentado por IA (Nexus IA) com orquestração de agentes, preview em tempo real (Canvas Tech) e suporte avançado a bibliotecas modernas.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
