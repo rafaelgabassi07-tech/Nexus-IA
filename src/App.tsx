@@ -6,8 +6,9 @@ import {
   Users, Edit2, Activity, Shield, Sparkles, Brain,
   ArrowLeft, Copy, Check,
   History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen, ChevronDown,
-  Wrench, FileText, Lightbulb
+  Wrench, FileText, Lightbulb, FileCode
 } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { FileTree } from './components/FileTree';
 
@@ -501,9 +502,14 @@ export default function App() {
   }, [currentChatId, chatHistory]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 100,
+    overscan: 5,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const lastExtractionTimeRef = useRef<number>(0);
 
   const resetChat = () => {
     setCurrentChatId(generateId());
@@ -520,15 +526,38 @@ export default function App() {
     ]);
   };
 
-  // Auto-scroll on new messages
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  // Monitor scroll position to determine if we should auto-scroll
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      // If we are within 100px of the bottom, we consider it "at bottom"
+      const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setIsAtBottom(nearBottom);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll on new messages ONLY if the user was already at the bottom
+  // Using a small delay or condition to not overwhelm the main thread
+  useEffect(() => {
+    if (messages.length > 0 && isAtBottom && isLoading) {
+      const msg = messages[messages.length - 1];
+      if (msg.role === 'model' && msg.content.length > 0) {
+        // Optimized scrolling: only trigger when content grows and user is at bottom
+        rowVirtualizer.scrollToIndex(messages.length - 1, { 
+          align: 'end', 
+          behavior: 'auto' 
+        });
+      }
     }
-  }, [messages]);
+  }, [messages.length, messages[messages.length - 1]?.content.length, isAtBottom, isLoading, rowVirtualizer]);
 
   // Save to local storage when chat history changes
   useEffect(() => {
@@ -1040,7 +1069,7 @@ export default function App() {
                   if (parsed.text) {
                     fullResponse += parsed.text;
                     
-                    // Real-time step parsing logic
+                    // Real-time step parsing logic (Thinking)
                     if (hasStartedThinking && !hasStartedCoding && Date.now() - lastThoughtUpdate > 1000) {
                       lastThoughtUpdate = Date.now();
                       const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -1049,16 +1078,76 @@ export default function App() {
                       ));
                     }
 
-                    // Heuristic: Detect file reading/accessing in the text
+                    // Real-time file extraction and step generation
                     const newContent = fullResponse.slice(lastContentLength);
-                    if (newContent.length > 5) {
+                    if (newContent.length > 2) {
+                      const currentFiles = extractFilesFromMarkdown(fullResponse);
+                      
+                      if (currentFiles.length > 0) {
+                        setGeneratedFiles(prev => {
+                          const prevLen = prev.length;
+                          const currLen = currentFiles.length;
+                          
+                          if (currLen > prevLen) {
+                            // New file discovered!
+                            const newFile = currentFiles[currLen - 1];
+                            const currentSteps = [...steps];
+                            // Mark previous as success if it was running
+                            if (currentSteps.length > 0 && currentSteps[currentSteps.length - 1].status === 'running') {
+                              currentSteps[currentSteps.length - 1].status = 'success';
+                            }
+                            // Add new creation step
+                            currentSteps.push({ 
+                              id: generateId(), 
+                              label: `Criando: ${newFile.name.split('/').pop()}`, 
+                              status: 'success', 
+                              icon: FileCode 
+                            });
+                            updateSteps(currentSteps);
+                            setActiveFileIndex(currLen - 1);
+                          }
+                          return currentFiles;
+                        });
+                      }
+
+                      // Update "Writing..." indicator in Action History
+                      const openBlockMatch = fullResponse.match(/```(\w+)?(?:[:\s]+)?([\w\.\/\-\_]+)?\n([^`]*)$/);
+                      if (openBlockMatch) {
+                        const fileName = openBlockMatch[2] || `arquivo_${generatedFiles.length + 1}`;
+                        const writingLabel = `Escrevendo código em ${fileName.split('/').pop()}...`;
+                        
+                        if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
+                          const currentSteps = [...steps];
+                          const last = currentSteps[currentSteps.length - 1];
+                          if (last.status === 'running') {
+                            last.label = writingLabel;
+                            last.icon = Edit2;
+                          } else {
+                            currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: Edit2 });
+                          }
+                          updateSteps(currentSteps);
+                        }
+                      } else if (hasStartedCoding) {
+                        // If no block is open but we already started coding, we might be writing the summary
+                        const summaryLabel = 'Finalizando com resumo e explicações...';
+                        if (steps.length > 0 && steps[steps.length - 1].label !== summaryLabel && !steps[steps.length - 1].label.includes('Pensou')) {
+                           const currentSteps = [...steps];
+                           const last = currentSteps[currentSteps.length - 1];
+                           if (last.status === 'running' && !last.label.includes('Pensando')) {
+                             last.label = summaryLabel;
+                             last.icon = Activity;
+                           }
+                           updateSteps(currentSteps);
+                        }
+                      }
+
+                      // Other heuristics (Commands/Reads)
                       const fileMatch = newContent.match(/(?:lendo|read|acessando|viewing)\s+arquivo\s+`?([\w\.\/\-]+)`?/i);
                       if (fileMatch && !detectedFiles.has(fileMatch[1])) {
                         detectedFiles.add(fileMatch[1]);
                         const currentSteps = [...steps];
-                        const last = currentSteps[currentSteps.length - 1];
-                        if (last.status === 'running') last.status = 'success';
-                        currentSteps.push({ id: generateId(), label: `Leu arquivo: ${fileMatch[1]}`, status: 'success', icon: FileText });
+                        if (currentSteps[currentSteps.length - 1].status === 'running') currentSteps[currentSteps.length - 1].status = 'success';
+                        currentSteps.push({ id: generateId(), label: `Analisando: ${fileMatch[1].split('/').pop()}`, status: 'success', icon: FileText });
                         updateSteps(currentSteps);
                       }
 
@@ -1066,9 +1155,8 @@ export default function App() {
                       if (cmdMatch && !detectedCommands.has(cmdMatch[1])) {
                         detectedCommands.add(cmdMatch[1]);
                         const currentSteps = [...steps];
-                        const last = currentSteps[currentSteps.length - 1];
-                        if (last.status === 'running') last.status = 'success';
-                        currentSteps.push({ id: generateId(), label: `Executou comando: ${cmdMatch[1].trim()}`, status: 'success', icon: Terminal });
+                        if (currentSteps[currentSteps.length - 1].status === 'running') currentSteps[currentSteps.length - 1].status = 'success';
+                        currentSteps.push({ id: generateId(), label: `Comando: ${cmdMatch[1].trim()}`, status: 'success', icon: Terminal });
                         updateSteps(currentSteps);
                       }
                       lastContentLength = fullResponse.length;
@@ -1089,21 +1177,6 @@ export default function App() {
                     setMessages(prev => prev.map(m => 
                       m.id === messageId ? { ...m, content: fullResponse } : m
                     ));
-                    
-                    if (Date.now() - lastExtractionTimeRef.current > 500) {
-                      lastExtractionTimeRef.current = Date.now();
-                      const currentFiles = extractFilesFromMarkdown(fullResponse);
-                      if (currentFiles.length > 0) {
-                        setGeneratedFiles(prev => {
-                          if (prev.length === 0) {
-                            setActiveFileIndex(currentFiles.length - 1);
-                          } else if (currentFiles.length > prev.length) {
-                             setActiveFileIndex(currentFiles.length - 1);
-                          }
-                          return currentFiles;
-                        });
-                      }
-                    }
                   }
                 }
               }
@@ -1421,7 +1494,10 @@ export default function App() {
           {/* Chat Log */}
           <div 
             ref={scrollRef}
-            className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-smooth custom-scrollbar relative flex flex-col"
+            className={cn(
+              "flex-1 overflow-y-auto px-3 py-4 custom-scrollbar relative",
+              messages.length === 0 && "flex flex-col"
+            )}
           >
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center py-4 px-2 text-center animate-in fade-in duration-700 w-full min-h-0">
@@ -1455,15 +1531,35 @@ export default function App() {
               </div>
             )}
 
-            <AnimatePresence initial={false}>
-              {messages.map((msg) => (
-                <motion.div 
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  className={cn("flex w-full mb-4", msg.role === 'user' ? "justify-end" : "justify-start")}
-                >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative'
+              }}
+            >
+              <AnimatePresence initial={false}>
+                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                  const msg = messages[virtualItem.index];
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      ref={rowVirtualizer.measureElement}
+                      data-index={virtualItem.index}
+                      className="absolute top-0 left-0 w-full"
+                      style={{
+                        transform: `translateY(${virtualItem.start}px)`,
+                        paddingBottom: '16px',
+                        willChange: 'transform'
+                      }}
+                    >
+                      <motion.div 
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                        className={cn("flex w-full mb-4", msg.role === 'user' ? "justify-end" : "justify-start")}
+                      >
                   {msg.role === 'user' ? (
                     <div className="bg-[#282a2d] text-[#e3e3e3] px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[85%] text-[14px] leading-relaxed whitespace-pre-wrap">
                       {msg.content}
@@ -1683,9 +1779,12 @@ export default function App() {
                       </div>
                   )}
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+              </div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
 
           {/* Input Area */}
           <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-[#131314] shrink-0 border-t border-[#333538]/50">
