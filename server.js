@@ -13,7 +13,7 @@ app.use(express.json({ limit: '50mb' }));
 // API Route for interacting with the Gemini-powered Agents
 app.post('/api/chat', async (req, res) => {
   const { messages, apiKey, model, systemPrompt, temperature } = req.body || {};
-  const targetModel = model || 'gemini-1.5-flash';
+  const targetModel = model || 'gemini-3-flash-preview';
 
   try {
     // Use Google Gen AI (Gemini) API
@@ -62,7 +62,7 @@ app.post('/api/chat', async (req, res) => {
     if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID")) {
       errorMessage = "Chave da API inválida. Por favor, verifique se a sua Chave de API nas configurações (ícone de engrenagem) está correta.";
     } else if (errorMessage.includes("limit: 0")) {
-      errorMessage = `A Chave de API utilizada não tem permissão para usar o modelo '${targetModel}' (limite 0). Tente usar o modelo Gemini 1.5 Flash.`;
+      errorMessage = `A Chave de API utilizada não tem permissão para usar o modelo '${targetModel}' (limite 0). Tente usar o modelo Gemini 3 Flash.`;
     } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("exceeded")) {
       errorMessage = "Limite de cota ou tokens excedido. O prompt é muito grande e consome muitos tokens de contexto, ultrapassando o limite da cota gratuita da sua Chave de API imediatamente. Para resolver: adicione um cartão de crédito no Google AI Studio (faturamento ativado) para remover a restrição de tokens por minuto.";
     }
