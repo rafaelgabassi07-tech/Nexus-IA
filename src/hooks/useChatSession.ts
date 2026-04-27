@@ -12,6 +12,7 @@ interface UseChatSessionProps {
   selectedModel: string;
   systemPrompt: string;
   temperature: number;
+  searchGrounding?: boolean;
 }
 
 export function useChatSession({
@@ -19,7 +20,8 @@ export function useChatSession({
   apiKey,
   selectedModel,
   systemPrompt,
-  temperature
+  temperature,
+  searchGrounding = false
 }: UseChatSessionProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -138,7 +140,8 @@ export function useChatSession({
           temperature,
           agentId: activeAgent.id,
           apiKey,
-          model: selectedModel
+          model: selectedModel,
+          searchGrounding
         })
       });
 

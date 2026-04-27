@@ -2,6 +2,9 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { 
   Sparkles, Check, ChevronDown, FileCode, Edit2, Copy, Brain, Layout, Code, Terminal, Activity, ArrowDown
 } from 'lucide-react';
@@ -84,7 +87,7 @@ export const ChatLog = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-4 w-full">
+      <div id="chat-log-container" className="flex flex-col gap-4 w-full">
         <AnimatePresence initial={false}>
           {messages.map((msg, index) => (
             <motion.div 
@@ -222,7 +225,8 @@ export const ChatLog = ({
 
                             <div className="pt-2">
                               <ReactMarkdown 
-                                remarkPlugins={[remarkGfm]}
+                                remarkPlugins={[remarkGfm, remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
                                 components={{
                                   code({ inline, className, children, ...props }: any) {
                                     const match = /language-(\w+)/.exec(className || '');
@@ -281,7 +285,8 @@ export const ChatLog = ({
                     
                     <div className={cn(msg.steps ? "mt-4" : "")}>
                       <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                         components={{
                           code({ inline, className, children, ...props }: any) {
                             const match = /language-(\w+)/.exec(className || '');

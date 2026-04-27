@@ -58,37 +58,37 @@ export const SettingsPanel = React.memo(({
   setActiveTab, saveSettings, hasSettingsChanges
 }: SettingsPanelProps) => {
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10">
-      <div className="max-w-4xl mx-auto space-y-12">
+    <div className="flex-1 overflow-y-auto custom-scrollbar p-5 md:p-8">
+      <div className="max-w-3xl mx-auto space-y-10">
         {settingsTab === 'overview' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-10">
-            <header className="space-y-2">
-              <h2 className="text-[28px] font-black text-white uppercase tracking-tighter">Central Nexus</h2>
-              <p className="text-[#8e918f] text-[14px] uppercase font-bold tracking-[0.2em]">Orquestração de Inteligência e Protocolos</p>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+            <header className="space-y-1">
+              <h2 className="text-[24px] font-black text-white uppercase tracking-tighter">Central Nexus</h2>
+              <p className="text-[#8e918f] text-[12px] uppercase font-bold tracking-[0.2em]">Orquestração de Inteligência e Protocolos</p>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button onClick={() => setSettingsTab('general')} className="group flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-blue-400/5 hover:border-blue-400/20 transition-all duration-300 gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Activity size={24} /></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <button onClick={() => setSettingsTab('general')} className="group flex flex-col items-center justify-center p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-blue-400/5 hover:border-blue-400/20 transition-all duration-300 gap-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Activity size={20} /></div>
                 <div className="text-center">
-                  <span className="block text-[13px] font-black text-white uppercase tracking-widest">Geral</span>
-                  <span className="text-[10px] text-[#8e918f] uppercase font-bold tracking-tighter">Modelos & API</span>
+                  <span className="block text-[12px] font-black text-white uppercase tracking-widest">Geral</span>
+                  <span className="text-[9px] text-[#8e918f] uppercase font-bold tracking-tighter">Modelos & API</span>
                 </div>
               </button>
 
-              <button onClick={() => setSettingsTab('agent')} className="group flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-purple-400/5 hover:border-purple-400/20 transition-all duration-300 gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Terminal size={24} /></div>
+              <button onClick={() => setSettingsTab('agent')} className="group flex flex-col items-center justify-center p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-purple-400/5 hover:border-purple-400/20 transition-all duration-300 gap-3">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Terminal size={20} /></div>
                 <div className="text-center">
-                  <span className="block text-[13px] font-black text-white uppercase tracking-widest">Identidade</span>
-                  <span className="text-[10px] text-[#8e918f] uppercase font-bold tracking-tighter">Personas & Core</span>
+                  <span className="block text-[12px] font-black text-white uppercase tracking-widest">Identidade</span>
+                  <span className="text-[9px] text-[#8e918f] uppercase font-bold tracking-tighter">Personas & Core</span>
                 </div>
               </button>
 
-              <button onClick={() => setSettingsTab('security')} className="group flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-emerald-400/5 hover:border-emerald-400/20 transition-all duration-300 gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Shield size={24} /></div>
+              <button onClick={() => setSettingsTab('security')} className="group flex flex-col items-center justify-center p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-emerald-400/5 hover:border-emerald-400/20 transition-all duration-300 gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Shield size={20} /></div>
                 <div className="text-center">
-                  <span className="block text-[13px] font-black text-white uppercase tracking-widest">Segurança</span>
-                  <span className="text-[10px] text-[#8e918f] uppercase font-bold tracking-tighter">Protocolos & Logs</span>
+                  <span className="block text-[12px] font-black text-white uppercase tracking-widest">Segurança</span>
+                  <span className="text-[9px] text-[#8e918f] uppercase font-bold tracking-tighter">Protocolos & Logs</span>
                 </div>
               </button>
             </div>
@@ -278,40 +278,39 @@ export const SettingsPanel = React.memo(({
               <h3 className="text-[14px] font-black text-white uppercase tracking-widest text-right">Biosfera de Identidades</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {allAgents.map(agent => (
                 <div 
                   key={agent.id} 
                   onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} 
                   className={cn(
-                    "group relative p-6 rounded-3xl border cursor-pointer transition-all duration-500 overflow-hidden", 
+                    "group relative p-4 rounded-2xl border cursor-pointer transition-all duration-500 overflow-hidden", 
                     draftActiveAgentId === agent.id 
-                      ? "bg-gradient-to-br from-purple-500/20 to-blue-500/5 border-purple-500/40 shadow-2xl shadow-purple-500/10" 
-                      : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.04] hover:border-white/10"
+                      ? "bg-gradient-to-br from-purple-500/20 to-blue-500/5 border-purple-500/40 shadow-xl shadow-purple-500/10" 
+                      : "bg-white/[0.01] border-white/5 text-[#8e918f] hover:bg-white/[0.03] hover:border-white/10"
                   )}
                 >
-                  <div className="flex items-center gap-5">
+                  <div className="flex items-center gap-4">
                     <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg", 
+                      "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-500 shadow-lg", 
                       agent.color,
-                      draftActiveAgentId === agent.id ? "scale-105 ring-4 ring-white/10 shadow-purple-500/20" : "opacity-60 scale-95"
+                      draftActiveAgentId === agent.id ? "scale-105 ring-2 ring-white/10" : "opacity-50 scale-95"
                     )}>
-                      <AgentIcon iconName={agent.iconName} size={28} className={cn(draftActiveAgentId === agent.id ? "text-white" : "text-white/60")} />
+                      <AgentIcon iconName={agent.iconName} size={22} className={cn(draftActiveAgentId === agent.id ? "text-white" : "text-white/60")} />
                     </div>
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={cn("text-[14px] font-black uppercase tracking-widest truncate transition-colors", draftActiveAgentId === agent.id ? "text-white" : "text-[#8e918f]")}>{agent.name}</span>
-                        {draftActiveAgentId === agent.id && <CheckCircle2 size={12} className="text-purple-400 animate-pulse" />}
+                        <span className={cn("text-[12px] font-black uppercase tracking-widest truncate transition-colors", draftActiveAgentId === agent.id ? "text-white" : "text-[#8e918f]")}>{agent.name}</span>
+                        {draftActiveAgentId === agent.id && <CheckCircle2 size={10} className="text-purple-400" />}
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest opacity-40 mt-0.5">{agent.shortDescription || 'Matriz Especializada'}</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-40">{agent.shortDescription || 'Persona Matrix'}</span>
                     </div>
                   </div>
                   
-                  <div className="mt-5 pt-4 border-t border-white/5 relative">
-                    <p className={cn("text-[11px] line-clamp-2 leading-relaxed italic transition-colors", draftActiveAgentId === agent.id ? "text-white/60" : "text-white/20")}>
+                  <div className="mt-4 pt-3 border-t border-white/5 relative">
+                    <p className={cn("text-[10px] line-clamp-2 leading-relaxed italic transition-colors", draftActiveAgentId === agent.id ? "text-white/50" : "text-white/20")}>
                       {agent.systemPrompt}
                     </p>
-                    <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-[#131314] to-transparent" />
                   </div>
                   
                   <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">

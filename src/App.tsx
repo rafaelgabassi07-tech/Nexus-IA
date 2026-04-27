@@ -3,7 +3,7 @@ import {
   Loader2, ArrowUp,
   Paperclip, Image as ImageIcon, Terminal, Layout,
   Plus, Trash2, X,
-  Brain, Activity,
+  Brain, Activity, Mic, MicOff, ExternalLink,
   RotateCcw, FolderOpen, Layers,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,6 +61,7 @@ export default function App() {
   const [temperature, setTemperature] = useState<number>(() => {
     return safeStorageNumber('nexus_temperature', 0.7);
   });
+  const [isSearchGroundingActive, setIsSearchGroundingActive] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(() => {
     return safeStorageString('nexus_system_prompt', activeAgent.systemPrompt);
   });
@@ -82,7 +83,8 @@ export default function App() {
     apiKey,
     selectedModel,
     systemPrompt,
-    temperature
+    temperature,
+    searchGrounding: isSearchGroundingActive
   });
 
   const [apiPresets, setApiPresets] = useState<APIPreset[]>(() => {
@@ -387,6 +389,67 @@ export default function App() {
       });
     }
   }, []);
+
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const toggleListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      toast.error('Reconhecimento de voz não suportado neste navegador.');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      if (!recognitionRef.current) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'pt-BR';
+
+        recognitionRef.current.onresult = (event: any) => {
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              const transcript = event.results[i][0].transcript;
+              setInputMessage(prev => prev + (prev ? ' ' : '') + transcript);
+            }
+          }
+        };
+
+        recognitionRef.current.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'not-allowed') {
+            toast.error('Permissão de microfone negada.');
+          } else {
+            toast.error(`Erro no microfone: ${event.error}`);
+          }
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+
+      recognitionRef.current.start();
+    } catch (error) {
+      console.error('Failed to start recognition:', error);
+      setIsListening(false);
+    }
+  };
 
   const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string) => {
     if (e) e.preventDefault();
@@ -759,6 +822,7 @@ export default function App() {
         setSelectedModel={setSelectedModel}
         setDraftSelectedModel={setDraftSelectedModel}
         isSaving={isSaving}
+        messages={messages}
       />
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
@@ -810,8 +874,19 @@ export default function App() {
                   rows={1}
                 />
                 
-                <div className="flex items-end justify-between p-2 pt-0">
-                  <div className="flex items-center gap-1.5 text-[#8e918f]">
+                <div className="flex items-center justify-between p-2 pt-0 gap-2">
+                  <div className="flex items-center gap-0.5 text-[#8e918f]">
+                    <button
+                      onClick={toggleListening}
+                      className={cn(
+                        "p-2 rounded-lg transition-colors flex items-center justify-center",
+                        isListening ? "text-red-400 bg-red-400/10" : "hover:bg-[#333538]/50 hover:text-[#e3e3e3]"
+                      )}
+                      title={isListening ? "Parar gravação" : "Digitar por voz"}
+                    >
+                      {isListening ? <MicOff size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
+                    </button>
+
                     <input 
                       type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
                       onChange={(e) => {
@@ -821,8 +896,8 @@ export default function App() {
                         }
                       }}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Anexar arquivos">
-                      <Paperclip size={18} strokeWidth={2} />
+                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Arquivos">
+                      <Paperclip size={15} strokeWidth={2.5} />
                     </label>
 
                     <input 
@@ -834,17 +909,28 @@ export default function App() {
                         }
                       }}
                     />
-                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" title="Anexar imagens">
-                      <ImageIcon size={18} strokeWidth={2} />
+                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" title="Imagens">
+                      <ImageIcon size={15} strokeWidth={2.5} />
                     </button>
                     
-                    <div className="flex items-center gap-1.5 ml-2 border-l border-white/5 pl-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/20 animate-pulse" />
-                      <span className="text-[9px] uppercase font-bold tracking-[0.2em] opacity-40">Auto-save: ON</span>
-                    </div>
+                    <div className="h-4 w-px bg-white/5 mx-1" />
+
+                    <button 
+                      onClick={() => setIsSearchGroundingActive(!isSearchGroundingActive)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[9.5px] font-black uppercase tracking-widest",
+                        isSearchGroundingActive 
+                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300" 
+                          : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.05]"
+                      )}
+                      title="Ativar busca Web"
+                    >
+                       <ExternalLink size={11} className={cn(isSearchGroundingActive ? "animate-pulse" : "")} />
+                       <span className="hidden sm:inline">Web</span>
+                    </button>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <Select value={selectedModel} onValueChange={(val) => {
                       if (val) {
                         setSelectedModel(val);
@@ -852,14 +938,14 @@ export default function App() {
                         safeLocalStorageSet('nexus_selected_model', val);
                       }
                     }}>
-                      <SelectTrigger className="flex h-8 bg-transparent border-none text-[11px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0 border-none shadow-none">
+                      <SelectTrigger className="flex h-7 bg-white/[0.02] border-white/5 text-[9.5px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0 min-w-0 sm:min-w-[95px] border-none shadow-none rounded-md transition-all hover:bg-white/5">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <Brain size={14} className="shrink-0" />
-                          <span className="truncate max-w-[120px]">{selectedModel.replace('gemini-', '').replace('-preview', '')}</span>
+                          <Brain size={12} className="shrink-0 opacity-40" />
+                          <span className="truncate max-w-[70px] hidden sm:inline">{selectedModel.split('-').slice(0, 2).join('-')}</span>
                         </div>
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                        <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro (Exp)</SelectItem>
+                        <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</SelectItem>
                         <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Thinking</SelectItem>
                         <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
                         <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Lite</SelectItem>
@@ -873,13 +959,13 @@ export default function App() {
                       disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
                       size="icon"
                       className={cn(
-                        "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none mr-0.5 mb-0.5",
+                        "h-7 w-7 rounded-md transition-all flex flex-shrink-0 items-center justify-center border-none",
                         (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
                           ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow" 
                           : "bg-[#282a2d] text-[#8e918f] cursor-not-allowed"
                       )}
                     >
-                      {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} strokeWidth={2.5} />}
+                      {isLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowUp size={14} strokeWidth={3} />}
                     </Button>
                   </div>
                 </div>
@@ -1074,6 +1160,18 @@ export default function App() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/5 bg-[#131314]/50 backdrop-blur-sm relative z-50">
+        <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
+          <span className="hidden sm:inline">Engine: Gemini 3.1</span>
+          <span className="hidden md:inline">Grounding: Enabled</span>
+          <div className="flex gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-white/10" />
+            <div className="w-1 h-1 rounded-full bg-white/10" />
+            <div className="w-1 h-1 rounded-full bg-white/10" />
+          </div>
+        </div>
+      </footer>
       
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
