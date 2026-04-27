@@ -5,7 +5,7 @@ import {
   Plus, MessageSquare, Trash2, X,
   Users, Edit2, Activity, Shield, Sparkles, Brain,
   ArrowLeft, Copy, Check, ListChecks,
-  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, ClipboardPaste
+  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen
 } from 'lucide-react';
 
 import { FileTree } from './components/FileTree';
@@ -65,6 +65,7 @@ export type ChatSession = {
   title: string;
   messages: Message[];
   updatedAt: number;
+  fileHistory?: { timestamp: number, files: {name: string, lang: string, code: string}[] }[];
 };
 
 const CodeBlock = ({ language, value, noMargin }: { language?: string; value: string; noMargin?: boolean }) => {
@@ -136,7 +137,8 @@ const CodeBlock = ({ language, value, noMargin }: { language?: string; value: st
  */
 function safeLocalStorageSet(key: string, value: any) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, valueToStore);
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError' && key === 'nexus_chat_history') {
       const history = JSON.parse(localStorage.getItem('nexus_chat_history') || '[]');
@@ -145,11 +147,40 @@ function safeLocalStorageSet(key: string, value: any) {
         const pruned = history.slice(0, Math.ceil(history.length / 2));
         localStorage.setItem('nexus_chat_history', JSON.stringify(pruned));
         // Tenta salvar o novo item novamente
-        localStorage.setItem(key, JSON.stringify(value));
+        const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
+        localStorage.setItem(key, valueToStore);
       }
     } else {
       console.error('LocalStorage storage failed:', e);
     }
+  }
+}
+
+function safeStorageString(key: string, defaultValue: string): string {
+  if (typeof window === 'undefined') return defaultValue;
+  const saved = localStorage.getItem(key);
+  if (saved === null) return defaultValue;
+  if (saved.startsWith('"') && saved.endsWith('"')) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return saved;
+    }
+  }
+  return saved;
+}
+
+function safeStorageNumber(key: string, defaultValue: number): number {
+  if (typeof window === 'undefined') return defaultValue;
+  const saved = localStorage.getItem(key);
+  if (saved === null) return defaultValue;
+  try {
+    const parsed = JSON.parse(saved);
+    const num = parseFloat(parsed);
+    return Number.isNaN(num) ? defaultValue : num;
+  } catch {
+    const num = parseFloat(saved);
+    return Number.isNaN(num) ? defaultValue : num;
   }
 }
 
@@ -202,7 +233,7 @@ export default function App() {
 
   const [activeAgentId, setActiveAgentId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nexus_active_agent_id') || AGENTS[0].id;
+      return safeStorageString('nexus_active_agent_id', AGENTS[0].id);
     }
     return AGENTS[0].id;
   });
@@ -221,7 +252,8 @@ export default function App() {
 
   const [activePresetId, setActivePresetId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nexus_active_preset_id');
+      const saved = safeStorageString('nexus_active_preset_id', '');
+      return saved ? saved : null;
     }
     return null;
   });
@@ -244,17 +276,18 @@ export default function App() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('nexus_api_key') || '');
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('nexus_selected_model') || 'gemini-3-flash-preview');
+  const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
+  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-3-flash-preview'));
   const [temperature, setTemperature] = useState<number>(() => {
-    const saved = localStorage.getItem('nexus_temperature');
-    return saved ? parseFloat(saved) : 0.7;
+    return safeStorageNumber('nexus_temperature', 0.7);
   });
   const [systemPrompt, setSystemPrompt] = useState(() => {
-    return localStorage.getItem('nexus_system_prompt') || activeAgent.systemPrompt;
+    return safeStorageString('nexus_system_prompt', activeAgent.systemPrompt);
   });
   
   const [generatedFiles, setGeneratedFiles] = useState<{name: string, lang: string, code: string}[]>([]);
+  const [fileHistory, setFileHistory] = useState<{timestamp: number, files: {name: string, lang: string, code: string}[]}[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
 
@@ -468,6 +501,10 @@ export default function App() {
 
   const resetChat = () => {
     setCurrentChatId(generateId());
+    setGeneratedFiles([]);
+    setFileHistory([]);
+    setHistoryIndex(null);
+    setActiveFileIndex(0);
     setMessages([
       {
         id: generateId(),
@@ -504,8 +541,8 @@ export default function App() {
               ...chat,
               messages: messages,
               updatedAt: Date.now(),
-              // Update title if it was named "Novo Chat" or empty based on first user message
-              title: chat.title === 'Novo Chat' && messages[1]?.role === 'user'
+              fileHistory: fileHistory,
+              title: chat.title === 'Novo Projeto' && messages[1]?.role === 'user'
                 ? messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')
                 : chat.title
             };
@@ -516,9 +553,10 @@ export default function App() {
         if (!exists) {
            return [{
              id: currentChatId,
-             title: messages[1]?.role === 'user' ? (messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')) : 'Novo Chat',
+             title: messages[1]?.role === 'user' ? (messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')) : 'Novo Projeto',
              messages: messages,
-             updatedAt: Date.now()
+             updatedAt: Date.now(),
+             fileHistory: fileHistory
            }, ...newHistory];
         }
 
@@ -640,7 +678,9 @@ export default function App() {
               import React from 'react';
               import ReactDOM from 'react-dom/client';
               import * as Lucide from 'lucide-react';
-              import { motion, AnimatePresence } from 'motion/react';
+              import * as MotionReact from 'motion/react';
+              import * as FramerMotion from 'framer-motion';
+              import * as Recharts from 'recharts';
               import { clsx } from 'clsx';
               import { twMerge } from 'tailwind-merge';
 
@@ -651,21 +691,35 @@ export default function App() {
               const __NEXUS_REGISTRY__ = {};
 
               ${generatedFiles.map(f => {
-                // Handles multiline imports and complex patterns
-                const cleanCode = f.code.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, '');
-                
+                // Safely convert common imports to destructuring from global object
+                let cleanCode = f.code
+                  .replace(/import\s+React\s*,?\s*{([^}]+)}\s+from\s+['"]react['"];?/g, 'const { $1 } = React;')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]react['"];?/g, 'const { $1 } = React;')
+                  .replace(/import\s+React\s+from\s+['"]react['"];?/g, '')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]lucide-react['"];?/g, 'const { $1 } = Lucide;')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]recharts['"];?/g, 'const { $1 } = Recharts;')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]framer-motion['"];?/g, 'const { $1 } = FramerMotion;')
+                  .replace(/import\s+{([^}]+)}\s+from\s+['"]motion\/react['"];?/g, 'const { $1 } = MotionReact;')
+                  .replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, ''); // Erase any other imports like local components for now
+
                 return `
                   __NEXUS_REGISTRY__["${f.name}"] = (function(exports) {
                     try {
-                      ${cleanCode.replace(/export\s+default\s+function\s+([\w]+)/g, 'function $1')
-                               .replace(/export\s+default\s+([\w]+)/g, 'return $1')
-                               .replace(/export\s+const\s+([\w]+)\s+=\s+/g, 'const $1 = exports.$1 = ')
+                      // Provide generic fallbacks for React
+                      const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Suspense, lazy } = React;
+                      ${cleanCode.replace(/export\s+default\s+function\s+([a-zA-Z0-9_]+)/g, 'function $1')
+                               .replace(/export\s+default\s+([a-zA-Z0-9_]+)/g, 'return $1')
+                               .replace(/export\s+const\s+([a-zA-Z0-9_]+)\s*=\s*/g, 'const $1 = exports.$1 = ')
                       }
+                      
+                      // Identify the component to return
                       if (typeof App !== 'undefined') return App;
-                      // Fallback for named exports if default is missing
+                      if (typeof Main !== 'undefined') return Main;
+                      
                       return exports.App || Object.values(exports)[0];
                     } catch (err) {
                       console.error("Error in module ${f.name}:", err);
+                      // Throwing allows Babel error reporting to catch it or React error boundary
                       throw err;
                     }
                   })({});
@@ -849,10 +903,14 @@ export default function App() {
                       lastExtractionTimeRef.current = Date.now();
                       const currentFiles = extractFilesFromMarkdown(fullResponse);
                       if (currentFiles.length > 0) {
-                        setGeneratedFiles(currentFiles);
-                        if (generatedFiles.length === 0 && currentFiles.length > 0) {
-                           setActiveFileIndex(currentFiles.length - 1);
-                        }
+                        setGeneratedFiles(prev => {
+                          if (prev.length === 0) {
+                            setActiveFileIndex(currentFiles.length - 1);
+                          } else if (currentFiles.length > prev.length) {
+                             setActiveFileIndex(currentFiles.length - 1);
+                          }
+                          return currentFiles;
+                        });
                       }
                     }
                   }
@@ -864,6 +922,12 @@ export default function App() {
           const finalFiles = extractFilesFromMarkdown(fullResponse);
           if (finalFiles.length > 0) {
             setGeneratedFiles(finalFiles);
+            setFileHistory(prev => {
+              const isSame = prev.length > 0 && JSON.stringify(prev[prev.length - 1].files) === JSON.stringify(finalFiles);
+              if (isSame) return prev;
+              return [...prev, { timestamp: Date.now(), files: finalFiles }];
+            });
+            setHistoryIndex(null);
           }
           
           break; // Sucesso, quebra o loop de tentativas
@@ -949,9 +1013,9 @@ export default function App() {
               <div className="p-4 h-[64px] border-b border-white/5 flex justify-between items-center bg-[#131314]">
                 <h2 className="text-[#f1f3f4] font-medium flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-[#a8c7fa]/10 text-[#a8c7fa]">
-                    <MessageSquare size={16} />
+                    <Layers size={16} />
                   </div>
-                  <span>Histórico</span>
+                  <span>Projetos</span>
                 </h2>
                 <button 
                   onClick={() => setIsSidebarOpen(false)} 
@@ -970,7 +1034,7 @@ export default function App() {
                   className="w-full bg-[#333538] hover:bg-[#4a4d51] text-[#f1f3f4] justify-start gap-3 h-12 border-none rounded-xl font-medium transition-all group"
                 >
                   <Plus size={18} className="text-[#a8c7fa] group-hover:scale-110 transition-transform" />
-                  <span>Nova conversa</span>
+                  <span>Novo projeto</span>
                 </Button>
               </div>
 
@@ -978,7 +1042,7 @@ export default function App() {
                 <input
                   type="text"
                   ref={searchInputRef}
-                  placeholder="Buscar conversas... (Ctrl+K)"
+                  placeholder="Buscar projetos... (Ctrl+K)"
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
                   className="w-full bg-[#282a2d] border border-[#333538] rounded-xl px-3 py-2 text-[13px] text-[#f1f3f4] placeholder:text-[#8e918f] outline-none focus:ring-1 focus:ring-[#a8c7fa]/30"
@@ -988,9 +1052,9 @@ export default function App() {
               <div className="flex-1 overflow-y-auto px-3 pb-8 space-y-2 custom-scrollbar">
                 {chatHistory.length === 0 ? (
                   <div className="flex flex-col items-center justify-center pt-24 px-6 text-center space-y-4 opacity-40">
-                    <MessageSquare size={48} className="text-[#8e918f]" strokeWidth={1} />
-                    <p className="text-[14px] font-medium text-[#f1f3f4]">Nenhuma conversa</p>
-                    <p className="text-[12px] max-w-[180px]">Suas conversas anteriores aparecerão aqui.</p>
+                    <Layers size={48} className="text-[#8e918f]" strokeWidth={1} />
+                    <p className="text-[14px] font-medium text-[#f1f3f4]">Nenhum projeto</p>
+                    <p className="text-[12px] max-w-[180px]">Seus projetos anteriores aparecerão aqui.</p>
                   </div>
                 ) : (
                   chatHistory
@@ -1008,11 +1072,23 @@ export default function App() {
                       onClick={() => {
                         setCurrentChatId(chat.id);
                         setMessages(chat.messages);
+                        if (chat.fileHistory) {
+                          setFileHistory(chat.fileHistory);
+                          const latestFiles = chat.fileHistory.length > 0 ? chat.fileHistory[chat.fileHistory.length - 1].files : [];
+                          setGeneratedFiles(latestFiles);
+                        } else {
+                          const fullContent = chat.messages.filter(m => m.role === 'model').map(m => m.content).join('\n');
+                          const files = extractFilesFromMarkdown(fullContent);
+                          setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
+                          setGeneratedFiles(files);
+                        }
+                        setHistoryIndex(null);
+                        setActiveFileIndex(0);
                         setIsSidebarOpen(false);
                       }}
                     >
                       <div className="flex items-center gap-2 pr-8">
-                        <MessageSquare size={14} className={cn("shrink-0", currentChatId === chat.id ? "text-[#a8c7fa]" : "text-[#8e918f]")} />
+                        <FolderOpen size={14} className={cn("shrink-0", currentChatId === chat.id ? "text-[#a8c7fa]" : "text-[#8e918f]")} />
                         <span className="text-[14px] font-medium truncate">{chat.title}</span>
                       </div>
                       <span className="text-[11px] opacity-50 pl-6">
@@ -1027,7 +1103,7 @@ export default function App() {
                           }
                         }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all z-20"
-                        title="Excluir conversa"
+                        title="Excluir projeto"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1086,7 +1162,13 @@ export default function App() {
              <div className="w-px h-4 bg-white/10" />
              <div className="flex flex-col items-end">
                <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Motor</span>
-               <Select value={selectedModel} onValueChange={setSelectedModel}>
+               <Select value={selectedModel} onValueChange={(val) => {
+                 if (val) {
+                   setSelectedModel(val);
+                   setDraftSelectedModel(val);
+                   safeLocalStorageSet('nexus_selected_model', val);
+                 }
+               }}>
                  <SelectTrigger className="h-4 p-0 text-[9px] font-bold text-zinc-400 hover:text-white uppercase tracking-tighter bg-transparent border-0 focus:ring-0 gap-1 min-w-0">
                    <SelectValue />
                  </SelectTrigger>
@@ -1262,6 +1344,12 @@ export default function App() {
                           </div>
                         )}
                         <div className="markdown-prose">
+                          {msg.content === '' && isLoading && (
+                            <div className="py-1 flex items-center gap-3">
+                              <div className="w-3.5 h-3.5 rounded-full border-[2px] border-[#a8c7fa] border-t-transparent animate-spin" />
+                              <span className="text-[13px] text-[#8e918f]">Gerando código...</span>
+                            </div>
+                          )}
                           <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             components={{
@@ -1284,13 +1372,19 @@ export default function App() {
                           </ReactMarkdown>
                         </div>
 
-                        <button
-                          onClick={() => navigator.clipboard.writeText(msg.content)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 mt-1 self-start"
-                          title="Copiar mensagem"
-                        >
-                          <Copy size={14} />
-                        </button>
+                        {msg.content && (
+                          <button
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(msg.content).catch(e => console.error("Clipboard API failed", e));
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 mt-1 self-start"
+                            title="Copiar mensagem"
+                          >
+                            <Copy size={14} />
+                          </button>
+                        )}
 
                           {msg.isError && (
                             <Button 
@@ -1315,27 +1409,6 @@ export default function App() {
                 </motion.div>
               ))}
             </AnimatePresence>
-
-            {isLoading && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-row gap-2 w-full max-w-none items-start mb-4 px-2"
-              >
-                         <Avatar className={cn(
-                        "w-6 h-6 rounded-md shrink-0 mt-0.5 shadow-sm",
-                        activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
-                      )}>
-                           <AvatarFallback className="bg-transparent text-white">
-                             <AgentIcon iconName={activeAgent.iconName} size={12} />
-                           </AvatarFallback>
-                         </Avatar>
-                 <div className="py-1 flex items-center gap-3">
-                   <div className="w-3.5 h-3.5 rounded-full border-[2px] border-[#a8c7fa] border-t-transparent animate-spin" />
-                   <span className="text-[13px] text-[#8e918f]">Gerando código...</span>
-                 </div>
-              </motion.div>
-            )}
           </div>
 
           {/* Input Area */}
@@ -1428,7 +1501,13 @@ export default function App() {
 
                   {/* Right Side Actions */}
                   <div className="flex items-center gap-2">
-                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <Select value={selectedModel} onValueChange={(val) => {
+                      if (val) {
+                        setSelectedModel(val);
+                        setDraftSelectedModel(val);
+                        safeLocalStorageSet('nexus_selected_model', val);
+                      }
+                    }}>
                       <SelectTrigger className="flex h-8 bg-transparent border-none text-[11px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Brain size={14} className="shrink-0" />
@@ -1595,6 +1674,50 @@ export default function App() {
                      <span className="text-[#333538]">/</span>
                      <span className="text-[#8e918f]">{generatedFiles[activeFileIndex]?.name || 'src/main.tsx'}</span>
                    </div>
+                   <div className="flex items-center gap-4">
+                     {fileHistory.length > 1 && (
+                       <div className="flex items-center gap-2">
+                         <span className="text-white/30 hidden sm:inline">Histórico:</span>
+                         <Select 
+                           value={historyIndex !== null ? historyIndex.toString() : (fileHistory.length - 1).toString()}
+                           onValueChange={(val) => {
+                             if (!val) return;
+                             const idx = parseInt(val, 10);
+                             if (isNaN(idx)) return;
+                             
+                             if (idx !== fileHistory.length - 1) {
+                               // Confirm before reverting (we can just revert right away as requested)
+                               const updatedHistory = fileHistory.slice(0, idx + 1);
+                               setFileHistory(updatedHistory);
+                               setHistoryIndex(null);
+                               setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
+                               setActiveFileIndex(0);
+                               setMessages(prev => [...prev, {
+                                 id: generateId(),
+                                 role: 'model',
+                                 content: `⏪ **Revertido para a v${idx + 1}** (${new Date(updatedHistory[updatedHistory.length - 1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})}).`
+                               }]);
+                             } else {
+                               setHistoryIndex(null); // Just current
+                               setGeneratedFiles(fileHistory[fileHistory.length - 1].files);
+                               setActiveFileIndex(0);
+                             }
+                           }}
+                         >
+                           <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10 hover:border-white/20">
+                             <div className="line-clamp-1 text-left flex-1"><SelectValue /></div>
+                           </SelectTrigger>
+                           <SelectContent>
+                             {fileHistory.map((history, idx) => (
+                               <SelectItem key={idx} value={idx.toString()} className="text-[11px]">
+                                 v{idx + 1} - {new Date(history.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                 {idx === fileHistory.length - 1 ? " (Atual)" : ""}
+                               </SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                       </div>
+                     )}
                    <button
                     onClick={() => {
                       if (!generatedFiles[activeFileIndex]) return;
@@ -1611,6 +1734,7 @@ export default function App() {
                   >
                     <ArrowDown size={14} />
                   </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-hidden flex">
@@ -1775,16 +1899,6 @@ export default function App() {
                                 <div className="relative">
                                   <Input type={showDraftApiKey ? "text" : "password"} value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso principal..." className="bg-black/20 border-white/10 rounded-xl h-11 px-4 text-[13px] focus-visible:ring-1 focus-visible:border-blue-400/50 transition-all pr-20" />
                                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                    <button type="button" onClick={async () => {
-                                      try {
-                                        const text = await navigator.clipboard.readText();
-                                        setDraftApiKey(text);
-                                      } catch(e) {
-                                        console.error('Failed to read clipboard', e);
-                                      }
-                                    }} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Colar">
-                                      <ClipboardPaste size={14} />
-                                    </button>
                                     <button type="button" onClick={() => setShowDraftApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showDraftApiKey ? "Ocultar" : "Mostrar"}>
                                       {showDraftApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                                     </button>
@@ -1871,16 +1985,6 @@ export default function App() {
                                      <div className="relative group">
                                        <Input type={showPresetApiKey ? "text" : "password"} placeholder="••••••••••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-black/30 border-white/10 rounded-xl h-11 px-4 text-[13px] text-white focus-visible:ring-1 focus-visible:border-blue-400 placeholder:text-white/20 transition-all pr-20" />
                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button type="button" onClick={async () => {
-                                            try {
-                                              const text = await navigator.clipboard.readText();
-                                              setPresetForm(prev => ({ ...prev, apiKey: text }));
-                                            } catch(e) {
-                                              console.error('Failed to read clipboard', e);
-                                            }
-                                          }} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Colar">
-                                            <ClipboardPaste size={14} />
-                                          </button>
                                           <button type="button" onClick={() => setShowPresetApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showPresetApiKey ? "Ocultar" : "Mostrar"}>
                                             {showPresetApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                                           </button>
@@ -2154,11 +2258,11 @@ export default function App() {
           <DialogHeader className="mb-4 text-left">
             <DialogTitle className="text-[18px] font-black tracking-widest uppercase flex items-center gap-2 text-white">
               <Trash2 className="text-red-400" size={20} />
-              Limpar Histórico
+              Limpar Projetos
             </DialogTitle>
           </DialogHeader>
           <div className="text-[13px] text-[#b2b5b4] leading-relaxed">
-            Tem certeza de que deseja apagar permanentemente todas as suas conversas? Esta ação não pode ser desfeita.
+            Tem certeza de que deseja apagar permanentemente todos os seus projetos? Esta ação não pode ser desfeita.
           </div>
           <div className="flex justify-end gap-3 mt-8">
             <Button 
