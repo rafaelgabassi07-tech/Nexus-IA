@@ -1,0 +1,6 @@
+{
+  "name": "Nexus IA",
+  "description": "Um assistente inteligente (Nexus IA) com agentes focados em revisão, simplificação, arquitetura e segurança de código. Suporta PWA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
