@@ -1,237 +1,41 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  Loader2, ArrowUp, Key, Settings,
-  Paperclip, Image as ImageIcon, Code, Terminal, Layout, Hexagon,
-  Plus, MessageSquare, Trash2, X,
-  Users, Edit2, Activity, Shield, Sparkles, Brain,
-  ArrowLeft, Copy, Check,
-  History as HistoryIcon, RotateCcw, ArrowDown, Eye, EyeOff, Layers, FolderOpen, ChevronDown,
-  Wrench, FileText, Lightbulb, FileCode
+  Loader2, ArrowUp, Key,
+  Paperclip, Image as ImageIcon, Terminal, Layout,
+  Plus, Trash2, X,
+  Brain, Shield, ArrowLeft, Activity,
+  RotateCcw, FolderOpen, Layers,
+  Lock, EyeOff, CheckCircle2, ShieldCheck,
+  ChevronDown
 } from 'lucide-react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Toaster, toast } from 'sonner';
 
 import { FileTree } from './components/FileTree';
+import { AgentIcon } from './components/AgentIcon';
+import { CodeBlock } from './components/CodeBlock';
+import { Header } from './components/Header';
+import { ChatLog } from './components/ChatLog';
+import { FloatingNav } from './components/FloatingNav';
 
-export type TechnicalStep = {
-  id: string;
-  label: string;
-  status: 'running' | 'success' | 'error' | 'pending';
-  details?: string;
-  icon?: any;
-};
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import remarkGfm from 'remark-gfm';
-import { motion, AnimatePresence } from 'motion/react';
+import { 
+  APIPreset, ChatSession 
+} from './types';
 
-const AgentIcon = ({ iconName, size = 18 }: { iconName?: string; size?: number }) => {
-  const props = { size, strokeWidth: 2.5 };
-  const icons: Record<string, React.ReactNode> = {
-    Hexagon: <Hexagon {...props} />,
-    Brain: <Brain {...props} />,
-    Sparkles: <Sparkles {...props} />,
-    Shield: <Shield {...props} />,
-    Terminal: <Terminal {...props} />,
-    Activity: <Activity {...props} />,
-    Users: <Users {...props} />,
-  };
-  return <>{icons[iconName || ''] || <Hexagon {...props} />}</>;
-};
-
-import { AGENTS, defaultWelcomeMessage } from './agents';
+import { AGENTS } from './agents';
 import type { AgentDefinition } from './agents';
-import { cn, generateId } from './lib/utils';
+import { 
+  cn, generateId, safeLocalStorageSet, safeStorageString, safeStorageNumber, extractFilesFromMarkdown 
+} from './lib/utils';
+import { useChatSession } from './hooks/useChatSession';
+
 import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
 import { Input } from './components/ui/input';
-import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 
-export type Message = {
-  id: string;
-  role: 'user' | 'model';
-  content: string;
-  isError?: boolean;
-  steps?: TechnicalStep[];
-};
-
-export type APIPreset = {
-  id: string;
-  name: string;
-  apiKey: string;
-};
-
-export type ChatSession = {
-  id: string;
-  title: string;
-  messages: Message[];
-  updatedAt: number;
-  fileHistory?: { timestamp: number, files: {name: string, lang: string, code: string}[] }[];
-};
-
-const CodeBlock = ({ language, value, noMargin, fastMode }: { language?: string; value: string; noMargin?: boolean; fastMode?: boolean }) => {
-  const [copied, setCopied] = useState(false);
-
-  const copyToClipboard = () => {
-    if (typeof window === 'undefined') return;
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (fastMode) {
-    return (
-      <div className={cn("relative group border border-[#1a1b1e] bg-[#0d0d0d] overflow-hidden flex flex-col font-mono text-[13px] h-full", !noMargin && "my-4 rounded-xl shadow-2xl")}>
-        <div className="flex-1 overflow-auto p-5 text-[#8e918f]">
-          <pre><code className="whitespace-pre-wrap leading-relaxed">{value}</code></pre>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn("relative group/code flex flex-col h-full", !noMargin && "my-4")}>
-      {!noMargin && (
-        <div className="absolute right-3 top-3 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-2">
-          {language && (
-            <span className="text-[10px] font-bold text-[#8e918f] uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded border border-white/5">
-              {language}
-            </span>
-          )}
-          <button
-            onClick={copyToClipboard}
-            className="p-1.5 rounded-lg bg-[#2d2e31] border border-white/10 text-zinc-400 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-lg"
-            title="Copiar código"
-          >
-            {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-          </button>
-        </div>
-      )}
-      <SyntaxHighlighter
-        language={language || 'text'}
-        style={vscDarkPlus}
-        PreTag="div"
-        showLineNumbers={true}
-        lineNumberStyle={{ 
-          minWidth: '2.5em', 
-          paddingRight: '1em', 
-          color: '#5f6368', 
-          textAlign: 'right',
-          userSelect: 'none',
-          fontSize: '12px'
-        }}
-        customStyle={{
-          margin: 0,
-          padding: '1.25rem',
-          borderRadius: noMargin ? '0' : '0.75rem',
-          fontSize: '13px',
-          background: 'transparent',
-          border: 'none',
-          lineHeight: '1.7',
-          flex: 1
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-          }
-        }}
-      >
-        {value}
-      </SyntaxHighlighter>
-    </div>
-  );
-};
-
-/**
- * Utilitário para salvar no localStorage com segurança contra QuotaExceededError.
- * Se o limite for atingido, remove os chats mais antigos e tenta novamente.
- */
-function safeLocalStorageSet(key: string, value: any) {
-  try {
-    const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
-    localStorage.setItem(key, valueToStore);
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'QuotaExceededError' && key === 'nexus_chat_history') {
-      const history = JSON.parse(localStorage.getItem('nexus_chat_history') || '[]');
-      if (history.length > 2) {
-        // Remove metade dos chats mais antigos
-        const pruned = history.slice(0, Math.ceil(history.length / 2));
-        localStorage.setItem('nexus_chat_history', JSON.stringify(pruned));
-        // Tenta salvar o novo item novamente
-        const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
-        localStorage.setItem(key, valueToStore);
-      }
-    } else {
-      console.error('LocalStorage storage failed:', e);
-    }
-  }
-}
-
-function safeStorageString(key: string, defaultValue: string): string {
-  if (typeof window === 'undefined') return defaultValue;
-  const saved = localStorage.getItem(key);
-  if (saved === null) return defaultValue;
-  if (saved.startsWith('"') && saved.endsWith('"')) {
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return saved;
-    }
-  }
-  return saved;
-}
-
-function safeStorageNumber(key: string, defaultValue: number): number {
-  if (typeof window === 'undefined') return defaultValue;
-  const saved = localStorage.getItem(key);
-  if (saved === null) return defaultValue;
-  try {
-    const parsed = JSON.parse(saved);
-    const num = parseFloat(parsed);
-    return Number.isNaN(num) ? defaultValue : num;
-  } catch {
-    const num = parseFloat(saved);
-    return Number.isNaN(num) ? defaultValue : num;
-  }
-}
-
-const extractFilesFromMarkdown = (content: string) => {
-  const files: { name: string, lang: string, code: string }[] = [];
-  const lineRegex = /```(\w+)?([^\n]*)\n([\s\S]*?)(?:```|$)/g;
-  let match;
-  while ((match = lineRegex.exec(content)) !== null) {
-    const lang = match[1] || 'text';
-    const meta = (match[2] || '').trim();
-    let name = '';
-    
-    if (meta) {
-      const fileMatch = meta.match(/(?:file:\s*)?([\w.-/:\\\\]+\.\w+)/i);
-      if (fileMatch) {
-        name = fileMatch[1];
-      } else {
-        const fallbackMatch = meta.match(/([\w.-/:\\\\]+)/);
-        if (fallbackMatch) name = fallbackMatch[1];
-      }
-    }
-    
-    if (!name) {
-      name = `file_${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang}`;
-    }
-
-    files.push({
-      lang: lang,
-      name: name,
-      code: match[3]
-    });
-  }
-  return files;
-};
-
 export default function App() {
-  const abortControllerRef = useRef<AbortController | null>(null);
-
   const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nexus_custom_agents');
@@ -253,6 +57,35 @@ export default function App() {
     return allAgents.find(a => a.id === activeAgentId) || AGENTS[0];
   }, [allAgents, activeAgentId]);
 
+  const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
+  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-2.0-flash'));
+  const [temperature, setTemperature] = useState<number>(() => {
+    return safeStorageNumber('nexus_temperature', 0.7);
+  });
+  const [systemPrompt, setSystemPrompt] = useState(() => {
+    return safeStorageString('nexus_system_prompt', activeAgent.systemPrompt);
+  });
+
+  const {
+    messages,
+    setMessages,
+    isLoading,
+    generatedFiles,
+    setGeneratedFiles,
+    activeFileIndex,
+    setActiveFileIndex,
+    fileHistory,
+    setFileHistory,
+    resetChat: hookResetChat,
+    sendMessage
+  } = useChatSession({
+    activeAgent,
+    apiKey,
+    selectedModel,
+    systemPrompt,
+    temperature
+  });
+
   const [apiPresets, setApiPresets] = useState<APIPreset[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nexus_api_presets');
@@ -273,56 +106,51 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nexus_chat_history');
       if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {}
+        try { return JSON.parse(saved); } catch (e) {}
       }
     }
     return [];
   });
+  
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
-  const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
-  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-2.0-flash'));
-   const [temperature, setTemperature] = useState<number>(() => {
-    return safeStorageNumber('nexus_temperature', 0.7);
-  });
-  const [systemPrompt, setSystemPrompt] = useState(() => {
-    return safeStorageString('nexus_system_prompt', activeAgent.systemPrompt);
-  });
-  
-  const [generatedFiles, setGeneratedFiles] = useState<{name: string, lang: string, code: string}[]>([]);
-  const [fileHistory, setFileHistory] = useState<{timestamp: number, files: {name: string, lang: string, code: string}[]}[]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
+  const [chatInputHistoryIndex, setChatInputHistoryIndex] = useState(0);
+
+  const [isSystemPromptExpanded, setIsSystemPromptExpanded] = useState(false);
 
   const [settingsTab, setSettingsTab] = useState<'overview' | 'general' | 'agent' | 'security'>('overview');
   const [isPresetFormOpen, setIsPresetFormOpen] = useState(false);
   const [editingPreset, setEditingPreset] = useState<APIPreset | null>(null);
   const [presetForm, setPresetForm] = useState<Partial<APIPreset>>({});
-  const [showPresetApiKey, setShowPresetApiKey] = useState(false);
-  const [showDraftApiKey, setShowDraftApiKey] = useState(false);
 
-  // Subagents management state
   const [isAgentFormOpen, setIsAgentFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
   const [agentForm, setAgentForm] = useState<Partial<AgentDefinition>>({});
 
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Draft states for settings modal
   const [draftApiKey, setDraftApiKey] = useState(apiKey);
   const [draftSelectedModel, setDraftSelectedModel] = useState(selectedModel);
+  const [draftTemperature, setDraftTemperature] = useState(temperature);
+  const [draftSystemPrompt, setDraftSystemPrompt] = useState(systemPrompt);
+  const [draftActiveAgentId, setDraftActiveAgentId] = useState(activeAgentId);
+  const [draftActivePresetId, setDraftActivePresetId] = useState(activePresetId);
 
   useEffect(() => {
-    // Lista de modelos suportados - Por favor, NÃO remova para evitar resets automáticos indesejados
     const validModels = [
       'gemini-3.1-pro-preview',
       'gemini-3.1-flash-lite-preview',
@@ -337,11 +165,7 @@ export default function App() {
       setDraftSelectedModel('gemini-3-flash-preview');
       safeLocalStorageSet('nexus_selected_model', 'gemini-3-flash-preview');
     }
-  }, [selectedModel, setDraftSelectedModel]);
-  const [draftTemperature, setDraftTemperature] = useState(temperature);
-  const [draftSystemPrompt, setDraftSystemPrompt] = useState(systemPrompt);
-  const [draftActiveAgentId, setDraftActiveAgentId] = useState(activeAgentId);
-  const [draftActivePresetId, setDraftActivePresetId] = useState(activePresetId);
+  }, [selectedModel]);
 
   const hasSettingsChanges = useMemo(() => {
     return draftApiKey !== apiKey || 
@@ -352,7 +176,6 @@ export default function App() {
            draftActivePresetId !== activePresetId;
   }, [apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId, draftApiKey, draftSelectedModel, draftTemperature, draftSystemPrompt, draftActiveAgentId, draftActivePresetId]);
 
-  // Sync draft states when opening settings tab
   useEffect(() => {
     if (activeTab === 'settings') {
       setDraftApiKey(apiKey);
@@ -371,17 +194,16 @@ export default function App() {
     setSystemPrompt(draftSystemPrompt);
     setActiveAgentId(draftActiveAgentId);
     setActivePresetId(draftActivePresetId);
-    setDraftActivePresetId(null); // Clear preset if manual settings are saved or handled
     
     safeLocalStorageSet('nexus_api_key', draftApiKey);
     safeLocalStorageSet('nexus_selected_model', draftSelectedModel);
     safeLocalStorageSet('nexus_temperature', draftTemperature.toString());
     safeLocalStorageSet('nexus_system_prompt', draftSystemPrompt);
-    
     safeLocalStorageSet('nexus_active_agent_id', draftActiveAgentId);
     if (draftActivePresetId) safeLocalStorageSet('nexus_active_preset_id', draftActivePresetId);
     else localStorage.removeItem('nexus_active_preset_id');
-    setActiveTab('chat');
+    // REMOVED: setActiveTab('chat');
+    toast.success('Configurações aplicadas com sucesso');
   };
 
   const saveApiPresets = (presets: APIPreset[]) => {
@@ -391,17 +213,18 @@ export default function App() {
 
   const addOrUpdatePreset = () => {
     if (!presetForm.name || !presetForm.apiKey) return;
-
     if (editingPreset) {
       const updated = apiPresets.map(p => p.id === editingPreset.id ? { ...p, ...presetForm } as APIPreset : p);
       saveApiPresets(updated);
+      toast.success('Preset atualizado com sucesso');
     } else {
-      const newPreset: APIPreset = {
-        id: generateId(),
-        name: presetForm.name!,
-        apiKey: presetForm.apiKey!,
-      };
+      if (apiPresets.length >= 5) {
+        toast.error('Limite de 5 chaves API atingido. Remova uma para adicionar outra.');
+        return;
+      }
+      const newPreset: APIPreset = { id: generateId(), name: presetForm.name!, apiKey: presetForm.apiKey! };
       saveApiPresets([...apiPresets, newPreset]);
+      toast.success('Novo preset de API registrado');
       if (!activePresetId) {
         setActivePresetId(newPreset.id);
         safeLocalStorageSet('nexus_active_preset_id', newPreset.id);
@@ -433,7 +256,6 @@ export default function App() {
 
   const addOrUpdateAgent = () => {
     if (!agentForm.name || !agentForm.systemPrompt) return;
-
     if (editingAgent) {
       const updated = customAgents.map(a => a.id === editingAgent.id ? { ...a, ...agentForm } as AgentDefinition : a);
       saveCustomAgents(updated);
@@ -457,114 +279,176 @@ export default function App() {
     if (confirm('Deseja excluir este agente?')) {
       const updated = customAgents.filter(a => a.id !== id);
       saveCustomAgents(updated);
-      if (draftActiveAgentId === id) {
-        setDraftActiveAgentId(AGENTS[0].id);
-      }
+      if (draftActiveAgentId === id) setDraftActiveAgentId(AGENTS[0].id);
     }
   };
   
+  const resetChat = useCallback(() => {
+    hookResetChat();
+    setCurrentChatId(generateId());
+    setActiveTab('chat');
+    setIsSidebarOpen(false);
+    setChatInputHistory(['']);
+    setChatInputHistoryIndex(0);
+  }, [hookResetChat]);
 
-  // Global Keyboard Shortcuts
+  const undoInput = useCallback(() => {
+    if (chatInputHistoryIndex > 0) {
+      const prevIndex = chatInputHistoryIndex - 1;
+      setChatInputHistoryIndex(prevIndex);
+      setInputMessage(chatInputHistory[prevIndex]);
+    }
+  }, [chatInputHistory, chatInputHistoryIndex]);
+
+  const redoInput = useCallback(() => {
+    if (chatInputHistoryIndex < chatInputHistory.length - 1) {
+      const nextIndex = chatInputHistoryIndex + 1;
+      setChatInputHistoryIndex(nextIndex);
+      setInputMessage(chatInputHistory[nextIndex]);
+    }
+  }, [chatInputHistory, chatInputHistoryIndex]);
+
+  const undoCode = useCallback(() => {
+    if (fileHistory.length > 1) {
+      // Create a dummy "undo" by going back one version
+      // In a real app we might want a separate pointer, 
+      // but for now we'll just allow navigating the history.
+      const newHistory = [...fileHistory];
+      const reverted = newHistory.pop();
+      if (reverted) {
+        setFileHistory(newHistory);
+        setGeneratedFiles(newHistory[newHistory.length - 1].files);
+        setActiveFileIndex(0);
+      }
+    }
+  }, [fileHistory, setFileHistory, setGeneratedFiles, setActiveFileIndex]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+L or Cmd+L for new chat
+      // Undo/Redo Input
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (document.activeElement?.tagName === 'TEXTAREA') {
+           e.preventDefault();
+           undoInput();
+        } else if (activeTab === 'code') {
+           e.preventDefault();
+           undoCode();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        if (document.activeElement?.tagName === 'TEXTAREA') {
+           e.preventDefault();
+           redoInput();
+        }
+      }
+      
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
         e.preventDefault();
         resetChat();
         setActiveTab('chat');
         setIsSidebarOpen(false);
       }
-      
-      // Ctrl+K to search history
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setIsSidebarOpen(true);
         setTimeout(() => searchInputRef.current?.focus(), 100);
       }
-
-      // Escape to close everything
       if (e.key === 'Escape') {
         setIsSidebarOpen(false);
         setIsPresetFormOpen(false);
         setIsAgentFormOpen(false);
       }
     };
-
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isSidebarOpen, isPresetFormOpen, isAgentFormOpen]);
+  }, [resetChat]);
 
-  // Dynamic Browser Tab Title
   useEffect(() => {
     const currentChat = chatHistory.find(c => c.id === currentChatId);
     document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
   }, [currentChatId, chatHistory]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 100,
-    overscan: 5,
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const resetChat = () => {
-    setCurrentChatId(generateId());
-    setGeneratedFiles([]);
-    setFileHistory([]);
-    setHistoryIndex(null);
-    setActiveFileIndex(0);
-    setMessages([
-      {
-        id: generateId(),
-        role: 'model',
-        content: activeAgent.id === 'general-specialist' ? defaultWelcomeMessage : `Olá! Sou o **${activeAgent.name}**. Como posso te ajudar hoje?`
-      }
-    ]);
-  };
-
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [previewHtml, setPreviewHtml] = useState<string>('');
 
-  // Monitor scroll position to determine if we should auto-scroll
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior
+      });
+    }
+  }, []);
+
+  const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string) => {
+    if (e) e.preventDefault();
+    if ((!inputMessage.trim() && !overridePrompt && attachedFiles.length === 0) || isLoading) return;
+
+    const messageToSend = overridePrompt || inputMessage;
+    
+    // Manage input history for undo/redo
+    if (!overridePrompt && inputMessage.trim()) {
+      setChatInputHistory(prev => {
+        const next = prev.slice(0, chatInputHistoryIndex + 1);
+        if (next[next.length - 1] !== inputMessage) {
+          return [...next, inputMessage];
+        }
+        return next;
+      });
+      setChatInputHistoryIndex(prev => prev + 1);
+    }
+
+    setInputMessage('');
+    setAttachedFiles([]);
+    setPreviewError(null);
+    
+    if (activeTab === 'preview' || activeTab === 'code' || activeTab === 'settings') {
+      setActiveTab('chat');
+    }
+
+    try {
+      await sendMessage(messageToSend, attachedFiles);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
+  }, [inputMessage, attachedFiles, isLoading, activeTab, sendMessage]);
+
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      // If we are within 30px of the bottom, we consider it "at bottom"
-      // Smaller threshold allows users to "break away" from auto-scroll more easily
-      const nearBottom = scrollHeight - scrollTop - clientHeight < 30;
-      setIsAtBottom(nearBottom);
+      const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setIsAtBottom(atBottom);
+      setShowScrollButton(!atBottom && isLoading);
     };
 
     scrollContainer.addEventListener('scroll', handleScroll);
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isLoading]);
 
-  // Auto-scroll on new messages ONLY if the user was already at the bottom
-  // Using a small delay or condition to not overwhelm the main thread
   useEffect(() => {
-    if (messages.length > 0 && isAtBottom && isLoading) {
-      const msg = messages[messages.length - 1];
-      if (msg.role === 'model' && msg.content.length > 0) {
-        // Optimized scrolling: only trigger when content grows and user is at bottom
-        rowVirtualizer.scrollToIndex(messages.length - 1, { 
-          align: 'end', 
-          behavior: 'auto' 
-        });
-      }
+    if (isLoading && isAtBottom) {
+      scrollToBottom('auto');
     }
-  }, [messages.length, messages[messages.length - 1]?.content.length, isAtBottom, isLoading, rowVirtualizer]);
+  }, [messages, isLoading, isAtBottom, scrollToBottom]);
 
-  // Save to local storage when chat history changes
   useEffect(() => {
-    safeLocalStorageSet('nexus_chat_history', chatHistory);
+    if (currentChatId) {
+      setTimeout(() => scrollToBottom('auto'), 100);
+    }
+  }, [currentChatId, scrollToBottom]);
+
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      setIsSaving(true);
+      safeLocalStorageSet('nexus_chat_history', chatHistory);
+      const timer = setTimeout(() => setIsSaving(false), 1200);
+      return () => clearTimeout(timer);
+    }
   }, [chatHistory]);
 
-  // Auto-save current messages to the active chat session
   useEffect(() => {
     if (messages.length > 1 && currentChatId) {
       setChatHistory(prev => {
@@ -574,9 +458,9 @@ export default function App() {
             exists = true;
             return {
               ...chat,
-              messages: messages,
+              messages,
               updatedAt: Date.now(),
-              fileHistory: fileHistory,
+              fileHistory,
               title: chat.title === 'Novo Projeto' && messages[1]?.role === 'user'
                 ? messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')
                 : chat.title
@@ -589,690 +473,122 @@ export default function App() {
            return [{
              id: currentChatId,
              title: messages[1]?.role === 'user' ? (messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')) : 'Novo Projeto',
-             messages: messages,
+             messages,
              updatedAt: Date.now(),
-             fileHistory: fileHistory
+             fileHistory
            }, ...newHistory];
         }
 
         return newHistory;
       });
     }
-  }, [messages, currentChatId]);
+  }, [messages, currentChatId, fileHistory]);
 
-  const [activeFileIndex, setActiveFileIndex] = useState(0);
-
-  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const hasFiles = generatedFiles.length > 0;
 
   useEffect(() => {
-    const buildPreview = () => {
+    const buildPreviewHtml = () => {
       const htmlFile = generatedFiles.find(f => f.lang === 'html');
       if (htmlFile) return htmlFile.code;
 
       if (generatedFiles.length > 0) {
-        // Find the best entry point or use the first file
         const entryFile = generatedFiles.find(f => 
           f.name.toLowerCase().includes('app') || 
           f.name.toLowerCase().includes('main') || 
-          f.name.toLowerCase().includes('index') ||
-          f.name.toLowerCase().includes('page')
+          f.name.toLowerCase().includes('index')
         ) || generatedFiles[0];
 
-      // Robust module mapping for Babel
-      // We convert all generated files into a "virtual" registry 
-      // where we manually resolve imports if they refer to our generated files.
-      // Or we just use a trick: bundle them by concatenating but wrapping in scopes.
-      
-      return `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Nexus Canvas Preview</title>
-            <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-            <script src="https://cdn.tailwindcss.com"></script>
-            <script type="importmap">
-              {
-                "imports": {
-                  "react": "https://esm.sh/react@19.0.0",
-                  "react-dom": "https://esm.sh/react-dom@19.0.0",
-                  "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-                  "lucide-react": "https://esm.sh/lucide-react@0.344.0",
-                  "motion/react": "https://esm.sh/motion@11.11.13/react",
-                  "framer-motion": "https://esm.sh/framer-motion@11.11.13",
-                  "clsx": "https://esm.sh/clsx@2.1.0",
-                  "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
-                  "recharts": "https://esm.sh/recharts@2.12.2",
-                  "d3": "https://esm.sh/d3@7.8.5",
-                  "date-fns": "https://esm.sh/date-fns@3.6.0",
-                  "zod": "https://esm.sh/zod@3.22.4",
-                  "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
-                  "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.0.2",
-                  "@radix-ui/react-accordion": "https://esm.sh/@radix-ui/react-accordion@1.1.2",
-                  "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.0.5",
-                  "@radix-ui/react-aspect-ratio": "https://esm.sh/@radix-ui/react-aspect-ratio@1.0.3",
-                  "@radix-ui/react-avatar": "https://esm.sh/@radix-ui/react-avatar@1.0.4",
-                  "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.0.4",
-                  "@radix-ui/react-collapsible": "https://esm.sh/@radix-ui/react-collapsible@1.0.3",
-                  "@radix-ui/react-context-menu": "https://esm.sh/@radix-ui/react-context-menu@2.1.5",
-                  "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.0.5",
-                  "@radix-ui/react-dropdown-menu": "https://esm.sh/@radix-ui/react-dropdown-menu@2.0.6",
-                  "@radix-ui/react-hover-card": "https://esm.sh/@radix-ui/react-hover-card@1.0.7",
-                  "@radix-ui/react-label": "https://esm.sh/@radix-ui/react-label@2.0.2",
-                  "@radix-ui/react-menubar": "https://esm.sh/@radix-ui/react-menubar@1.0.4",
-                  "@radix-ui/react-navigation-menu": "https://esm.sh/@radix-ui/react-navigation-menu@1.1.4",
-                  "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.0.7",
-                  "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.0.3",
-                  "@radix-ui/react-radio-group": "https://esm.sh/@radix-ui/react-radio-group@1.1.3",
-                  "@radix-ui/react-scroll-area": "https://esm.sh/@radix-ui/react-scroll-area@1.0.5",
-                  "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.0.0",
-                  "@radix-ui/react-separator": "https://esm.sh/@radix-ui/react-separator@1.0.3",
-                  "@radix-ui/react-slider": "https://esm.sh/@radix-ui/react-slider@1.1.2",
-                  "@radix-ui/react-switch": "https://esm.sh/@radix-ui/react-switch@1.0.3",
-                  "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.0.4",
-                  "@radix-ui/react-toast": "https://esm.sh/@radix-ui/react-toast@1.1.5",
-                  "@radix-ui/react-toggle": "https://esm.sh/@radix-ui/react-toggle@1.0.3",
-                  "@radix-ui/react-toggle-group": "https://esm.sh/@radix-ui/react-toggle-group@1.0.4",
-                  "@radix-ui/react-tooltip": "https://esm.sh/@radix-ui/react-tooltip@1.0.7"
-                }
-              }
-            </script>
-            <style>
-              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-              
-              :root { --font-sans: 'Inter', system-ui, sans-serif; --font-mono: 'JetBrains Mono', monospace; }
-              body { 
-                margin: 0; padding: 0; min-height: 100vh;
-                background-color: #0d0d0d; color: #f1f3f4;
-                font-family: var(--font-sans);
-                -webkit-font-smoothing: antialiased;
-              }
-              #root { min-height: 100vh; }
-              * { box-sizing: border-box; }
-              
-              /* Custom Scrollbar for Previews */
-              ::-webkit-scrollbar { width: 8px; height: 8px; }
-              ::-webkit-scrollbar-track { background: transparent; }
-              ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-              ::-webkit-scrollbar-thumb:hover { background: #444; }
-            </style>
-            <script>
-              window.tailwind.config = {
-                theme: {
-                  extend: {
-                    colors: {
-                      border: "hsl(var(--border))",
-                      input: "hsl(var(--input))",
-                      ring: "hsl(var(--ring))",
-                      background: "hsl(var(--background))",
-                      foreground: "hsl(var(--foreground))",
-                      primary: {
-                        DEFAULT: "hsl(var(--primary))",
-                        foreground: "hsl(var(--primary-foreground))",
-                      },
-                      secondary: {
-                        DEFAULT: "hsl(var(--secondary))",
-                        foreground: "hsl(var(--secondary-foreground))",
-                      },
-                      destructive: {
-                        DEFAULT: "hsl(var(--destructive))",
-                        foreground: "hsl(var(--destructive-foreground))",
-                      },
-                      muted: {
-                        DEFAULT: "hsl(var(--muted))",
-                        foreground: "hsl(var(--muted-foreground))",
-                      },
-                      accent: {
-                        DEFAULT: "hsl(var(--accent))",
-                        foreground: "hsl(var(--accent-foreground))",
-                      },
-                      popover: {
-                        DEFAULT: "hsl(var(--popover))",
-                        foreground: "hsl(var(--popover-foreground))",
-                      },
-                      card: {
-                        DEFAULT: "hsl(var(--card))",
-                        foreground: "hsl(var(--card-foreground))",
-                      },
-                    },
-                  }
-                }
-              };
-
-              window.addEventListener('error', (e) => {
-                handleNexusError(e.error || e.message);
-              });
-              
-              window.addEventListener('unhandledrejection', (e) => {
-                handleNexusError(e.reason || 'Unhandled Promise Rejection');
-              });
-
-              function handleNexusError(err) {
-                const errorMsg = err?.message || String(err);
-                const trace = err?.stack?.split('\\n').slice(1).join('\\n') || 'Unknown source';
-                const safeMsg = errorMsg.replace(/[\`\$]/g, '');
-                const safeTrace = trace.replace(/[\`\$]/g, '');
-                
-                const root = document.getElementById('root');
-                if (root) {
-                  root.innerHTML = \`
-                    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: -apple-system, sans-serif; background: #0d0d0d;">
-                      <div style="background: #1a1b1e; border: 1px solid #ff5f56; color: #ff5f56; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-                        <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
-                           <span style="font-size: 20px;">⚠️</span>
-                           Erro Encontrado (Syntax / Runtime)
-                        </h3>
-                        <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #ff9f9a; white-space: pre-wrap;">\${errorMsg}</pre>
-                        <details style="margin-top: 10px;">
-                           <summary style="font-size: 12px; color: #8e918f; cursor: pointer;">Ver rastreamento completo</summary>
-                           <pre style="font-size: 11px; color: #8e918f; margin-top: 5px; white-space: pre-wrap;">\${trace}</pre>
-                        </details>
-                        <button onclick="parent.postMessage({ type: 'NEXUS_FIX_ERROR', error: '\${safeMsg.replace(/'/g, "\\'")}\\n\\n\${safeTrace.replace(/'/g, "\\'")}' }, '*')" style="margin-top: 16px; padding: 8px 16px; background: rgba(255, 95, 86, 0.1); color: #ff5f56; border: 1px solid #ff5f56; border-radius: 6px; cursor: pointer; font-weight: 500; font-family: inherit; font-size: 13px; transition: all 0.2s;" onmouseover="this.style.background='#ff5f56'; this.style.color='#1a1b1e'" onmouseout="this.style.background='rgba(255, 95, 86, 0.1)'; this.style.color='#ff5f56'">
-                          Pedir para a IA investigar e corrigir
-                        </button>
-                      </div>
-                    </div>
-                  \`;
-                }
-              }
-            </script>
-          </head>
-          <body>
-            <div id="root"></div>
-            <script type="text/babel" data-type="module" data-presets="react,typescript">
-              import React from 'react';
-              import ReactDOM from 'react-dom/client';
-              import * as Lucide from 'lucide-react';
-              import * as MotionReact from 'motion/react';
-              import * as FramerMotion from 'framer-motion';
-              import * as Recharts from 'recharts';
-              import { clsx } from 'clsx';
-              import { twMerge } from 'tailwind-merge';
-
-              // Shared utilities
-              const cn = (...inputs) => twMerge(clsx(inputs));
-
-              // We'll create a registry for internal modules
-              const __NEXUS_REGISTRY__ = {};
-              
-              const __NEXUS_REQUIRE__ = (path) => {
-                 let lookupPath = path.replace(/^[.\\/@~]+/, '');
-                 const fileKey = Object.keys(__NEXUS_REGISTRY__).find(k => k.replace(/\.[^/.]+$/, '').endsWith(lookupPath));
-                 if (fileKey && __NEXUS_REGISTRY__[fileKey]) {
-                    return __NEXUS_REGISTRY__[fileKey];
-                 }
-                 console.warn("Module not found in registry:", path);
-                 return new Proxy({}, { get: () => () => null });
-              };
-
-              const __NEXUS_IMPORT__ = async (path) => {
-                 if (path.startsWith('.') || path.startsWith('@/') || path.startsWith('~/')) {
-                     return __NEXUS_REQUIRE__(path);
-                 }
-                 try {
-                     return await import(path);
-                 } catch (e) {
-                     try {
-                         return await import(\`https://esm.sh/\${path}\`);
-                     } catch (err) {
-                         console.warn("Failed to import external module:", path, err);
-                         return new Proxy({}, { get: () => () => null });
-                     }
-                 }
-              };
-
-              // First, we initialize the async modules wrapper
-              const initModules = async () => {
-              ${generatedFiles.map(f => {
-                // Safely convert common imports to destructuring from global object
-                let cleanCode = f.code
-                  .replace(/import\s+React\s*,?\s*{([^}]+)}\s+from\s+['"]react['"];?/g, 'const { $1 } = React;')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]react['"];?/g, 'const { $1 } = React;')
-                  .replace(/import\s+React\s+from\s+['"]react['"];?/g, '')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]lucide-react['"];?/g, 'const { $1 } = Lucide;')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]recharts['"];?/g, 'const { $1 } = Recharts;')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]framer-motion['"];?/g, 'const { $1 } = FramerMotion;')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]motion\/react['"];?/g, 'const { $1 } = MotionReact;')
-                  .replace(/import\s+([a-zA-Z0-9_]+)\s*,\s*{([^}]+)}\s+from\s+['"]([^'"]+)['"];?/g, 'const $1 = (await __NEXUS_IMPORT__("$3")).default || (await __NEXUS_IMPORT__("$3")); const { $2 } = await __NEXUS_IMPORT__("$3");')
-                  .replace(/import\s+([a-zA-Z0-9_]+)\s+from\s+['"]([^'"]+)['"];?/g, 'const $1 = (await __NEXUS_IMPORT__("$2")).default || (await __NEXUS_IMPORT__("$2"));')
-                  .replace(/import\s+{([^}]+)}\s+from\s+['"]([^'"]+)['"];?/g, 'const { $1 } = await __NEXUS_IMPORT__("$2");')
-                  .replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, ''); // Erase any other unmatched imports
-
-                return `
-                  __NEXUS_REGISTRY__["${f.name}"] = await (async function(exports) {
-                    try {
-                      // Provide generic fallbacks for React
-                      const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Suspense, lazy } = React;
-                      ${cleanCode.replace(/export\s+default\s+function\s+([a-zA-Z0-9_]+)/g, 'const $1 = exports.default = function $1')
-                               .replace(/export\s+default\s+function\s*\(/g, 'exports.default = function(')
-                               .replace(/export\s+default\s+(?!function)(.+)/g, 'exports.default = $1')
-                               .replace(/export\s+const\s+([a-zA-Z0-9_]+)\s*=\s*/g, 'const $1 = exports.$1 = ')
-                               .replace(/export\s+function\s+([a-zA-Z0-9_]+)/g, 'const $1 = exports.$1 = function $1')
-                               .replace(/export\s+type\s+[^;]+;?/g, '')
-                               .replace(/export\s+interface\s+[a-zA-Z0-9_]+\s*{[^}]+}/g, '')
-                               .replace(/export\s*{([^}]+)};?/g, 'Object.assign(exports, { $1 });')
-                      }
-                      return exports;
-                    } catch (err) {
-                      console.error("Error in module ${f.name}:", err);
-                      // Throwing allows Babel error reporting to catch it or React error boundary
-                      throw err;
-                    }
-                  })({});
-                `;
-              }).join('\n')}
-              };
-
-              initModules().then(() => {
-                try {
-                  const root = ReactDOM.createRoot(document.getElementById('root'));
-                  // Use the entryFile defined above
-                  const EntryModule = __NEXUS_REGISTRY__["${entryFile.name}"];
-                  const EntryComponent = EntryModule ? (EntryModule.default || EntryModule.App || Object.values(EntryModule)[0]) : null;
-                  
-                  if (!EntryComponent || typeof EntryComponent !== 'function') {
-                     throw new Error("No entry component found. Make sure you have exported a default React component.");
-                  }
-                  
-                  root.render(<EntryComponent />);
-                } catch (e) {
-                  console.error("Nexus Runtime Error:", e);
-                  window.handleNexusError?.(e) || console.error(e);
-                }
-              }).catch(e => {
-                  console.error("Nexus Module Init Error:", e);
-                  window.handleNexusError?.(e) || console.error(e);
-              });
-            </script>
-          </body>
-        </html>
-      `;
+        return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus Preview</title>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react-dom": "https://esm.sh/react-dom@19.0.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0",
+        "motion/react": "https://esm.sh/motion@11.11.13/react",
+        "framer-motion": "https://esm.sh/framer-motion@11.11.13",
+        "clsx": "https://esm.sh/clsx@2.1.0",
+        "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1"
+      }
     }
-    return '';
-  };
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+      body { margin: 0; font-family: 'Inter', sans-serif; background: #0d0d0e; color: #f1f3f4; }
+      #root { min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import * as LucideReact from 'lucide-react';
+      
+      window.React = React;
+      window.LucideReact = LucideReact;
+
+      // Persistence Layer
+      const STORAGE_KEY = 'NEXUS_PREVIEW_STATE';
+      
+      const saveState = (state) => {
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+      };
+      
+      const loadState = () => {
+        try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY)); } catch (e) { return null; }
+      };
+
+      try {
+        ${entryFile.code}
+        const root = createRoot(document.getElementById('root'));
+        
+        // Wrap original render to support state restoration if the app implements it
+        root.render(<App initialNexusState={loadState()} />);
+        
+        // Periodically save state if needed, or rely on internal app logic
+        window.addEventListener('beforeunload', () => {
+          // If the app uses window.getNexusState, we save it
+          if (window.getNexusState) saveState(window.getNexusState());
+        });
+      } catch (err) {
+        console.error(err);
+        window.parent.postMessage({ type: 'NEXUS_FIX_ERROR', error: err.stack || err.message }, '*');
+      }
+    </script>
+</body>
+</html>`;
+      }
+      return '';
+    };
 
     if (!isLoading) {
-      setPreviewHtml(buildPreview());
-    } else {
-      const timeoutId = setTimeout(() => {
-        setPreviewHtml(buildPreview());
-      }, 2000); // 2 second debounce
-      return () => clearTimeout(timeoutId);
+      setPreviewHtml(buildPreviewHtml());
     }
   }, [generatedFiles, isLoading]);
-
-  const hasFiles = generatedFiles.length > 0;
-
-  const handleSendMessage = async (e?: React.FormEvent, overrideMessage?: string) => {
-    e?.preventDefault();
-    const messageToUse = overrideMessage || inputMessage.trim();
-    if ((!messageToUse && attachedFiles.length === 0) || isLoading) return;
-
-    let finalMessage = messageToUse;
-    const imageAttachments: { mimeType: string; data: string }[] = [];
-
-    // Remove error messages if retrying
-    if (overrideMessage) {
-      setMessages(prev => prev.filter(m => !m.isError));
-    }
-
-    if (attachedFiles.length > 0) {
-      for (const file of attachedFiles) {
-        if (file.type.startsWith('image/')) {
-          try {
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const result = reader.result as string;
-                resolve(result.split(',')[1]); // Only data part
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            imageAttachments.push({ mimeType: file.type, data: base64 });
-          } catch (e) {
-            console.error('Failed to read image', file.name);
-          }
-        } else if (file.type.startsWith('text/') || /\.(js|jsx|ts|tsx|json|md|py|css|html|yaml|yml|sh|sql|env|env\.example|toml|rs|go)$/i.test(file.name)) {
-          try {
-            const text = await file.text();
-            finalMessage += `\n\n\`\`\`${file.name}\n${text}\n\`\`\``;
-          } catch (e) {
-            console.error('Failed to read file', file.name);
-          }
-        } else {
-           finalMessage += `\n\n[Arquivo anexo: ${file.name}]`;
-        }
-      }
-    }
-
-    const userMessage: Message & { images?: any[] } = {
-      id: generateId(),
-      role: 'user',
-      content: finalMessage || 'Veja os arquivos anexos.',
-      ...(imageAttachments.length > 0 ? { images: imageAttachments } : {})
-    };
-
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    setInputMessage('');
-    setAttachedFiles([]);
-    setIsLoading(true);
-
-    abortControllerRef.current = new AbortController();
-
-    const modelToUse = selectedModel;
-    let currentPresetIndex = apiPresets.findIndex(p => p.id === activePresetId);
-    let attemptsCount = 0;
-    const maxAttempts = Math.max(1, apiPresets.length);
-
-    const messageId = generateId();
-    const initialSteps: TechnicalStep[] = [
-      { id: generateId(), label: 'Conectando...', status: 'running', icon: Terminal }
-    ];
-
-    setMessages(prev => [...prev, {
-      id: messageId,
-      role: 'model',
-      content: '',
-      steps: initialSteps
-    }]);
-
-    let steps = [...initialSteps];
-    const updateSteps = (newSteps: TechnicalStep[]) => {
-      steps = [...newSteps];
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, steps: [...newSteps] } : m));
-    };
-
-    const startTime = Date.now();
-    let lastThoughtUpdate = 0;
-    let hasStartedThinking = false;
-    let hasStartedCoding = false;
-    let thoughtStepId = '';
-    let lastContentLength = 0;
-    const detectedFiles = new Set<string>();
-    const detectedCommands = new Set<string>();
-
-    try {
-      while (attemptsCount < maxAttempts) {
-        if (abortControllerRef.current?.signal.aborted) break;
-
-        const preset = currentPresetIndex >= 0 && currentPresetIndex < apiPresets.length ? apiPresets[currentPresetIndex] : null;
-        const apiToUse = preset ? preset.apiKey : apiKey;
-
-        try {
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: abortControllerRef.current.signal,
-            body: JSON.stringify({
-              messages: updatedMessages.map(m => ({ 
-                role: m.role, 
-                content: m.content,
-                images: (m as any).images 
-              })),
-              systemPrompt: systemPrompt,
-              temperature: temperature,
-              agentId: activeAgent.id,
-              apiKey: apiToUse,
-              model: modelToUse
-            })
-          });
-
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || `Server returned ${res.status}`);
-          }
-
-          const reader = res.body?.getReader();
-          const decoder = new TextDecoder("utf-8");
-          
-          let fullResponse = "";
-
-          if (reader) {
-            let buffer = "";
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              buffer += decoder.decode(value, { stream: true });
-
-              if (!hasStartedThinking && buffer.length > 0) {
-                hasStartedThinking = true;
-                thoughtStepId = generateId();
-                const connectStep = { ...steps[0], status: 'success' as const };
-                updateSteps([
-                  connectStep,
-                  { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: Lightbulb }
-                ]);
-              }
-
-              const parts = buffer.split('\n\n');
-              buffer = parts.pop() || "";
-
-              for (const part of parts) {
-                if (part.startsWith('data: ')) {
-                  const data = part.slice(6);
-                  if (data === '[DONE]') break;
-                  
-                  let parsed;
-                  try {
-                    parsed = JSON.parse(data);
-                  } catch (e) {
-                    continue;
-                  }
-                  
-                  if (parsed.error) {
-                    throw new Error(parsed.error);
-                  }
-                  if (parsed.text) {
-                    fullResponse += parsed.text;
-                    
-                    // Real-time step parsing logic (Thinking)
-                    if (hasStartedThinking && !hasStartedCoding && Date.now() - lastThoughtUpdate > 1000) {
-                      lastThoughtUpdate = Date.now();
-                      const elapsed = Math.round((Date.now() - startTime) / 1000);
-                      updateSteps(steps.map(s => 
-                        s.id === thoughtStepId ? { ...s, label: `Pensando... (${elapsed}s)` } : s
-                      ));
-                    }
-
-                    // Real-time file extraction and step generation
-                    const newContent = fullResponse.slice(lastContentLength);
-                    if (newContent.length > 2) {
-                      const currentFiles = extractFilesFromMarkdown(fullResponse);
-                      
-                      if (currentFiles.length > 0) {
-                        setGeneratedFiles(prev => {
-                          const prevLen = prev.length;
-                          const currLen = currentFiles.length;
-                          
-                          if (currLen > prevLen) {
-                            // New file discovered!
-                            const newFile = currentFiles[currLen - 1];
-                            const currentSteps = [...steps];
-                            // Mark previous as success if it was running
-                            if (currentSteps.length > 0 && currentSteps[currentSteps.length - 1].status === 'running') {
-                              currentSteps[currentSteps.length - 1].status = 'success';
-                            }
-                            // Add new creation step
-                            currentSteps.push({ 
-                              id: generateId(), 
-                              label: `Criando: ${newFile.name.split('/').pop()}`, 
-                              status: 'success', 
-                              icon: FileCode 
-                            });
-                            updateSteps(currentSteps);
-                            setActiveFileIndex(currLen - 1);
-                          }
-                          return currentFiles;
-                        });
-                      }
-
-                      // Update "Writing..." indicator in Action History
-                      const openBlockMatch = fullResponse.match(/```(\w+)?(?:[:\s]+)?([\w\.\/\-\_]+)?\n([^`]*)$/);
-                      if (openBlockMatch) {
-                        const fileName = openBlockMatch[2] || `arquivo_${generatedFiles.length + 1}`;
-                        const writingLabel = `Escrevendo código em ${fileName.split('/').pop()}...`;
-                        
-                        if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
-                          const currentSteps = [...steps];
-                          const last = currentSteps[currentSteps.length - 1];
-                          if (last.status === 'running') {
-                            last.label = writingLabel;
-                            last.icon = Edit2;
-                          } else {
-                            currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: Edit2 });
-                          }
-                          updateSteps(currentSteps);
-                        }
-                      } else if (hasStartedCoding) {
-                        // If no block is open but we already started coding, we might be writing the summary
-                        const summaryLabel = 'Finalizando com resumo e explicações...';
-                        if (steps.length > 0 && steps[steps.length - 1].label !== summaryLabel && !steps[steps.length - 1].label.includes('Pensou')) {
-                           const currentSteps = [...steps];
-                           const last = currentSteps[currentSteps.length - 1];
-                           if (last.status === 'running' && !last.label.includes('Pensando')) {
-                             last.label = summaryLabel;
-                             last.icon = Activity;
-                           }
-                           updateSteps(currentSteps);
-                        }
-                      }
-
-                      // Other heuristics (Commands/Reads)
-                      const fileMatch = newContent.match(/(?:lendo|read|acessando|viewing)\s+arquivo\s+`?([\w\.\/\-]+)`?/i);
-                      if (fileMatch && !detectedFiles.has(fileMatch[1])) {
-                        detectedFiles.add(fileMatch[1]);
-                        const currentSteps = [...steps];
-                        if (currentSteps[currentSteps.length - 1].status === 'running') currentSteps[currentSteps.length - 1].status = 'success';
-                        currentSteps.push({ id: generateId(), label: `Analisando: ${fileMatch[1].split('/').pop()}`, status: 'success', icon: FileText });
-                        updateSteps(currentSteps);
-                      }
-
-                      const cmdMatch = newContent.match(/(?:executando|running|executing)\s+comando\s+`?([\w\s\.\/\-\_]+)`?/i);
-                      if (cmdMatch && !detectedCommands.has(cmdMatch[1])) {
-                        detectedCommands.add(cmdMatch[1]);
-                        const currentSteps = [...steps];
-                        if (currentSteps[currentSteps.length - 1].status === 'running') currentSteps[currentSteps.length - 1].status = 'success';
-                        currentSteps.push({ id: generateId(), label: `Comando: ${cmdMatch[1].trim()}`, status: 'success', icon: Terminal });
-                        updateSteps(currentSteps);
-                      }
-                      lastContentLength = fullResponse.length;
-                    }
-
-                    if (!hasStartedCoding && fullResponse.includes('```')) {
-                      hasStartedCoding = true;
-                      const thoughtDuration = Math.round((Date.now() - startTime) / 1000);
-                      const updatedSteps = steps.map(s => 
-                        s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
-                      );
-                      updateSteps([
-                        ...updatedSteps,
-                        { id: generateId(), label: 'Gerando código e componentes...', status: 'running', icon: Code }
-                      ]);
-                    }
-
-                    setMessages(prev => prev.map(m => 
-                      m.id === messageId ? { ...m, content: fullResponse } : m
-                    ));
-                  }
-                }
-              }
-            }
-          }
-          
-          const finalFiles = extractFilesFromMarkdown(fullResponse);
-          if (finalFiles.length > 0) {
-            setGeneratedFiles(finalFiles);
-            setFileHistory(prev => {
-              const isSame = prev.length > 0 && JSON.stringify(prev[prev.length - 1].files) === JSON.stringify(finalFiles);
-              if (isSame) return prev;
-              return [...prev, { timestamp: Date.now(), files: finalFiles }];
-            });
-            setHistoryIndex(null);
-          }
-          
-          break; // Sucesso, quebra o loop de tentativas
-
-        } catch (innerErr: any) {
-          const errMsg = (innerErr.message || "").toLowerCase();
-          const isQuota = errMsg.includes('cota') || errMsg.includes('quota') || errMsg.includes('exceeded') || errMsg.includes('limit: 0') || errMsg.includes('limite 0') || errMsg.includes('limite de cota');
-          
-          if (isQuota && apiPresets.length > 1) {
-            attemptsCount++;
-            if (attemptsCount < maxAttempts) {
-              const nextIndex = (currentPresetIndex + 1) % apiPresets.length;
-              currentPresetIndex = nextIndex;
-              const newPresetId = apiPresets[nextIndex].id;
-              console.warn(`Cota excedida. Alternando automaticamente para o preset ${apiPresets[nextIndex].name}`);
-              
-              setActivePresetId(newPresetId);
-              safeLocalStorageSet('nexus_active_preset_id', newPresetId);
-              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: `⚠️ **Cota excedida no preset atual.**\nAlternando automaticamente para o preset **${apiPresets[nextIndex].name}**...` } : m));
-              
-              await new Promise(r => setTimeout(r, 2000));
-              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: '' } : m));
-              
-              continue; // Tenta novamente com o proximo preset!
-            }
-          }
-          
-          throw innerErr; // Caso nao seja cota, ou caso esgotem os presets
-        }
-      }
-    } catch (err: any) {
-      console.error(err);
-      setMessages(prev => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg && lastMsg.role === 'model' && lastMsg.content === '') {
-           return prev.map(m => m.id === lastMsg.id ? { ...m, content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}`, isError: true } : m);
-        } else {
-           return [...prev, {
-            id: crypto.randomUUID(),
-            role: 'model',
-            content: `**Erro ao conectar com a IA:**\n\n${err.message || 'Tente novamente.'}`,
-            isError: true
-          }];
-        }
-      });
-    } finally {
-      setIsLoading(false);
-      // Finalize steps if not already done using the scoped update logic
-      const finalSteps = steps.map(s => ({ 
-        ...s, 
-        status: s.status === 'running' ? 'success' : s.status 
-      } as TechnicalStep));
-      
-      const lastStep = finalSteps[finalSteps.length - 1];
-      if (lastStep && lastStep.status === 'success' && !finalSteps.some(s => s.label === 'Build verificado')) {
-         finalSteps.push({ id: generateId(), label: 'Build verificado', status: 'success', icon: Wrench });
-      }
-
-      updateSteps(finalSteps);
-    }
-  };
-
-  const handleSendMessageRef = useRef(handleSendMessage);
-  useEffect(() => {
-    handleSendMessageRef.current = handleSendMessage;
-  }, [handleSendMessage]);
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === 'NEXUS_FIX_ERROR' && e.data?.error) {
-        const errorMsg = `O seguinte erro ocorreu no preview:\n\`\`\`\n${e.data.error}\n\`\`\`\nPor favor, investigue e corrija.`;
-        setActiveTab('chat');
-        handleSendMessageRef.current(undefined, errorMsg);
+        setPreviewError(e.data.error);
+        // handleSendMessage(undefined, `O seguinte erro ocorreu no preview: ${e.data.error}. Por favor, corrija.`);
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [handleSendMessage]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -1281,11 +597,9 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] bg-[#131314] text-zinc-200 overflow-hidden font-sans relative pb-safe">
       
-      {/* Sidebar Drawer - Moved to top for reliability */}
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
           <div className="fixed inset-0 z-[9999]" key="sidebar-overlay">
-            {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1293,7 +607,6 @@ export default function App() {
               onClick={() => setIsSidebarOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
-            {/* Content Drawer */}
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -1374,7 +687,6 @@ export default function App() {
                           setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
                           setGeneratedFiles(files);
                         }
-                        setHistoryIndex(null);
                         setActiveFileIndex(0);
                         setIsSidebarOpen(false);
                       }}
@@ -1390,12 +702,9 @@ export default function App() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setChatHistory(prev => prev.filter(c => c.id !== chat.id));
-                          if (currentChatId === chat.id) {
-                            resetChat();
-                          }
+                          if (currentChatId === chat.id) resetChat();
                         }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all z-20"
-                        title="Excluir projeto"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1423,375 +732,38 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Header - AI Studio Style */}
-      <header className="h-[64px] min-h-[64px] py-1 flex items-center justify-between px-4 md:px-6 bg-[#131314]/80 backdrop-blur-md flex-shrink-0 border-b border-white/5 relative z-[60]">
-        <div className="flex items-center gap-4 group">
-          <div className={cn(
-            "flex items-center justify-center w-[38px] h-[38px] rounded-xl text-white shadow-2xl transition-all duration-500 group-hover:scale-105 group-hover:rotate-3 overflow-hidden border border-white/10",
-            activeAgent.color || "bg-gradient-to-tr from-blue-600 to-indigo-600"
-          )}>
-            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <AgentIcon iconName={activeAgent.iconName} size={18} />
-          </div>
-          <div className="flex flex-col">
-            <h1 className="text-[14px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2 leading-none">
-              {activeAgent.name}
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-              <p className="text-[8px] text-[#5f6368] font-bold uppercase tracking-[0.3em] leading-none">Nexus Protocol Active</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Status Indicator (Desktop) */}
-          <div className="hidden lg:flex items-center gap-4 px-4 py-1.5 rounded-full bg-white/[0.02] border border-white/5">
-             <div className="flex flex-col items-end">
-               <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">Status</span>
-               <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter mt-1">Sincronizado</span>
-             </div>
-             <div className="w-px h-4 bg-white/10" />
-             <div className="flex flex-col items-end">
-               <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Motor</span>
-               <Select value={selectedModel} onValueChange={(val) => {
-                 if (val) {
-                   setSelectedModel(val);
-                   setDraftSelectedModel(val);
-                   safeLocalStorageSet('nexus_selected_model', val);
-                 }
-               }}>
-                 <SelectTrigger className="h-4 p-0 text-[9px] font-bold text-zinc-400 hover:text-white uppercase tracking-tighter bg-transparent border-0 focus:ring-0 gap-1 min-w-0">
-                   <SelectValue />
-                 </SelectTrigger>
-                 <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl min-w-[150px]">
-                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                   <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
-                   <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
-                   <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                   <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                   <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
-                 </SelectContent>
-               </Select>
-             </div>
-          </div>
-        </div>
-      </header>
+      <Header 
+        activeAgent={activeAgent}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
+        setDraftSelectedModel={setDraftSelectedModel}
+        isSaving={isSaving}
+      />
 
-
-      {/* Main Workspace */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
-        
-        {/* Chat / Prompt Section */}
         <div className={cn(
           "flex flex-col flex-1 bg-[#131314] border-r border-[#333538] min-h-0",
           activeTab !== 'chat' && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          {/* Technical Execution Bar removed to be integrated in chat as per user request */}
+          <ChatLog 
+            messages={messages}
+            isLoading={isLoading}
+            activeAgent={activeAgent}
+            generatedFiles={generatedFiles}
+            activeFileIndex={activeFileIndex}
+            setActiveFileIndex={setActiveFileIndex}
+            setActiveTab={setActiveTab}
+            scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
+            showScrollButton={showScrollButton}
+            scrollToBottom={scrollToBottom}
+            setInputMessage={setInputMessage}
+            handleSendMessage={handleSendMessage}
+          />
 
-          {/* Chat Log */}
-          <div 
-            ref={scrollRef}
-            className={cn(
-              "flex-1 overflow-y-auto px-3 py-4 custom-scrollbar relative",
-              messages.length === 0 && "flex flex-col"
-            )}
-          >
-            {messages.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center py-4 px-2 text-center animate-in fade-in duration-700 w-full min-h-0">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-3 border border-blue-500/20 shrink-0">
-                  <Brain size={20} className="text-blue-400" />
-                </div>
-                <h2 className="text-[13px] sm:text-[14px] font-black text-white uppercase tracking-widest mb-1.5 shrink-0">NEXUS IA</h2>
-                <p className="text-[10px] sm:text-[11px] font-medium text-[#8e918f] max-w-sm mb-4 leading-relaxed uppercase tracking-widest text-center shrink-0">
-                  Descreva o seu app e o agente mais adequado será alocado.
-                </p>
-                <div className="grid grid-cols-1 gap-2 w-full max-w-lg shrink-0 pb-2">
-                  {[
-                    { label: "App de Clima Responsivo", prompt: "Crie um aplicativo de previsão do tempo responsivo com gráficos de temperatura dos últimos dias e visualização atual.", icon: Layout, color: "text-pink-400" },
-                    { label: "Dashboard Financeiro", prompt: "Construa um dashboard financeiro moderno contendo cards de resumo, gráfico de despesas e receitas.", icon: Code, color: "text-blue-400" },
-                    { label: "Jogo da Velha", prompt: "Desenvolva um jogo da velha avançado com modo escuro e placar de vitórias, usando lucide-react.", icon: Terminal, color: "text-emerald-400" },
-                    { label: "Design de Landing Page", prompt: "Gere uma landing page minimalista e futurista para uma IA, com animações e efeitos glassmorphism.", icon: Activity, color: "text-orange-400" }
-                  ].map((s, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => setInputMessage(s.prompt)}
-                      className="group flex items-center text-left py-2 px-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] hover:border-white/20 transition-all cursor-pointer w-full relative overflow-hidden gap-3"
-                    >
-                      <s.icon size={14} className={cn("shrink-0", s.color)} />
-                      <div className="flex flex-col min-w-0 flex-1">
-                         <span className="text-[10px] sm:text-[11px] font-black text-white/90 uppercase tracking-widest truncate leading-none mb-1">{s.label}</span>
-                         <span className="text-[9px] sm:text-[10px] text-[#8e918f] font-medium truncate opacity-70 group-hover:opacity-100 transition-opacity">"{s.prompt}"</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: '100%',
-                position: 'relative'
-              }}
-            >
-              <AnimatePresence initial={false}>
-                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                  const msg = messages[virtualItem.index];
-                  return (
-                    <div
-                      key={virtualItem.key}
-                      ref={rowVirtualizer.measureElement}
-                      data-index={virtualItem.index}
-                      className="absolute top-0 left-0 w-full"
-                      style={{
-                        transform: `translateY(${virtualItem.start}px)`,
-                        paddingBottom: '16px',
-                        willChange: 'transform'
-                      }}
-                    >
-                      <motion.div 
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 15 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                        className={cn("flex w-full mb-4", msg.role === 'user' ? "justify-end" : "justify-start")}
-                      >
-                  {msg.role === 'user' ? (
-                    <div className="bg-[#282a2d] text-[#e3e3e3] px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[85%] text-[14px] leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
-                    </div>
-                  ) : (
-                    <div className="flex flex-row gap-2 w-full max-w-none items-start group">
-                      <Avatar className={cn(
-                        "w-6 h-6 rounded-md shrink-0 mt-0.5 shadow-sm",
-                        activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
-                      )}>
-                         <AvatarFallback className="bg-transparent text-white">
-                           <AgentIcon iconName={activeAgent.iconName} size={12} />
-                         </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 text-[14px] leading-[1.6] text-[#e3e3e3] pr-2">
-                        {msg.role === 'model' && msg.steps && (
-                          <div className="mb-4 w-full max-w-2xl px-1">
-                            <details className="group/accordion border border-white/5 bg-white/[0.02] rounded-xl overflow-hidden shadow-sm" open={msg.steps.some(s => s.status === 'running')}>
-                              <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none text-[13px] font-semibold text-[#e3e3e3] hover:bg-white/[0.04] transition-all bg-white/[0.01]">
-                                <div className="relative shrink-0 flex items-center justify-center">
-                                  {msg.steps.some(s => s.status === 'running') ? (
-                                    <div className="relative">
-                                      <motion.div 
-                                        animate={{ rotate: 360 }}
-                                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                                        className="w-4 h-4 rounded-full border-b-2 border-blue-400"
-                                      />
-                                      <Sparkles size={8} className="absolute inset-0 m-auto text-blue-400 opacity-80 animate-pulse" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-4 h-4 rounded-full bg-blue-400/10 flex items-center justify-center">
-                                      <Check size={10} className="text-blue-400" strokeWidth={3} />
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="flex-1 tracking-tight text-[#e3e3e3]/90">
-                                  {msg.steps.some(s => s.status === 'running') ? 'Executando Tarefas' : 'Etapas de Execução'}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {msg.steps.some(s => s.status === 'running') && (
-                                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-400/10 border border-blue-400/20">Working</span>
-                                  )}
-                                  <ChevronDown size={14} className="text-[#8e918f]/50 transition-transform group-open/accordion:rotate-180 shrink-0" />
-                                </div>
-                              </summary>
-                              
-                              <div className="px-5 pb-5 pt-3 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-300 relative">
-                                {/* Vertical line connector */}
-                                <div className="absolute left-[27px] top-4 bottom-8 w-px bg-white/5 z-0" />
-                                
-                                {msg.steps.map((step, i) => (
-                                  <div key={i} className="flex items-center gap-4 py-2 group/step relative z-10">
-                                    <div className={cn(
-                                      "shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-all duration-500",
-                                      step.status === 'running' 
-                                        ? "bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]" 
-                                        : step.status === 'success' 
-                                          ? "bg-white/[0.03] border-white/5 text-[#8e918f]" 
-                                          : "bg-transparent border-white/5 text-[#5f6368]"
-                                    )}>
-                                      <step.icon size={12} strokeWidth={2} />
-                                    </div>
-                                    <div className="flex-1 flex flex-col">
-                                      <span className={cn(
-                                        "text-[13px] font-medium transition-colors",
-                                        step.status === 'running' ? "text-white" : step.status === 'success' ? "text-[#8e918f]" : "text-[#5f6368]"
-                                      )}>
-                                        {step.label}
-                                      </span>
-                                    </div>
-                                    {step.status === 'running' && (
-                                      <div className="flex gap-1">
-                                        {[0, 1, 2].map(d => (
-                                          <motion.div 
-                                            key={d}
-                                            animate={{ opacity: [0.3, 1, 0.3] }}
-                                            transition={{ duration: 1, repeat: Infinity, delay: d * 0.2 }}
-                                            className="w-1 h-1 rounded-full bg-blue-400"
-                                          />
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                                
-                                {hasFiles && msg.id === messages[messages.length-1].id && generatedFiles.length > 0 && (
-                                  <div className="pt-4 mt-2 border-t border-white/5">
-                                    <div className="flex items-center gap-3 px-1 mb-4">
-                                      <div className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                                        <Edit2 size={12} className="text-emerald-400" strokeWidth={2} />
-                                      </div>
-                                      <span className="text-[13px] font-bold text-[#e3e3e3] tracking-tight">
-                                        Arquivos Gerados <span className="ml-1 px-1.5 py-0.5 rounded-md bg-white/5 text-[10px] text-[#8e918f]">{generatedFiles.length}</span>
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {generatedFiles.map((f, idx) => (
-                                        <motion.div 
-                                          key={idx}
-                                          initial={{ opacity: 0, x: -10 }}
-                                          animate={{ opacity: 1, x: 0 }}
-                                          transition={{ delay: idx * 0.05 }}
-                                          onClick={() => {
-                                            setActiveFileIndex(idx);
-                                            setActiveTab('code');
-                                          }}
-                                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] font-medium text-[#c4c7c5] hover:text-[#a8c7fa] hover:bg-[#a8c7fa]/5 hover:border-[#a8c7fa]/20 transition-all cursor-pointer group/file"
-                                        >
-                                          <div className="flex items-center gap-2 truncate">
-                                            <FileText size={14} className="text-[#8e918f] group-hover/file:text-[#a8c7fa]" />
-                                            <span className="truncate">{f.name.split('/').pop()}</span>
-                                          </div>
-                                          <div className="w-4 h-4 rounded-full flex items-center justify-center bg-emerald-500/10 opacity-60">
-                                            <Check size={10} className="text-emerald-500" strokeWidth={3} />
-                                          </div>
-                                        </motion.div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </details>
-                          </div>
-                        )}
-                        <div className="markdown-prose">
-                          {msg.content === '' && isLoading && (
-                            <div className="py-1 flex items-center gap-3">
-                              <div className="w-3.5 h-3.5 rounded-full border-[2px] border-[#a8c7fa] border-t-transparent animate-spin" />
-                              <span className="text-[13px] text-[#8e918f]">Gerando código...</span>
-                            </div>
-                          )}
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              code({ node, inline, className, children, ...props }: any) {
-                                if (!inline) {
-                                  return null;
-                                }
-                                return (
-                                  <code className={cn("bg-white/10 px-1 rounded text-[#80bfff]", className)} {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              blockquote({ children }: any) {
-                                // Extract text safely depending on React element structure
-                                let text = '';
-                                try {
-                                  if (Array.isArray(children)) {
-                                    text = children.map((c: any) => c?.props?.children?.[0] || '').join(' ');
-                                  } else {
-                                    text = String(children?.props?.children?.[0] || '');
-                                  }
-                                } catch (e) {
-                                  // fallback
-                                }
-                                const isThought = text.includes('💭') || text.toLowerCase().includes('pensamento');
-                                
-                                if (isThought) {
-                                  return (
-                                    <details className="group/thought my-4">
-                                      <summary className="inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#282a2d] border border-[#333538] hover:bg-[#333538] transition-colors cursor-pointer list-none select-none text-[12px] font-medium text-[#c4c7c5] w-fit">
-                                        <div className="flex items-center gap-2 pr-4">
-                                          <Brain size={14} className="text-purple-400" />
-                                          <span>Processo de Pensamento Estratégico</span>
-                                        </div>
-                                        <ChevronDown size={14} className="opacity-50 transition-transform group-open/thought:rotate-180" />
-                                      </summary>
-                                      <div className="mt-2 pl-4 py-3 border-l-2 border-purple-500/30 bg-purple-500/5 text-[#b2b5b4] text-[13px] rounded-r-xl markdown-prose">
-                                        {children}
-                                      </div>
-                                    </details>
-                                  );
-                                }
-
-                                return <blockquote className="border-l-3 border-[#a8c7fa]/40 pl-4 py-1 italic text-[#8e918f] my-4">{children}</blockquote>;
-                              },
-                              p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed tracking-tight">{children}</p>
-                            }}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
-
-                        {msg.content && (
-                          <button
-                            onClick={() => {
-                              if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(msg.content).catch(e => console.error("Clipboard API failed", e));
-                              }
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 mt-1 self-start"
-                            title="Copiar mensagem"
-                          >
-                            <Copy size={14} />
-                          </button>
-                        )}
-
-                          {msg.isError && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => {
-                                const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-                                if (lastUserMsg) {
-                                  handleSendMessage(undefined, lastUserMsg.content);
-                                }
-                              }} 
-                              className="mt-4 border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 gap-2 h-8 rounded-lg text-[12px] font-bold uppercase tracking-widest"
-                            >
-                              <RotateCcw size={14} />
-                              Tentar Novamente
-                            </Button>
-                          )}
-                        </div>
-                        
-                      </div>
-                  )}
-                </motion.div>
-              </div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-    </div>
-
-          {/* Input Area */}
           <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-[#131314] shrink-0 border-t border-[#333538]/50">
             <div className="max-w-3xl mx-auto flex flex-col px-1">
-              {/* Main Input Container */}
               <div className="relative bg-[#1e1f20] border border-[#333538] focus-within:border-[#a8c7fa]/50 focus-within:ring-1 focus-within:ring-[#a8c7fa]/20 rounded-2xl transition-all duration-200 shadow-xl flex flex-col">
-                
                 {attachedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
                     {attachedFiles.map((f, i) => (
@@ -1813,68 +785,38 @@ export default function App() {
                   onKeyDown={onKeyDown}
                   placeholder="Descreva o que você quer construir..."
                   className={cn("w-full bg-transparent border-none text-base text-[#f1f3f4] px-4 py-3 min-h-[50px] max-h-[300px] resize-none outline-none leading-relaxed custom-scrollbar placeholder:text-[#8e918f] focus-visible:ring-0 shadow-none overflow-y-auto", attachedFiles.length > 0 && "pt-2")}
-                  spellCheck={false}
                   rows={1}
                 />
                 
-                {/* Bottom Toolbar inside the input */}
                 <div className="flex items-end justify-between p-2 pt-0">
-                  {/* Left Side Icons */}
                   <div className="flex items-center gap-1 text-[#8e918f]">
                     <input 
-                      type="file" 
-                      multiple 
-                      className="hidden" 
-                      id="file-upload" 
-                      ref={fileInputRef}
+                      type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
                       onChange={(e) => {
                         if (e.target.files) {
-                          const MAX_SIZE_MB = 10;
-                          const validFiles = Array.from(e.target.files).filter(f => {
-                            if (f.size > MAX_SIZE_MB * 1024 * 1024) {
-                              alert(`"${f.name}" excede ${MAX_SIZE_MB}MB e não pode ser anexado.`);
-                              return false;
-                            }
-                            return true;
-                          });
+                          const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
                           setAttachedFiles(prev => [...prev, ...validFiles]);
                         }
                       }}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Anexar arquivo">
+                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center">
                       <Paperclip size={18} strokeWidth={2} />
                     </label>
 
                     <input 
-                      type="file" 
-                      accept="image/*" 
-                      multiple 
-                      hidden 
-                      ref={imageInputRef}
+                      type="file" accept="image/*" multiple hidden ref={imageInputRef}
                       onChange={(e) => {
                         if (e.target.files) {
-                          const MAX_SIZE_MB = 10;
-                          const validFiles = Array.from(e.target.files).filter(f => {
-                            if (f.size > MAX_SIZE_MB * 1024 * 1024) {
-                              alert(`"${f.name}" excede ${MAX_SIZE_MB}MB e não pode ser anexado.`);
-                              return false;
-                            }
-                            return true;
-                          });
+                          const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
                           setAttachedFiles(prev => [...prev, ...validFiles]);
                         }
                       }}
                     />
-                    <button 
-                      onClick={() => imageInputRef.current?.click()}
-                      className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" 
-                      title="Adicionar imagem"
-                    >
+                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex">
                       <ImageIcon size={18} strokeWidth={2} />
                     </button>
                   </div>
 
-                  {/* Right Side Actions */}
                   <div className="flex items-center gap-2">
                     <Select value={selectedModel} onValueChange={(val) => {
                       if (val) {
@@ -1883,7 +825,7 @@ export default function App() {
                         safeLocalStorageSet('nexus_selected_model', val);
                       }
                     }}>
-                      <SelectTrigger className="flex h-8 bg-transparent border-none text-[11px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0">
+                      <SelectTrigger className="flex h-8 bg-transparent border-none text-[11px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0 border-none shadow-none">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Brain size={14} className="shrink-0" />
                           <span className="truncate max-w-[120px]">{selectedModel.replace('gemini-', '').replace('-preview', '')}</span>
@@ -1900,20 +842,19 @@ export default function App() {
                       </SelectContent>
                     </Select>
 
-                    {/* Send Button */}
                     <Button
                       onClick={handleSendMessage}
                       disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
                       size="icon"
                       className={cn(
-                      "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none mr-0.5 mb-0.5",
-                      (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
-                        ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow" 
-                        : "bg-[#282a2d] text-[#8e918f] cursor-not-allowed"
-                    )}
-                  >
-                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} strokeWidth={2.5} />}
-                  </Button>
+                        "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none mr-0.5 mb-0.5",
+                        (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
+                          ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow" 
+                          : "bg-[#282a2d] text-[#8e918f] cursor-not-allowed"
+                      )}
+                    >
+                      {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} strokeWidth={2.5} />}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1921,238 +862,107 @@ export default function App() {
           </div>
         </div>
 
-        {/* Preview / Canvas Section */}
         <div className={cn(
           "flex-1 flex flex-col bg-[#131314] min-h-0",
           (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          {/* Section Header */}
-          <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 relative z-[60] shadow-sm w-full">
-             {/* Modern top segmented control for Canvas vs Code */}
+          <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
              <div className="bg-[#282a2d] p-1 rounded-lg flex items-center">
-               <button
-                 onClick={() => setActiveTab('preview')}
-                 className={cn(
-                   "px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200",
-                   activeTab === 'preview' || (activeTab === 'chat' && !hasFiles) 
-                    ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]"
-                 )}
-               >
-                 Canvas
-               </button>
-               <button
-                 onClick={() => setActiveTab('code')}
-                 className={cn(
-                   "px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5 relative",
-                   activeTab === 'code' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]"
-                 )}
-               >
-                 Arquivos
-                 {hasFiles && <span className="flex h-2 w-2 rounded-full bg-[#a8c7fa]" />}
-               </button>
+               <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", activeTab === 'preview' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]")}>Canvas</button>
+               <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === 'code' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-[#a8c7fa]" />}</button>
              </div>
-             
-             <div className="flex-1 max-w-md bg-[#131314] border border-[#333538] rounded-full text-[11px] px-4 py-1.5 text-[#5f6368] font-mono tracking-wide hidden lg:flex items-center gap-2">
-               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
-               <span className="truncate">localhost:3000/app-preview</span>
-             </div>
-
              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    const blob = new Blob([previewHtml], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank');
-                  }}
-                  className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg hover:bg-white/5 transition-colors" 
-                  title="Abrir em nova aba"
-                >
-                  <ArrowUp size={16} className="rotate-45" />
-                </button>
-                <div className="w-px h-4 bg-white/10 mx-1" />
-                <button 
-                  onClick={() => setPreviewKey(k => k + 1)}
-                  className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg hover:bg-white/5 transition-colors"
-                  title="Recarregar preview"
-                >
-                  <RotateCcw size={16} />
-                </button>
+                <button onClick={() => { const blob = new Blob([previewHtml], { type: 'text/html' }); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors"><ArrowUp size={16} className="rotate-45" /></button>
+                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors"><RotateCcw size={16} /></button>
              </div>
           </div>
 
-          <div 
-            className="flex-1 relative flex flex-col bg-white"
-            style={!hasFiles ? { 
-              backgroundColor: activeTab === 'code' ? '#080809' : '#131314',
-              backgroundImage: activeTab === 'code' 
-                ? 'linear-gradient(#161617 1px, transparent 1px), linear-gradient(90deg, #161617 1px, transparent 1px)'
-                : 'radial-gradient(#333538 1px, transparent 1px)', 
-              backgroundSize: activeTab === 'code' ? '32px 32px' : '24px 24px' 
-            } : undefined}
-          >
+          <div className="flex-1 relative flex flex-col bg-white">
             {!hasFiles && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1, duration: 0.5, type: 'spring' }}
-                  className="flex flex-col items-center justify-center"
-                >
-                  <div className="relative mb-6">
-                    <div className={cn(
-                      "absolute inset-0 blur-2xl rounded-full",
-                      activeTab === 'code' ? "bg-emerald-500/10" : "bg-blue-500/20"
-                    )} />
-                    <div className="w-20 h-20 rounded-3xl bg-[#1e1f20] border border-[#333538] shadow-2xl flex items-center justify-center relative shadow-[0_0_40px_rgba(40,40,40,0.5)]">
-                      {activeTab === 'code' ? (
-                        <Terminal size={32} className="text-emerald-400/80" strokeWidth={1.5} />
-                      ) : (
-                        <Layout size={32} className="text-[#a8c7fa]" strokeWidth={1.5} />
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[18px] font-semibold text-[#f1f3f4] tracking-tight">
-                    {activeTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}
-                  </p>
-                  <p className="text-[14px] mt-2 text-[#8e918f] max-w-[280px] text-center leading-relaxed">
-                    {activeTab === 'code' 
-                      ? 'Descreva a lógica ou as funções que deseja criar para ver os arquivos aqui.'
-                      : 'Comece a desenvolver descrevendo o que deseja construir no chat.'}
-                  </p>
-                </motion.div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-[#131314]">
+                <div className="w-20 h-20 rounded-3xl bg-[#1e1f20] border border-[#333538] shadow-2xl flex items-center justify-center mb-6">
+                  {activeTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-[#a8c7fa]" />}
+                </div>
+                <p className="text-[18px] font-semibold text-[#f1f3f4]">{activeTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
+                <p className="text-[14px] mt-2 text-[#8e918f] text-center max-w-[280px]">{activeTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
               </div>
             )}
 
-            {previewHtml && activeTab === 'preview' && (
-              <iframe 
-                key={previewKey}
-                srcDoc={previewHtml}
-                className="w-full h-full border-none bg-white relative z-20" 
-                title="Application Preview"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
-            )}
-            {!previewHtml && activeTab === 'preview' && hasFiles && (
-              <div className="flex-1 flex items-center justify-center bg-[#131314] text-[#8e918f] z-20 absolute inset-0">
-                Nenhum artefato web (HTML) encontrado. Verifique a aba de código.
+            {previewHtml && (
+              <div className={cn("w-full h-full relative", activeTab !== 'preview' && "hidden")}>
+                <iframe key={previewKey} srcDoc={previewHtml} className="w-full h-full border-none relative z-20" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+                
+                {previewError && (
+                  <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-[#1e1f20] border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+                      <div className="flex items-center gap-4 text-red-400">
+                        <div className="p-3 rounded-full bg-red-400/10">
+                          <Activity size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold">Erro Detectado</h3>
+                      </div>
+                      
+                      <div className="bg-black/40 rounded-xl p-4 font-mono text-xs text-red-200/80 overflow-auto max-h-[200px] border border-white/5">
+                        {previewError}
+                      </div>
+                      
+                      <div className="flex flex-col gap-3 pt-2">
+                        <Button 
+                          onClick={() => {
+                            setPreviewError(null);
+                            handleSendMessage(undefined, `Corrija o seguinte erro no código: ${previewError}`);
+                          }}
+                          className="w-full bg-red-500 hover:bg-red-600 text-white font-bold h-12 rounded-xl"
+                        >
+                          Tentar Corrigir com IA
+                        </Button>
+                        <Button 
+                          variant="ghost"
+                          onClick={() => setPreviewError(null)}
+                          className="w-full text-[#8e918f] hover:text-white"
+                        >
+                          Fechar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             
-            {hasFiles && activeTab === 'code' && (
-              <div 
-                className="absolute inset-0 z-20 flex flex-col bg-[#050505]"
-              >
-                {/* Image 3 Breadcrumb Bar */}
+            {hasFiles && (
+              <div className={cn("absolute inset-0 z-20 flex flex-col bg-[#050505]", activeTab !== 'code' && "hidden")}>
                 <div className="h-10 border-b border-[#1a1b1e] bg-[#0d0d0d] flex items-center px-4 gap-2 text-[11px] font-medium justify-between">
                    <div className="flex items-center gap-2">
                      <span className="text-[#5f6368]">Preview</span>
                      <span className="text-[#333538]">/</span>
-                     <span className="text-[#8e918f]">{generatedFiles[activeFileIndex]?.name || 'src/main.tsx'}</span>
+                     <span className="text-[#8e918f]">{generatedFiles[activeFileIndex]?.name}</span>
                    </div>
                    <div className="flex items-center gap-4">
                      {fileHistory.length > 1 && (
-                       <div className="flex items-center gap-2">
-                         <span className="text-white/30 hidden sm:inline">Histórico:</span>
-                         <Select 
-                           value={historyIndex !== null ? historyIndex.toString() : (fileHistory.length - 1).toString()}
-                           onValueChange={(val) => {
-                             if (!val) return;
-                             const idx = parseInt(val, 10);
-                             if (isNaN(idx)) return;
-                             
-                             if (idx !== fileHistory.length - 1) {
-                               // Confirm before reverting (we can just revert right away as requested)
-                               const updatedHistory = fileHistory.slice(0, idx + 1);
-                               setFileHistory(updatedHistory);
-                               setHistoryIndex(null);
-                               setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
-                               setActiveFileIndex(0);
-                               setMessages(prev => [...prev, {
-                                 id: generateId(),
-                                 role: 'model',
-                                 content: `⏪ **Revertido para a v${idx + 1}** (${new Date(updatedHistory[updatedHistory.length - 1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})}).`
-                               }]);
-                             } else {
-                               setHistoryIndex(null); // Just current
-                               setGeneratedFiles(fileHistory[fileHistory.length - 1].files);
-                               setActiveFileIndex(0);
-                             }
-                           }}
-                         >
-                           <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10 hover:border-white/20">
-                             <div className="line-clamp-1 text-left flex-1"><SelectValue /></div>
-                           </SelectTrigger>
-                           <SelectContent>
-                             {fileHistory.map((history, idx) => (
-                               <SelectItem key={idx} value={idx.toString()} className="text-[11px]">
-                                 v{idx + 1} - {new Date(history.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                 {idx === fileHistory.length - 1 ? " (Atual)" : ""}
-                               </SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
-                       </div>
+                       <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
+                         const idx = parseInt(val || '0', 10);
+                         const updatedHistory = fileHistory.slice(0, idx + 1);
+                         setFileHistory(updatedHistory);
+                         setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
+                         setActiveFileIndex(0);
+                       }}>
+                         <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+                         <SelectContent>
+                           {fileHistory.map((h, i) => <SelectItem key={i} value={i.toString()} className="text-[11px]">v{i+1} - {new Date(h.timestamp).toLocaleTimeString()}</SelectItem>)}
+                         </SelectContent>
+                       </Select>
                      )}
-                   <button
-                    onClick={() => {
-                      if (!generatedFiles[activeFileIndex]) return;
-                      const blob = new Blob([generatedFiles[activeFileIndex].code], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = generatedFiles[activeFileIndex].name;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    title="Baixar arquivo"
-                    className="p-1.5 text-[#8e918f] hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-                  >
-                    <ArrowDown size={14} />
-                  </button>
-                  </div>
+                   </div>
                 </div>
 
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                  {/* Sidebar for multiple files - desktop */}
                   <div className="hidden md:flex h-full border-r border-[#1a1b1e]">
                     <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
                   </div>
-                  
-                  {/* Mobile File Navigator - scrollable tabs below breadcrumb */}
-                  <div className="flex md:hidden bg-[#0a0a0b] border-b border-[#1a1b1e] overflow-x-auto whitespace-nowrap px-4 py-2 gap-2 h-10 items-center hide-scrollbar">
-                    <div className="text-[9px] font-black text-[#5f6368] uppercase tracking-tighter mr-1 border-r border-[#1a1b1e] pr-2">Files</div>
-                    {generatedFiles.map((f, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveFileIndex(idx)}
-                        className={cn(
-                          "px-3 py-1 rounded-md text-[10px] font-medium transition-all flex items-center gap-1.5",
-                          activeFileIndex === idx 
-                            ? "bg-[#a8c7fa]/10 text-[#a8c7fa] border border-[#a8c7fa]/20 shadow-[0_0_10px_rgba(168,199,250,0.1)]" 
-                            : "text-[#5f6368] hover:text-[#8e918f]"
-                        )}
-                      >
-                        <FolderOpen size={10} className={activeFileIndex === idx ? "text-[#a8c7fa]" : "text-[#5f6368]"} />
-                        {f.name.split('/').pop()}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex-1 overflow-auto custom-scrollbar bg-[#050505] relative">
-                    <CodeBlock 
-                      language={generatedFiles[activeFileIndex]?.lang} 
-                      value={generatedFiles[activeFileIndex]?.code || ''} 
-                      noMargin 
-                      fastMode={isLoading}
-                    />
-                  </div>
-
-                  {/* Image 3 Red bar on the right */}
-                  <div className="w-[12px] h-full flex flex-col gap-[2px] py-4 px-[2px]">
-                    {Array.from({ length: 15 }).map((_, i) => (
-                      <div key={i} className={cn("w-full h-4 rounded-[1px]", i % 4 === 0 ? "bg-red-900/40" : "bg-transparent")} />
-                    ))}
+                  <div className="flex-1 overflow-auto bg-[#050505]">
+                    <CodeBlock language={generatedFiles[activeFileIndex]?.lang} value={generatedFiles[activeFileIndex]?.code || ''} noMargin fastMode={isLoading} />
                   </div>
                 </div>
               </div>
@@ -2160,580 +970,402 @@ export default function App() {
           </div>
         </div>
 
-
-
-      {/* Modern Global Bottom Navigation (Floating Pill) */}
-      <div className="fixed bottom-4 inset-x-0 px-4 flex justify-center z-[100] pointer-events-none">
-        <nav className="relative flex items-center justify-between bg-[#1e1e1f]/95 backdrop-blur-xl border border-[#333538] py-1.5 px-3 rounded-full shadow-2xl w-full max-w-[500px] pointer-events-auto ring-1 ring-black/20">
-          {[
-            { id: 'chat', icon: MessageSquare, label: 'Chat' },
-            { id: 'preview', icon: Layout, label: 'Canvas' },
-            { id: 'code', icon: Terminal, label: 'Código', dot: hasFiles },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={cn(
-                "relative flex flex-col items-center justify-center p-2 min-w-[56px] gap-1 transition-colors z-10",
-                activeTab === item.id ? "text-white" : "text-[#8e918f] hover:text-[#f1f3f4]"
-              )}
-            >
-              {activeTab === item.id && (
-                <motion.div
-                  layoutId="bottom-nav-indicator"
-                  className="absolute inset-0 bg-[#a8c7fa]/20 rounded-full -z-10"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <div className="relative">
-                <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} className={cn(activeTab === item.id ? "text-[#a8c7fa]" : "")} />
-                {item.id === 'code' && item.dot && <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-red-500 border-2 border-[#1e1e1f]" />}
-              </div>
-              <span className="text-[10px] font-medium tracking-wide leading-none">{item.label}</span>
-            </button>
-          ))}
-
-          <div className="w-[1px] h-6 bg-[#333538] mx-1 z-10"></div>
-
-          <div className="flex items-center">
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                setSettingsTab('overview');
-              }}
-              className={cn(
-                "relative flex flex-col items-center justify-center p-2 min-w-[56px] gap-1 transition-colors z-10",
-                activeTab === 'settings' ? "text-white" : "text-[#8e918f] hover:text-[#f1f3f4]"
-              )}
-            >
-              {activeTab === 'settings' && (
-                <motion.div
-                  layoutId="bottom-nav-indicator"
-                  className="absolute inset-0 bg-[#a8c7fa]/20 rounded-full -z-10"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <div className="relative">
-                <Settings size={20} strokeWidth={activeTab === 'settings' ? 2.5 : 2} className={cn(activeTab === 'settings' ? "text-[#a8c7fa] rotate-45 transition-transform duration-500" : "")} />
-              </div>
-              <span className="text-[10px] font-medium tracking-wide leading-none">Ajustes</span>
-            </button>
-
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="relative flex flex-col items-center justify-center p-2 min-w-[64px] gap-1 text-[#8e918f] hover:text-[#f1f3f4] transition-colors z-10 group"
-            >
-              <HistoryIcon size={20} className="group-hover:-rotate-12 transition-transform duration-300" strokeWidth={2} />
-              <span className="text-[10px] font-medium tracking-wide leading-none">Histórico</span>
-            </button>
-          </div>
-        </nav>
-      </div>
-
-      {/* Settings Section */}
-      {activeTab === 'settings' && (
-          <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden animate-in fade-in duration-500 font-sans">
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="max-w-3xl mx-auto px-6 py-10 pb-[120px]">
-                  {settingsTab === 'overview' && (
-                    <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
-                      <div className="space-y-1.5 text-center px-4">
-                        <h2 className="text-[18px] font-black text-white uppercase tracking-[0.3em]">Console de Orquestração</h2>
-                        <p className="text-[#8e918f] text-[10px] uppercase font-bold tracking-[0.4em]">Configuração de modelos, agentes e protocolos</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
-                        {[
-                          { id: 'general', title: 'Motor', desc: 'Conectividade', icon: Key, color: 'text-blue-400', border: 'hover:border-blue-500/20' },
-                          { id: 'agent', title: 'Identidade', desc: 'Comportamento', icon: Brain, color: 'text-purple-400', border: 'hover:border-purple-500/20' },
-                          { id: 'security', title: 'Segurança', desc: 'Privacidade', icon: Shield, color: 'text-emerald-400', border: 'hover:border-emerald-500/20' }
-                        ].map((card) => (
-                          <button
-                            key={card.id}
-                            onClick={() => setSettingsTab(card.id as any)}
-                            className={cn(
-                              "group p-3.5 rounded-xl border border-white/5 transition-all duration-300 text-left flex items-center gap-3.5 bg-white/[0.01] hover:bg-white/[0.03] active:scale-[0.98]",
-                              card.border
-                            )}
-                          >
-                            <div className={cn("w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5 transition-all duration-300 group-hover:scale-105", card.color)}>
-                              <card.icon size={13} />
-                            </div>
-                            <div className="flex-1 space-y-0.5">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-[10.5px] font-black text-white uppercase tracking-[0.12em] leading-none">{card.title}</h3>
-                                <ArrowUp size={7} className="rotate-45 text-white/10 group-hover:text-white/40 transition-colors" />
-                              </div>
-                              <p className="text-[#8e918f] text-[8.5px] uppercase font-bold tracking-tight">{card.desc}</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+        {activeTab === 'settings' && (
+          <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden animate-in fade-in duration-500">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="max-w-3xl mx-auto px-6 py-10 pb-[120px]">
+                {settingsTab === 'overview' && (
+                  <div className="space-y-10 text-center">
+                    <h2 className="text-[18px] font-black text-white uppercase tracking-[0.3em]">Console de Orquestração</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        { id: 'general', title: 'Motor', icon: Key, color: 'text-blue-400' },
+                        { id: 'agent', title: 'Identidade', icon: Brain, color: 'text-purple-400' },
+                        { id: 'security', title: 'Segurança', icon: Shield, color: 'text-emerald-400' }
+                      ].map(card => (
+                        <button key={card.id} onClick={() => setSettingsTab(card.id as any)} className="p-6 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] text-center space-y-4">
+                          <div className={cn("mx-auto w-10 h-10 flex items-center justify-center rounded-lg bg-white/[0.02] border border-white/5", card.color)}><card.icon size={18} /></div>
+                          <h3 className="text-[12px] font-black text-white uppercase tracking-widest">{card.title}</h3>
+                        </button>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {settingsTab === 'general' && (
-                    <div className="space-y-10 animate-in fade-in duration-500">
-                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors">
-                        <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-                        VOLTAR
-                      </button>
-                      <div className="space-y-10">
-                        <div className="space-y-6">
-                          <div className="space-y-1 border-l-2 border-blue-500/50 pl-4">
-                             <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Motor IA</h3>
-                             <p className="text-[11px] text-[#8e918f] uppercase tracking-widest font-bold">Configuração Básica de API e Parametrização</p>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6 overflow-hidden group hover:bg-white/[0.04] transition-colors">
-                              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Key size={64} />
-                              </div>
-                              <div className="space-y-2 relative z-10">
-                                <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
-                                  <Key size={12} className="text-blue-400" /> API KEY PRINCIPAL
-                                </label>
-                                <div className="relative">
-                                  <Input type={showDraftApiKey ? "text" : "password"} value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} placeholder="Chave de acesso principal..." className="bg-black/20 border-white/10 rounded-xl h-11 px-4 text-[13px] focus-visible:ring-1 focus-visible:border-blue-400/50 transition-all pr-20" />
-                                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                    <button type="button" onClick={() => setShowDraftApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showDraftApiKey ? "Ocultar" : "Mostrar"}>
-                                      {showDraftApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
+                {settingsTab === 'general' && (
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
+                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Motor de Inteligência</h3>
+                    </div>
 
-                              <div className="space-y-2 relative z-10">
-                                <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
-                                  <Brain size={12} className="text-blue-400" /> MODELO PADRÃO
-                                </label>
-                                <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
-                                  <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11 px-4 text-[13px] focus:ring-1 focus:border-blue-400/50 transition-all hover:bg-black/40"><SelectValue /></SelectTrigger>
-                                  <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                                    <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
-                                    <SelectItem value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</SelectItem>
-                                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                                    <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                                    <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            
-                            <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6 flex flex-col justify-center overflow-hidden group hover:bg-white/[0.04] transition-colors">
-                              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Activity size={64} />
-                              </div>
-                              <div className="space-y-4 relative z-10">
-                                <div className="flex justify-between items-end border-b border-white/10 pb-3">
-                                  <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
-                                    <Activity size={12} className="text-blue-400" /> CRIATIVIDADE (TEMP)
-                                  </label>
-                                  <span className="text-[15px] font-mono font-bold text-blue-400">{draftTemperature.toFixed(1)}</span>
-                                </div>
-                                <div className="space-y-4 pt-4">
-                                  <input type="range" min="0" max="2.0" step="0.1" value={draftTemperature} onChange={(e) => setDraftTemperature(parseFloat(e.target.value))} className="w-full h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-blue-500 transition-all hover:accent-blue-400" />
-                                  <div className="flex justify-between text-[9px] font-black text-[#5f6368] uppercase tracking-widest">
-                                    <span className={cn(draftTemperature < 0.7 ? "text-blue-400" : "")}>Exato (0.0)</span>
-                                    <span className={cn(draftTemperature >= 0.7 && draftTemperature <= 1.2 ? "text-blue-400" : "")}>Balanceado (1.0)</span>
-                                    <span className={cn(draftTemperature > 1.2 ? "text-blue-400" : "")}>Caótico (2.0)</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="px-4 py-3 bg-blue-500/10 rounded-xl border border-blue-500/20 relative z-10">
-                                <p className="text-[11px] text-blue-200/70 leading-relaxed font-medium">Alta criatividade gera ideias inesperadas. Valores exatos aproximam-se de códigos e lógicas precisas.</p>
-                              </div>
-                            </div>
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex justify-between">
+                          <span>API KEY Principal</span>
+                          <span className="text-[10px] text-blue-400/60 lowercase italic font-medium">armazenada localmente</span>
+                        </label>
+                        <Input type="password" value={draftApiKey} onChange={(e) => setDraftApiKey(e.target.value)} className="bg-black/20 border-white/10 rounded-xl px-4 text-[13px] h-11" placeholder="Insira sua chave Gemini..." />
+                      </div>
+
+                      <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest italic">Presets Rápidos</label>
+                            <span className="text-[8px] text-[#8e918f] uppercase font-bold tracking-tighter">{apiPresets.length}/5 Chaves</span>
                           </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            disabled={apiPresets.length >= 5}
+                            onClick={() => { setEditingPreset(null); setPresetForm({}); setIsPresetFormOpen(true); }}
+                            className="h-6 text-[9px] uppercase tracking-widest font-black text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 disabled:opacity-30"
+                          >
+                            <Plus size={10} className="mr-1" /> Novo
+                          </Button>
                         </div>
-
-                        <div className="space-y-6">
-                          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                             <div className="space-y-1.5 border-l-2 border-white/10 pl-4"><h3 className="text-[14px] font-black text-white uppercase tracking-widest">Biblioteca Local</h3><p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest">Endpoints Pré-Configurados</p></div>
-                             <button onClick={() => { setEditingPreset(null); setPresetForm({ apiKey: draftApiKey }); setIsPresetFormOpen(true); }} className="text-[10px] font-black bg-blue-500 hover:bg-blue-400 text-white rounded-lg px-4 py-2 transition-colors uppercase tracking-widest flex items-center gap-2"><Plus size={14} /> Novo Preset</button>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                            {apiPresets.map((preset) => (
-                              <div key={preset.id} onClick={() => setDraftActivePresetId(preset.id)} className={cn("group transition-all cursor-pointer flex flex-col gap-3 p-4 rounded-xl border", draftActivePresetId === preset.id ? "bg-blue-500/10 border-blue-500/40" : "bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]")}>
-                                <div className="flex items-center justify-between">
-                                  <span className={cn("text-[13px] font-black uppercase tracking-wider", draftActivePresetId === preset.id ? "text-white" : "text-white/70")}>{preset.name}</span>
-                                  {draftActivePresetId === preset.id && <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] animate-pulse" />}
-                                </div>
-                                <div className="flex items-center gap-3 mt-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={(e) => { e.stopPropagation(); setEditingPreset(preset); setPresetForm(preset); setIsPresetFormOpen(true); }} className="text-[10px] font-bold text-white hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center gap-1"><Edit2 size={10} /> Editar</button>
-                                  <button onClick={(e) => deletePreset(preset.id, e)} className="text-[10px] font-bold text-white hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1"><Trash2 size={10} /> Excluir</button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {isPresetFormOpen && (
-                            <div className="p-6 rounded-2xl bg-[#141517] border border-white/10 mt-6 animate-in slide-in-from-bottom-4 duration-300">
-                               <div className="max-w-md space-y-6">
-                                 <div className="space-y-4">
-                                   <div className="space-y-2">
-                                     <label className="text-[10px] font-black text-white/60 uppercase tracking-widest">Identificador do Preset</label>
-                                     <Input placeholder="Ex: Produção, Amb. Testes..." value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} className="bg-black/30 border-white/10 rounded-xl h-11 px-4 text-[13px] text-white focus-visible:ring-1 focus-visible:border-blue-400 placeholder:text-white/20 transition-all" />
-                                   </div>
-                                   <div className="space-y-2">
-                                     <label className="text-[10px] font-black text-white/60 uppercase tracking-widest">Chave de API</label>
-                                     <div className="relative group">
-                                       <Input type={showPresetApiKey ? "text" : "password"} placeholder="••••••••••••••••" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} className="bg-black/30 border-white/10 rounded-xl h-11 px-4 text-[13px] text-white focus-visible:ring-1 focus-visible:border-blue-400 placeholder:text-white/20 transition-all pr-20" />
-                                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button type="button" onClick={() => setShowPresetApiKey(s => !s)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title={showPresetApiKey ? "Ocultar" : "Mostrar"}>
-                                            {showPresetApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                                          </button>
-                                       </div>
-                                     </div>
-                                   </div>
-                                 </div>
-                                 <div className="flex items-center gap-4 pt-2">
-                                   <button onClick={addOrUpdatePreset} className="text-[11px] font-black text-[#001d35] bg-[#c2e7ff] hover:bg-[#b5cffb] transition-colors uppercase tracking-widest px-6 py-2.5 rounded-xl">Gravar Preset</button>
-                                   <button onClick={() => setIsPresetFormOpen(false)} className="text-[11px] font-black text-white/50 hover:text-white transition-colors uppercase tracking-widest px-4 py-2.5">Descartar</button>
-                                 </div>
-                               </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {apiPresets.map(preset => (
+                            <div 
+                              key={preset.id} 
+                              onClick={() => setDraftApiKey(preset.apiKey)}
+                              className={cn(
+                                "group relative flex items-center gap-2 pl-3 pr-8 py-2 rounded-lg border transition-all cursor-pointer text-[12px] font-medium",
+                                draftApiKey === preset.apiKey ? "bg-blue-400/20 border-blue-400/40 text-blue-100" : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.04]"
+                              )}
+                            >
+                              <Key size={12} className="shrink-0" />
+                              <span className="truncate max-w-[80px]">{preset.name}</span>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); deletePreset(preset.id, e); }}
+                                className="absolute right-1.5 opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 transition-all"
+                              >
+                                <Trash2 size={10} />
+                              </button>
                             </div>
+                          ))}
+                          {apiPresets.length === 0 && (
+                            <p className="text-[10px] text-[#8e918f] italic uppercase tracking-widest opacity-40 py-1">Nenhum preset salvo</p>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {settingsTab === 'agent' && (
-                    <div className="space-y-8 animate-in fade-in duration-500">
-                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors">
-                        <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />
-                        VOLTAR
-                      </button>
-                      <div className="space-y-10">
-                        <div className="space-y-6">
-                          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                             <div className="space-y-1.5 border-l-2 border-purple-500/50 pl-4">
-                               <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Identidade IA</h3>
-                               <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Perfis e Capacidades Cognitivas</p>
-                             </div>
-                             <button onClick={() => { setEditingAgent(null); setAgentForm({ iconName: 'Brain', color: 'bg-indigo-500' }); setIsAgentFormOpen(true); }} className="text-[10px] font-black bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 transition-colors uppercase tracking-widest flex items-center gap-2"><Plus size={14} /> Novo Perfil</button>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                            {allAgents.map(agent => {
-                              const isDefault = AGENTS.some(a => a.id === agent.id);
-                              const isSelected = draftActiveAgentId === agent.id;
-                              return (
-                                <div key={agent.id} onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} className={cn("group transition-all cursor-pointer flex flex-col p-5 rounded-2xl border relative overflow-hidden", isSelected ? "bg-purple-500/10 border-purple-500/40" : "bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.04]")}>
-                                  
-                                  {isSelected && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 to-blue-500" />}
-                                  
-                                  <div className="flex items-center gap-4 mb-4">
-                                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-inner", isSelected ? agent.color + " text-white" : "bg-white/5 text-[#8e918f]")}>
-                                         <AgentIcon iconName={agent.iconName} size={20} />
-                                    </div>
-                                    <div className="flex flex-col overflow-hidden">
-                                      <span className="text-[14px] font-black text-white uppercase tracking-wider truncate">{agent.name}</span>
-                                      <span className={cn("text-[9px] font-bold uppercase tracking-widest leading-none mt-1 inline-block px-2 py-0.5 rounded-full w-fit", isDefault ? "bg-white/10 text-white/70" : "bg-purple-500/20 text-purple-300")}>{isDefault ? 'SYSTEM CORE' : 'USER CUSTOM'}</span>
-                                    </div>
-                                  </div>
-                                  
-                                  <p className="text-[11px] text-white/50 font-medium leading-relaxed line-clamp-2 mb-4">{agent.shortDescription || "Sem descrição disponível."}</p>
-                                  
-                                  <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity">
-                                    {!isDefault ? (
-                                      <div className="flex items-center gap-4 w-full">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }} className="text-[10px] font-bold text-white hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center gap-1.5"><Edit2 size={12} /> Editar</button>
-                                        <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }} className="text-[10px] font-bold text-white hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1.5 ml-auto"><Trash2 size={12} /> Excluir</button>
-                                      </div>
-                                    ) : (
-                                      <span className="text-[9px] font-black text-white/30 uppercase tracking-widest flex items-center gap-1.5"><Shield size={12} /> Protegido</span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <label className="text-[11px] font-black text-white/60 uppercase tracking-widest">Modelo Gemini</label>
+                          <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
+                            <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11"><SelectValue /></SelectTrigger>
+                            <SelectContent className="bg-[#1a1b1e] border-white/10">
+                              <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro (Exp)</SelectItem>
+                              <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                              <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Flash Lite</SelectItem>
+                              <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                              <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                              <SelectItem value="gemini-1.5-flash-8b">Gemini 1.5 Flash 8B</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        
-                        <div className="space-y-4 pt-6">
-                          <div className="space-y-1.5 border-l-2 border-white/10 pl-4"><h3 className="text-[14px] font-black text-white uppercase tracking-widest">Procedimento Base (System Prompt)</h3><p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Instruções para o perfil selecionado</p></div>
-                          <div className="relative group bg-black/20 rounded-2xl border border-white/5 overflow-hidden transition-all focus-within:border-purple-500/50 focus-within:bg-black/40">
-                            <Textarea 
-                              value={draftSystemPrompt} 
-                              onChange={(e) => setDraftSystemPrompt(e.target.value)} 
-                              className="bg-transparent border-0 focus:ring-0 min-h-[250px] text-[#e3e3e3] rounded-none font-sans text-[14px] px-6 py-6 leading-relaxed resize-y scrollbar-hide placeholder:text-white/20" 
-                              placeholder="Defina as diretrizes fundamentais e operacionais..." 
+                        <div className="space-y-4">
+                          <label className="text-[11px] font-black text-white/60 uppercase tracking-widest flex justify-between">
+                            <span>Temperatura</span>
+                            <span className="text-blue-400">{draftTemperature}</span>
+                          </label>
+                          <div className="pt-2">
+                            <input 
+                              type="range" 
+                              min="0" max="1" step="0.1" 
+                              value={draftTemperature} 
+                              onChange={(e) => setDraftTemperature(parseFloat(e.target.value))}
+                              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-400"
                             />
-                            <div className="absolute top-4 right-4 flex items-center gap-2 text-[9px] font-black bg-white/5 px-2 py-1 rounded-sm text-white/50 uppercase tracking-widest select-none pointer-events-none group-focus-within:text-purple-300 transition-colors">
-                              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                              PROMPT ATIVO
+                            <div className="flex justify-between text-[10px] text-[#8e918f] mt-1 font-medium italic">
+                              <span>Preciso</span>
+                              <span>Creativo</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {settingsTab === 'security' && (
-                    <div className="space-y-8 animate-in fade-in duration-500">
-                      <button onClick={() => setSettingsTab('overview')} className="flex items-center gap-2 text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest group transition-colors"><ArrowLeft size={14} className="transition-transform group-hover:-translate-x-1" />VOLTAR</button>
-                      <div className="space-y-10">
-                        <div className="space-y-8">
-                          <div className="space-y-1.5 border-l-2 border-emerald-500/50 pl-4">
-                            <h3 className="text-[16px] font-black text-white uppercase tracking-widest">Segurança & Privacidade</h3>
-                            <p className="text-[11px] text-[#8e918f] font-bold uppercase tracking-widest">Estrutura de dados e sigilo do sistema</p>
+                      <div className="space-y-4">
+                        <button 
+                          onClick={() => setIsSystemPromptExpanded(!isSystemPromptExpanded)}
+                          className="w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <label className="text-[11px] font-black text-white/60 uppercase tracking-widest cursor-pointer group-hover:text-blue-400 transition-colors">Prompt de Sistema (Atual)</label>
+                            {!isSystemPromptExpanded && <span className="text-[10px] text-[#8e918f] italic truncate max-w-[200px] opacity-40"> — {draftSystemPrompt.slice(0, 30)}...</span>}
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {[
-                              { title: 'Offline-First', desc: 'Dados e logs confinados ao armazenamento local seguro do seu navegador.', icon: Shield, color: 'text-blue-400' },
-                              { title: 'Protocolo TLS', desc: 'Comunicação direta com os motores Gemini utiliza TLS 1.3 para blindagem total em trânsito.', icon: Key, color: 'text-emerald-400' },
-                              { title: 'Zero Telemetria', desc: 'Sem rastreamento de uso, sem telemetria embutida e sem scripts de captura de terceiros.', icon: Activity, color: 'text-purple-400' },
-                              { title: 'Expurgo Absoluto', desc: 'Ao iniciar o reset, ocorre uma aniquilação completa de todas as chaves e memórias locais.', icon: Trash2, color: 'text-red-400' }
-                            ].map((item, i) => (
-                              <div key={i} className="flex gap-5 p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group">
-                                <div className={cn("p-3 rounded-xl bg-black/20 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", item.color)}>
-                                  <item.icon size={24} strokeWidth={2} />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <h4 className="text-[13px] font-black text-white uppercase tracking-widest leading-none mt-1">{item.title}</h4>
-                                  <p className="text-[11px] text-white/50 leading-relaxed font-medium transition-colors group-hover:text-white/70">{item.desc}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                          <ChevronDown size={14} className={cn("text-[#8e918f] transition-transform duration-300", isSystemPromptExpanded && "rotate-180")} />
+                        </button>
                         
-                        <div className="pt-8 border-t border-white/10">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 p-6 rounded-2xl bg-red-500/5 border border-red-500/20 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-8 opacity-5">
-                              <Trash2 size={120} />
-                            </div>
-                            <div className="space-y-3 relative z-10 max-w-lg">
-                              <h4 className="text-[14px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
-                                <Shield size={16} /> Protócolo de Expurgo
-                              </h4>
-                              <p className="text-[12px] text-red-100/50 leading-relaxed font-medium">Acionar este mecanismo aniquila instantânea e permanentemente todas as suas chaves de API, presets salvos, histórico de conversões e preferências do sistema. Não há como reverter.</p>
-                            </div>
-                            <button onClick={() => { if(confirm('⚠️ TERMINAR PERMANENTEMENTE TODAS AS CONFIGURAÇÕES E DADOS LOCAIS?\n\nESTA AÇÃO É IRREVERSÍVEL.')) { setChatHistory([]); resetChat(); setApiKey(''); setApiPresets([]); setActivePresetId(null); localStorage.clear(); window.location.reload(); } }} className="relative z-10 bg-red-500 hover:bg-red-600 text-white transition-all transform hover:-translate-y-0.5 shadow-[0_0_20px_rgba(239,68,68,0.3)] text-[12px] font-black uppercase tracking-widest px-8 py-3.5 rounded-xl whitespace-nowrap">
-                              Resetar Nexus
-                            </button>
-                          </div>
-                        </div>
+                        <AnimatePresence>
+                          {isSystemPromptExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <Textarea 
+                                value={draftSystemPrompt} 
+                                onChange={(e) => setDraftSystemPrompt(e.target.value)} 
+                                className="bg-black/20 border-white/10 rounded-xl px-4 py-3 text-[12px] h-[80px] custom-scrollbar focus:ring-1 focus:ring-blue-500/30 resize-none" 
+                                placeholder="Instruções de base para a IA..."
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {hasSettingsChanges && (
-                <div className="absolute bottom-20 inset-x-4 flex justify-center z-50 pointer-events-none">
-                  <div className="bg-[#1a1b1e]/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 w-full max-w-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto">
-                    <div className="flex items-center gap-2 text-[12px] text-[#8e918f]">
-                      <Activity size={14} className="text-blue-400 animate-pulse" />
-                      <span>Nexus Engine: Há modificações pendentes</span>
-                    </div>
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                      <Button variant="ghost" onClick={() => setActiveTab('chat')} className="flex-1 md:flex-none text-[#8e918f] hover:text-white">Cancelar</Button>
-                      <Button onClick={saveSettings} className="flex-1 md:flex-none font-bold px-8 h-10 rounded-xl bg-[#c2e7ff] text-[#001d35] hover:bg-[#b5cffb]">Salvar Alterações</Button>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {settingsTab === 'agent' && (
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
+                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Identidades Nexus</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {allAgents.map(agent => (
+                        <div 
+                          key={agent.id} 
+                          onClick={() => { setDraftActiveAgentId(agent.id); setDraftSystemPrompt(agent.systemPrompt); }} 
+                          className={cn(
+                            "group relative p-5 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden", 
+                            draftActiveAgentId === agent.id 
+                              ? "bg-gradient-to-br from-purple-500/20 to-blue-500/10 border-purple-500/40 shadow-lg shadow-purple-500/5 text-white" 
+                              : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.04] hover:text-white"
+                          )}
+                        >
+                          {draftActiveAgentId === agent.id && (
+                            <div className="absolute top-0 right-0 p-1.5 bg-purple-500 text-white rounded-bl-xl">
+                              <CheckCircle2 size={10} />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500 shadow-xl", 
+                              agent.color,
+                              draftActiveAgentId === agent.id ? "ring-2 ring-white/20" : ""
+                            )}>
+                              <AgentIcon iconName={agent.iconName} size={22} />
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-[13px] font-black uppercase tracking-widest truncate">{agent.name}</span>
+                              <span className="text-[10px] font-medium opacity-50 truncate">{agent.shortDescription || 'Persona especializada'}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-4 pt-4 border-t border-white/5">
+                            <p className="text-[10px] line-clamp-2 opacity-40 italic leading-relaxed">
+                              {agent.systemPrompt}
+                            </p>
+                          </div>
+                          
+                          {customAgents.some(a => a.id === agent.id) && (
+                            <div className="absolute bottom-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentForm(agent); setIsAgentFormOpen(true); }}
+                                className="p-2 hover:bg-white/10 rounded-lg text-[#8e918f] hover:text-white transition-colors"
+                              >
+                                <Terminal size={12} />
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); deleteAgent(agent.id); }}
+                                className="p-2 hover:bg-red-400/10 rounded-lg text-[#8e918f] hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <button 
+                        onClick={() => { setEditingAgent(null); setAgentForm({}); setIsAgentFormOpen(true); }}
+                        className="p-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/20 transition-all flex flex-col items-center justify-center gap-4 group min-h-[140px]"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:bg-white/[0.08] transition-all group-hover:-translate-y-1">
+                          <Plus size={20} className="text-[#8e918f] group-hover:text-white transition-colors" />
+                        </div>
+                        <span className="text-[10px] font-black text-[#8e918f] group-hover:text-white uppercase tracking-[0.2em]">Sincronizar Nova Persona</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {settingsTab === 'security' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-10">
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setSettingsTab('overview')} className="text-[#8e918f] hover:text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2"><ArrowLeft size={14} /> VOLTAR</button>
+                      <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Protocolos de Segurança</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                          <ShieldCheck size={20} />
+                        </div>
+                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Storage Local Isolado</h4>
+                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Suas chaves de API e histórico de conversas são armazenados exclusivamente na memória local do seu navegador (LocalStorage). Nenhum dado é enviado para nossos servidores.</p>
+                      </div>
+
+                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                          <Lock size={20} />
+                        </div>
+                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Criptografia em Trânsito</h4>
+                        <p className="text-[12px] text-[#8e918f] leading-relaxed">As comunicações com o modelo Gemini utilizam túneis HTTPS protegidos por TLS 1.3, garantindo que o conteúdo dos prompts seja inacessível por terceiros.</p>
+                      </div>
+
+                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                          <EyeOff size={20} />
+                        </div>
+                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Modo Privado Permanente</h4>
+                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Não utilizamos seus dados para treinamento de modelos de terceiros. Sua privacidade é o pilar central da arquitetura Nexus.</p>
+                      </div>
+
+                      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                          <Activity size={20} />
+                        </div>
+                        <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Auditoria de Chamadas</h4>
+                        <p className="text-[12px] text-[#8e918f] leading-relaxed">Você tem controle total sobre as chamadas de API, podendo monitorar o consumo e alternar entre diferentes chaves instantaneamente.</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400/60">
+                      <CheckCircle2 size={14} />
+                      SISTEMA STATUS: PROTEGIDO
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {hasSettingsChanges && (
+              <div className="absolute bottom-20 inset-x-4 flex justify-center z-50">
+                <div className="bg-[#1a1b1e]/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between gap-4 w-full max-w-2xl">
+                  <span className="text-[12px] text-[#8e918f]">Modificações pendentes...</span>
+                  <div className="flex gap-3">
+                     <Button variant="ghost" onClick={() => setActiveTab('chat')} className="text-[#8e918f]">Cancelar</Button>
+                     <Button onClick={saveSettings} className="bg-[#c2e7ff] text-[#001d35] font-bold">Salvar</Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
-      {/* Subagent Editor Dialog */}
+      <FloatingNav 
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        setSettingsTab={setSettingsTab}
+        setIsSidebarOpen={setIsSidebarOpen}
+        hasFiles={hasFiles}
+      />
+
+      <Dialog open={isPresetFormOpen} onOpenChange={setIsPresetFormOpen}>
+        <DialogContent className="max-w-md bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] p-6 rounded-2xl">
+          <DialogHeader><DialogTitle>{editingPreset ? 'Editar Preset API' : 'Novo Preset API'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-4">
+             <div className="space-y-2">
+               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Identificação</label>
+               <Input value={presetForm.name || ''} onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })} placeholder="Ex: Produção, Testes..." className="bg-transparent border-[#333538]" />
+             </div>
+             <div className="space-y-2">
+               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Gemini API Key</label>
+               <Input type="password" value={presetForm.apiKey || ''} onChange={(e) => setPresetForm({ ...presetForm, apiKey: e.target.value })} placeholder="Past key here..." className="bg-transparent border-[#333538]" />
+             </div>
+             <div className="flex justify-end gap-3 pt-4">
+                <Button variant="ghost" onClick={() => setIsPresetFormOpen(false)}>Cancelar</Button>
+                <Button onClick={addOrUpdatePreset} className="bg-blue-400 text-[#001d35] font-bold">Confirmar</Button>
+             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isAgentFormOpen} onOpenChange={setIsAgentFormOpen}>
-        <DialogContent className="max-w-md bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] p-6 rounded-2xl shadow-2xl z-[101]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {editingAgent ? <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400"><Edit2 size={18} /></div> : <div className="p-1.5 rounded-lg bg-green-500/10 text-green-400"><Plus size={18} /></div>}
-              <span>{editingAgent ? 'Editar Subagente' : 'Novo Subagente'}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 pt-4">
-             {/* Name */}
+        <DialogContent className="max-w-md bg-[#1a1b1e] border-[#333538] text-[#f1f3f4] p-6 rounded-2xl">
+          <DialogHeader><DialogTitle className="uppercase tracking-widest font-black text-sm">{editingAgent ? 'Ajustar Parâmetros de Identidade' : 'Forjar Nova Identidade'}</DialogTitle></DialogHeader>
+          <div className="space-y-6 pt-6">
              <div className="space-y-2">
-               <label className="text-[11px] font-bold text-[#c4c7c5] uppercase tracking-widest pl-1">Nome do Agente</label>
-               <Input 
-                 value={agentForm.name || ''}
-                 onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
-                 className="bg-transparent border-[#333538] focus-visible:border-[#a8c7fa]/50 text-[#f1f3f4] rounded-xl h-11"
-                 placeholder="Ex: Especialista em Python"
-               />
+               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Nomenclatura</label>
+               <Input value={agentForm.name || ''} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} placeholder="Ex: Engenheiro de React, Designer..." className="bg-transparent border-[#333538] h-11" />
              </div>
-             {/* Description */}
+             
              <div className="space-y-2">
-               <label className="text-[11px] font-bold text-[#c4c7c5] uppercase tracking-widest pl-1">Descrição Curta</label>
-               <Input 
-                 value={agentForm.shortDescription || ''}
-                 onChange={(e) => setAgentForm({ ...agentForm, shortDescription: e.target.value })}
-                 className="bg-transparent border-[#333538] focus-visible:border-[#a8c7fa]/50 text-[#f1f3f4] rounded-xl h-11"
-                 placeholder="Ex: Ajuda com scripts e automação"
-               />
-             </div>
-             {/* System Prompt */}
-             <div className="space-y-2">
-               <label className="text-[11px] font-bold text-[#c4c7c5] uppercase tracking-widest pl-1">Instruções de Sistema</label>
-               <Textarea 
-                 value={agentForm.systemPrompt || ''}
-                 onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })}
-                 className="bg-[#131314] border-[#333538] focus-visible:border-[#a8c7fa]/50 text-[#f1f3f4] min-h-[140px] rounded-xl resize-none font-mono text-[13px] leading-relaxed p-4"
-                 placeholder="Defina o comportamento e diretrizes deste agente..."
-               />
+               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Breve Descrição</label>
+               <Input value={agentForm.shortDescription || ''} onChange={(e) => setAgentForm({ ...agentForm, shortDescription: e.target.value })} placeholder="Ex: Especialista em UI/UX..." className="bg-transparent border-[#333538] h-11" />
              </div>
 
-             {/* Icon and Color Selection */}
-             <div className="flex flex-col sm:flex-row gap-6">
-                <div className="flex-1 space-y-2">
-                  <label className="text-[11px] font-bold text-[#c4c7c5] uppercase tracking-widest pl-1">Ícone</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                     {['Brain', 'Sparkles', 'Shield', 'Terminal', 'Activity', 'Users'].map(icon => (
-                       <button 
-                         key={icon}
-                         type="button"
-                         onClick={() => setAgentForm({ ...agentForm, iconName: icon })}
-                         className={cn(
-                           "p-2.5 rounded-xl border transition-all",
-                           agentForm.iconName === icon ? "bg-[#a8c7fa]/20 border-[#a8c7fa] text-[#a8c7fa] scale-105" : "border-[#333538] text-[#8e918f] hover:bg-white/5"
-                         )}
-                       >
-                         {icon === 'Brain' && <Brain size={18} />}
-                         {icon === 'Sparkles' && <Sparkles size={18} />}
-                         {icon === 'Shield' && <Shield size={18} />}
-                         {icon === 'Terminal' && <Terminal size={18} />}
-                         {icon === 'Activity' && <Activity size={18} />}
-                         {icon === 'Users' && <Users size={18} />}
-                       </button>
-                     ))}
-                  </div>
-                </div>
-
-                <div className="flex-1 space-y-2">
-                  <label className="text-[11px] font-bold text-[#c4c7c5] uppercase tracking-widest pl-1">Cor Base</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                     {['bg-purple-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'].map(color => (
-                       <button 
-                         key={color}
-                         type="button"
-                         onClick={() => setAgentForm({ ...agentForm, color })}
-                         className={cn(
-                           "w-9 h-9 rounded-xl border-2 transition-all p-0",
-                           color,
-                           agentForm.color === color ? "border-white scale-110 shadow-lg" : "border-transparent opacity-60 hover:opacity-100"
-                         )}
-                       />
-                     ))}
-                  </div>
-                </div>
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Ícone (Lucide)</label>
+                 <Select value={agentForm.iconName || 'Brain'} onValueChange={(val: string | null) => val && setAgentForm({ ...agentForm, iconName: val })}>
+                   <SelectTrigger className="bg-transparent border-[#333538] h-11"><SelectValue /></SelectTrigger>
+                   <SelectContent className="bg-[#1a1b1e] border-white/10">
+                     <SelectItem value="Brain">Brain</SelectItem>
+                     <SelectItem value="Code">Code</SelectItem>
+                     <SelectItem value="Terminal">Terminal</SelectItem>
+                     <SelectItem value="Layout">Layout</SelectItem>
+                     <SelectItem value="Shield">Shield</SelectItem>
+                     <SelectItem value="Zap">Zap</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+               <div className="space-y-2">
+                 <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Sinalização Visual</label>
+                 <Select value={agentForm.color || 'bg-purple-500'} onValueChange={(val: string | null) => val && setAgentForm({ ...agentForm, color: val })}>
+                   <SelectTrigger className="bg-transparent border-[#333538] h-11"><SelectValue /></SelectTrigger>
+                   <SelectContent className="bg-[#1a1b1e] border-white/10">
+                     <SelectItem value="bg-purple-500">Púrpura</SelectItem>
+                     <SelectItem value="bg-blue-500">Azul</SelectItem>
+                     <SelectItem value="bg-emerald-500">Esmeralda</SelectItem>
+                     <SelectItem value="bg-amber-500">Âmbar</SelectItem>
+                     <SelectItem value="bg-rose-500">Rosa</SelectItem>
+                     <SelectItem value="bg-zinc-500">Zinco</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
              </div>
 
-             <div className="flex justify-end gap-3 pt-6 border-t border-[#333538]">
-                <Button 
-                  type="button"
-                  variant="ghost" 
-                  onClick={() => setIsAgentFormOpen(false)} 
-                  className="text-[#8e918f] hover:text-white hover:bg-white/5 h-11 px-6 rounded-xl font-medium"
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={addOrUpdateAgent}
-                  className="bg-[#a8c7fa] hover:brightness-110 text-[#001d35] font-bold h-11 px-8 rounded-xl shadow-lg shadow-blue-500/20"
-                  disabled={!agentForm.name || !agentForm.systemPrompt}
-                >
-                  {editingAgent ? 'Salvar Alterações' : 'Criar Subagente'}
-                </Button>
+             <div className="space-y-2">
+               <label className="text-[10px] uppercase font-black tracking-widest text-[#8e918f]">Matriz de Comportamento (System Prompt)</label>
+               <Textarea value={agentForm.systemPrompt || ''} onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })} placeholder="Defina como este agente deve se comportar..." className="bg-[#131314] border-[#333538] min-h-[150px] custom-scrollbar focus:ring-1 focus:ring-purple-500/30" />
+             </div>
+
+             <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <Button variant="ghost" onClick={() => setIsAgentFormOpen(false)} className="text-[#8e918f]">Abortar</Button>
+                <Button onClick={addOrUpdateAgent} className="bg-purple-500 text-white font-black uppercase tracking-widest text-[11px] h-11 px-8">Sincronizar</Button>
              </div>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isClearHistoryModalOpen} onOpenChange={setIsClearHistoryModalOpen}>
-        <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 shadow-2xl backdrop-blur-3xl rounded-2xl">
-          <DialogHeader className="mb-4 text-left">
-            <DialogTitle className="text-[18px] font-black tracking-widest uppercase flex items-center gap-2 text-white">
-              <Trash2 className="text-red-400" size={20} />
-              Limpar Projetos
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-[13px] text-[#b2b5b4] leading-relaxed">
-            Tem certeza de que deseja apagar permanentemente todos os seus projetos? Esta ação não pode ser desfeita.
-          </div>
+        <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 rounded-2xl">
+          <DialogTitle>Limpar Histórico?</DialogTitle>
+          <p className="text-[13px] text-[#8e918f] mt-2">Esta ação apagará todos os seus projetos salvos localmente.</p>
           <div className="flex justify-end gap-3 mt-8">
-            <Button 
-              variant="ghost" 
-              onClick={() => setIsClearHistoryModalOpen(false)} 
-              className="text-[#8e918f] hover:text-white hover:bg-white/5 h-10 px-4 rounded-xl font-medium"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={() => {
-                setChatHistory([]);
-                localStorage.removeItem('nexus_chat_history');
-                resetChat();
-                setIsClearHistoryModalOpen(false);
-              }}
-              className="bg-red-500 hover:bg-red-600 text-white font-bold h-10 px-6 rounded-xl shadow-lg border border-red-400/20"
-            >
-              Excluir Tudo
-            </Button>
+            <Button variant="ghost" onClick={() => setIsClearHistoryModalOpen(false)}>Melhor não</Button>
+            <Button onClick={() => { setChatHistory([]); localStorage.removeItem('nexus_chat_history'); resetChat(); setIsClearHistoryModalOpen(false); }} className="bg-red-500 hover:bg-red-600">Sim, apagar tudo</Button>
           </div>
         </DialogContent>
       </Dialog>
       
-      {/* Dynamic styles injected specifically for syntax highlight & markdown format */}
       <style>{`
-        .markdown-prose p { margin-bottom: 0.75rem; color: #e3e3e3; }
-        .markdown-prose p:last-child { margin-bottom: 0; }
-        .markdown-prose code { 
-          background: #282a2d; 
-          padding: 0.15rem 0.35rem; 
-          border-radius: 0.3rem; 
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 0.9em; 
-          color: #f1f3f4;
-          border: 1px solid #333538;
-        }
-        .markdown-prose blockquote {
-          border-left: 3px solid #a8c7fa/40;
-          padding-left: 1rem;
-          font-style: italic;
-          color: #8e918f;
-          margin: 1rem 0;
-        }
-        .markdown-prose h1, .markdown-prose h2, .markdown-prose h3 { font-weight: 500; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #f1f3f4; }
-        .markdown-prose h1 { font-size: 1.25em; }
-        .markdown-prose h2 { font-size: 1.15em; border-bottom: 1px solid #333538; padding-bottom: 0.35em; }
-        .markdown-prose h3 { font-size: 1.05em; }
-        .markdown-prose ul { list-style-type: none; padding-left: 1rem; margin-bottom: 0.75rem; }
-        .markdown-prose ul li { position: relative; margin-bottom: 0.25rem; }
-        .markdown-prose ul li::before {
-          content: "";
-          position: absolute;
-          left: -0.75rem;
-          top: 0.55rem;
-          height: 0.3rem;
-          width: 0.3rem;
-          border-radius: 50%;
-          background-color: #a8c7fa;
-        }
-        .markdown-prose ol { list-style-type: decimal; padding-left: 1rem; margin-bottom: 0.75rem; color: #e3e3e3; }
-        .markdown-prose ol li { margin-bottom: 0.25rem; }
-        .markdown-prose a { color: #a8c7fa; text-decoration: none; transition: color 0.2s ease; }
-        .markdown-prose a:hover { text-decoration: underline; color: #d3e3fd; }
-        
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333538; border-radius: 4px; border: 2px solid #131314; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #5f6368; }
-        .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
       `}</style>
+      <Toaster position="top-right" theme="dark" richColors closeButton />
     </div>
   );
 }
