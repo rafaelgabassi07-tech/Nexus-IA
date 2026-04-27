@@ -324,19 +324,18 @@ export default function App() {
   useEffect(() => {
     // Lista de modelos suportados - Por favor, NÃO remova para evitar resets automáticos indesejados
     const validModels = [
+      'gemini-3.1-pro-preview',
+      'gemini-3.1-flash-lite-preview',
       'gemini-3-flash-preview', 
-      'gemini-3-flash-lite-preview', 
       'gemini-2.5-flash', 
       'gemini-2.0-flash', 
       'gemini-2.0-flash-lite', 
-      'gemini-1.5-flash', 
-      'gemini-1.5-pro', 
-      'gemini-1.0-pro'
+      'gemini-flash-latest'
     ];
     if (!validModels.includes(selectedModel)) {
-      setSelectedModel('gemini-2.0-flash');
-      setDraftSelectedModel('gemini-2.0-flash');
-      safeLocalStorageSet('nexus_selected_model', 'gemini-2.0-flash');
+      setSelectedModel('gemini-3-flash-preview');
+      setDraftSelectedModel('gemini-3-flash-preview');
+      safeLocalStorageSet('nexus_selected_model', 'gemini-3-flash-preview');
     }
   }, [selectedModel, setDraftSelectedModel]);
   const [draftTemperature, setDraftTemperature] = useState(temperature);
@@ -535,8 +534,9 @@ export default function App() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      // If we are within 100px of the bottom, we consider it "at bottom"
-      const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      // If we are within 30px of the bottom, we consider it "at bottom"
+      // Smaller threshold allows users to "break away" from auto-scroll more easily
+      const nearBottom = scrollHeight - scrollTop - clientHeight < 30;
       setIsAtBottom(nearBottom);
     };
 
@@ -1470,8 +1470,8 @@ export default function App() {
                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
                    <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                   <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                   <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                   <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
                  </SelectContent>
                </Select>
              </div>
@@ -1890,13 +1890,13 @@ export default function App() {
                         </div>
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                        <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
+                        <SelectItem value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</SelectItem>
                         <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                        <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
                         <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                         <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
                         <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                        <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -2312,13 +2312,13 @@ export default function App() {
                                 <Select value={draftSelectedModel} onValueChange={(val) => val && setDraftSelectedModel(val)}>
                                   <SelectTrigger className="bg-black/20 border-white/10 text-white rounded-xl h-11 px-4 text-[13px] focus:ring-1 focus:border-blue-400/50 transition-all hover:bg-black/40"><SelectValue /></SelectTrigger>
                                   <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
+                                    <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
+                                    <SelectItem value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</SelectItem>
                                     <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                                    <SelectItem value="gemini-3-flash-lite-preview">Gemini 3 Flash Lite</SelectItem>
                                     <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
                                     <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</SelectItem>
-                                    <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                                    <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                                    <SelectItem value="gemini-flash-latest">Gemini 1.5 Flash (Latest)</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>

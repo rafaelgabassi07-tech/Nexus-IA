@@ -44,16 +44,15 @@ app.post('/api/chat', limiter, async (req, res) => {
     return res.status(400).json({ error: 'Temperature inválida. Deve ser entre 0 e 2.' });
   }
 
-  // Whitelist de modelos permitidos - Por favor, NÃO remova modelos válidos (como 2.5 ou 3.0) para evitar quebras
+  // Whitelist de modelos permitidos - Por favor, NÃO remova modelos válidos para evitar quebras
   const ALLOWED_MODELS = [
+    'gemini-3.1-pro-preview',
+    'gemini-3.1-flash-lite-preview',
     'gemini-3-flash-preview',
-    'gemini-3-flash-lite-preview',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-1.0-pro'
+    'gemini-flash-latest'
   ];
   if (model && !ALLOWED_MODELS.includes(model)) {
     return res.status(400).json({ error: `Modelo '${model}' não permitido.` });
@@ -64,7 +63,7 @@ app.post('/api/chat', limiter, async (req, res) => {
     return res.status(400).json({ error: 'Campo messages inválido.' });
   }
 
-  const targetModel = model || 'gemini-2.0-flash';
+  const targetModel = model || 'gemini-3-flash-preview';
 
   let clientClosed = false;
   req.on('close', () => {
@@ -99,7 +98,7 @@ app.post('/api/chat', limiter, async (req, res) => {
     let lastError;
     
     // Lista de modelos para tentar (começa pelo requisitado e usa opções mais seguras de fallback)
-    const baseFallback = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    const baseFallback = ['gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-flash-latest'];
     const modelsToTry = [...new Set([targetModel, ...baseFallback])];
 
     for (let mIndex = 0; mIndex < modelsToTry.length; mIndex++) {
