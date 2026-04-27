@@ -1159,33 +1159,31 @@ export default function App() {
             className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-smooth custom-scrollbar relative flex flex-col"
           >
             {messages.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-700 min-h-0">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
-                  <Brain size={24} className="text-blue-400" />
+              <div className="flex-1 flex flex-col items-center justify-center py-4 px-2 text-center animate-in fade-in duration-700 w-full min-h-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] bg-blue-500/10 flex items-center justify-center mb-3 border border-blue-500/20 shrink-0">
+                  <Brain size={16} className="text-blue-400" />
                 </div>
-                <h2 className="text-xl font-black text-white uppercase tracking-widest mb-2">Construa com o Nexus IA</h2>
-                <p className="text-[12px] font-medium text-[#8e918f] max-w-md mb-8 leading-relaxed">
-                  Descreva o que você quer criar. O Nexus selecionará automaticamente o especialista mais adequado para a tarefa.
+                <h2 className="text-[12px] sm:text-[13px] font-black text-white uppercase tracking-widest mb-1 sm:mb-1.5 shrink-0">NEXUS IA</h2>
+                <p className="text-[9px] sm:text-[10px] font-bold text-[#8e918f] max-w-[260px] mb-4 sm:mb-6 leading-relaxed uppercase tracking-widest text-center shrink-0">
+                  Descreva o seu app e o agente mais adequado será alocado.
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-3 w-full max-w-3xl">
+                <div className="flex flex-col gap-2 w-full max-w-lg overflow-y-auto pr-1 pb-4 custom-scrollbar flex-shrink">
                   {[
-                    { label: "App de Clima com gráficos", prompt: "Crie um aplicativo de previsão do tempo responsivo com gráficos de temperatura dos últimos dias e visualização atual usando layout moderno e componentes do shadcn.", icon: Layout, color: "text-pink-400" },
-                    { label: "Dashboard Financeiro", prompt: "Construa um dashboard financeiro moderno contendo cards de resumo, gráfico de despesas e receitas, e uma tabela de transações recentes com filtro.", icon: Code, color: "text-blue-400" },
-                    { label: "Jogo da Velha Avançado", prompt: "Desenvolva um jogo da velha (Tic-Tac-Toe) com modo escuro, placar de vitórias, histórico de jogadas e uma interface animada.", icon: Terminal, color: "text-emerald-400" },
-                    { label: "Análise de Código Extrema", prompt: "Revise detalhadamente o meu código em busca de problemas de segurança, más práticas e gargalos de performance, sugerindo melhorias pontuais.", icon: Activity, color: "text-orange-400" }
+                    { label: "App de Clima Responsivo", prompt: "Crie um aplicativo de previsão do tempo responsivo com gráficos de temperatura dos últimos dias e visualização atual.", icon: Layout, color: "text-pink-400" },
+                    { label: "Dashboard Financeiro", prompt: "Construa um dashboard financeiro moderno contendo cards de resumo, gráfico de despesas e receitas.", icon: Code, color: "text-blue-400" },
+                    { label: "Jogo da Velha", prompt: "Desenvolva um jogo da velha avançado com modo escuro e placar de vitórias, usando lucide-react.", icon: Terminal, color: "text-emerald-400" },
+                    { label: "Design de Landing Page", prompt: "Gere uma landing page minimalista e futurista para uma IA, com animações e efeitos glassmorphism.", icon: Activity, color: "text-orange-400" }
                   ].map((s, i) => (
                     <button 
                       key={i} 
                       onClick={() => setInputMessage(s.prompt)}
-                      className="group flex flex-col items-start text-left p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/20 transition-all cursor-pointer w-full sm:w-[calc(50%-6px)] relative overflow-hidden"
+                      className="group flex items-center text-left py-2.5 px-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all cursor-pointer w-full relative overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 mb-1.5 relative z-10">
-                        <s.icon size={14} className={s.color} />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{s.label}</span>
+                      <s.icon size={12} className={cn("mr-2.5 shrink-0", s.color)} />
+                      <div className="flex flex-col min-w-0">
+                         <span className="text-[10px] font-black text-white/90 uppercase tracking-widest truncate leading-none mb-1">{s.label}</span>
+                         <span className="text-[9px] text-[#8e918f] font-medium truncate opacity-70 group-hover:opacity-100 transition-opacity">"{s.prompt}"</span>
                       </div>
-                      <p className="text-[11px] text-[#8e918f] font-medium line-clamp-2 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">
-                        "{s.prompt}"
-                      </p>
                     </button>
                   ))}
                 </div>
