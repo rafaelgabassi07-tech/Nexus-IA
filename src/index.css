@@ -141,6 +141,38 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  .markdown-prose {
+    @apply text-[14px] leading-[1.6] text-foreground font-sans break-words;
+  }
+  .markdown-prose p {
+    @apply mb-4 last:mb-0;
+  }
+  .markdown-prose h1, .markdown-prose h2, .markdown-prose h3, .markdown-prose h4 {
+    @apply font-bold tracking-tight text-foreground mt-8 mb-4 border-b border-white/10 pb-2;
+  }
+  .markdown-prose h1 { @apply text-2xl; }
+  .markdown-prose h2 { @apply text-xl; }
+  .markdown-prose h3 { @apply text-lg; }
+  .markdown-prose h4 { @apply text-base; }
+  .markdown-prose ul {
+    @apply list-disc pl-6 mb-4 space-y-1;
+  }
+  .markdown-prose ol {
+    @apply list-decimal pl-6 mb-4 space-y-1;
+  }
+  .markdown-prose li {
+    @apply mb-1 leading-relaxed;
+  }
+  .markdown-prose strong {
+    @apply font-bold text-foreground;
+  }
+  .markdown-prose a {
+    @apply text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors;
+  }
+  .markdown-prose br {
+    @apply block content-[''] pb-2;
+  }
 }
 
 @layer base {

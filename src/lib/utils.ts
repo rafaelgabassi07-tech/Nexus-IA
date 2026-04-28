@@ -94,7 +94,7 @@ export function formatTokenCount(count: number): string {
   return (count / 1000).toFixed(1) + 'k';
 }
 
-export const extractFilesFromMarkdown = (content: string) => {
+export const extractFilesFromMarkdown = (content: string, uniquePrefix: string = '') => {
   const files: { name: string, lang: string, code: string }[] = [];
   const lines = content.split('\n');
   
@@ -131,13 +131,31 @@ export const extractFilesFromMarkdown = (content: string) => {
         }
 
         if (!name) {
-          name = `nexus_asset_${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang === 'react' ? 'tsx' : lang}`;
+          name = `nexus_asset_${uniquePrefix ? uniquePrefix + '_' : ''}${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang === 'react' ? 'tsx' : lang}`;
         }
         
         currentFile = { name, lang, code: [] };
       } else if (currentFenceLength >= fenceLength) {
         // Closing fence
         if (currentFile) {
+          // If name is still generic, check first 3 lines for a filename
+          if (currentFile.name.startsWith('nexus_asset_')) {
+            for (let j = 0; j < Math.min(3, currentFile.code.length); j++) {
+              const fileLineMatch = currentFile.code[j].match(/(?:file|arquivo)?:\s*([a-zA-Z0-9.\-_/\\]+\.[a-zA-Z0-9]+)/i) || 
+                                    currentFile.code[j].match(/^\s*(?:\/\/\/?|\#|\<!--)\s*([a-zA-Z0-9.\-_/\\]+\.[a-zA-Z0-9]+)\s*(?:-->)?\s*$/);
+              if (fileLineMatch) {
+                currentFile.name = fileLineMatch[1];
+                // Remove the comment line if it's just the filename
+                if (currentFile.code[j].trim().startsWith('//') || currentFile.code[j].trim().startsWith('#')) {
+                  if (currentFile.code[j].length < fileLineMatch[1].length + 15) {
+                    currentFile.code.splice(j, 1);
+                  }
+                }
+                break;
+              }
+            }
+          }
+
           files.push({
             name: currentFile.name,
             lang: currentFile.lang,
@@ -158,6 +176,16 @@ export const extractFilesFromMarkdown = (content: string) => {
 
   // Handle unclosed fences gracefully
   if (inFence && currentFile) {
+    if (currentFile.name.startsWith('nexus_asset_')) {
+      for (let j = 0; j < Math.min(3, currentFile.code.length); j++) {
+        const fileLineMatch = currentFile.code[j].match(/(?:file|arquivo)?:\s*([a-zA-Z0-9.\-_/\\]+\.[a-zA-Z0-9]+)/i) || 
+                              currentFile.code[j].match(/^\s*(?:\/\/\/?|\#|\<!--)\s*([a-zA-Z0-9.\-_/\\]+\.[a-zA-Z0-9]+)\s*(?:-->)?\s*$/);
+        if (fileLineMatch) {
+          currentFile.name = fileLineMatch[1];
+          break;
+        }
+      }
+    }
     files.push({
       name: currentFile.name,
       lang: currentFile.lang,

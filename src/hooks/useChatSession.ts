@@ -29,6 +29,11 @@ export function useChatSession({
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [fileHistory, setFileHistory] = useState<{ timestamp: number; files: GeneratedFile[] }[]>([]);
   
+  const generatedFilesRef = useRef<GeneratedFile[]>([]);
+  useEffect(() => {
+    generatedFilesRef.current = generatedFiles;
+  }, [generatedFiles]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -102,8 +107,9 @@ export function useChatSession({
 
     // ARCHITECTURE FIX: Inject current files context for the LLM
     // This allows the model to perform "edits" instead of just adding new code.
-    const filesContext = generatedFiles.length > 0 
-      ? `\n\nESTADO ATUAL DO PROJETO:\n${generatedFiles.map(f => `Arquivo: ${f.name}\n\`\`\`${f.lang}\n${f.code}\n\`\`\``).join('\n\n')}`
+    const currentFiles = generatedFilesRef.current;
+    const filesContext = currentFiles.length > 0 
+      ? `\n\nESTADO ATUAL DO PROJETO:\n${currentFiles.map(f => `Arquivo: ${f.name}\n\`\`\`${f.lang}\n${f.code}\n\`\`\``).join('\n\n')}`
       : '';
 
     setIsLoading(true);
@@ -210,7 +216,7 @@ export function useChatSession({
                   // File detection
                   const newContent = fullResponse.slice(lastContentLength);
                   if (newContent.length > 2) {
-                    const currentFiles = extractFilesFromMarkdown(fullResponse);
+                    const currentFiles = extractFilesFromMarkdown(fullResponse, messageId.slice(0, 5));
                     if (currentFiles.length > turnGeneratedFilesCount) {
                       turnGeneratedFilesCount = currentFiles.length;
                       const newFile = currentFiles[currentFiles.length - 1];
@@ -289,7 +295,7 @@ export function useChatSession({
       }
 
       // Finalize
-      const finalFiles = extractFilesFromMarkdown(fullResponse);
+      const finalFiles = extractFilesFromMarkdown(fullResponse, messageId.slice(0, 5));
       if (finalFiles.length > 0) {
         setGeneratedFiles(prev => {
           const merged = [...prev];
@@ -317,7 +323,7 @@ export function useChatSession({
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isLoading, activeAgent, apiKey, selectedModel, systemPrompt, temperature, searchGrounding, generatedFiles.length]);
+  }, [messages, isLoading, activeAgent, apiKey, selectedModel, systemPrompt, temperature, searchGrounding]);
 
   return {
     messages,

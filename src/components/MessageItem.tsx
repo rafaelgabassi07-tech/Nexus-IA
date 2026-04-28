@@ -6,7 +6,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { 
-  Sparkles, Check, ChevronDown, FileCode, Edit2, Copy, Brain, Layout, Activity, RotateCcw
+  Check, ChevronDown, FileCode, Edit2, Copy, Brain, Layout, Activity, RotateCcw
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Button } from './ui/button';
@@ -71,7 +71,7 @@ export const MessageItem = React.memo(({
         className={cn("flex w-full", message.role === 'user' ? "justify-end" : "justify-start")}
       >
         {message.role === 'user' ? (
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-5 py-4 rounded-3xl rounded-br-sm max-w-[85%] text-[15px] font-medium leading-[1.6] whitespace-pre-wrap shadow-lg shadow-indigo-500/20">
+          <div className="bg-[#1e1e20] text-[#f1f3f4] px-5 py-3.5 rounded-2xl rounded-tr-md max-w-[85%] text-[14px] font-medium leading-relaxed whitespace-pre-wrap border border-white/5 shadow-sm">
             {message.content}
           </div>
         ) : (
@@ -85,49 +85,48 @@ export const MessageItem = React.memo(({
                </AvatarFallback>
             </Avatar>
                         <div className="flex-1 text-[14px] leading-[1.6] text-foreground pr-2 overflow-hidden">
-              {message.steps && (
-                <div className="mb-4 w-full max-w-2xl">
-                  <details className="group/accordion border border-border bg-white/[0.02] rounded-2xl overflow-hidden shadow-sm" open={message.steps.some(s => s.status === 'running')}>
-                    <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none text-[13px] font-bold text-foreground hover:bg-white/[0.04] transition-all bg-white/[0.01]">
+              {message.steps && message.steps.length > 0 && (
+                <div className="mb-3 w-full max-w-[90%] md:max-w-xl">
+                  <details className="group/accordion border border-white/5 bg-white/[0.01] rounded-lg overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
+                    <summary className="flex items-center gap-3 px-3 py-2 cursor-pointer list-none select-none hover:bg-white/[0.02] transition-colors">
                       <div className="relative shrink-0 flex items-center justify-center">
-                        {message.steps.some(s => s.status === 'running') ? (
+                        {message.steps.some((s: any) => s.status === 'running') ? (
                           <div className="relative">
                             <motion.div 
                                animate={{ rotate: 360 }}
                                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                               className="w-4 h-4 rounded-full border-b-2 border-blue-400"
+                               className="w-3 h-3 rounded-full border-b-2 border-blue-400"
                             />
-                            <Sparkles size={8} className="absolute inset-0 m-auto text-blue-400 opacity-80 animate-pulse" />
                           </div>
                         ) : (
-                          <div className="w-4 h-4 rounded-full bg-blue-400/10 flex items-center justify-center">
-                            <Check size={10} className="text-blue-400" strokeWidth={3} />
+                          <div className="w-3.5 h-3.5 rounded-full bg-blue-400/10 flex items-center justify-center">
+                            <Check size={8} className="text-blue-400" strokeWidth={3} />
                           </div>
                         )}
                       </div>
-                      <span className="flex-1 tracking-tight text-foreground/90 uppercase text-[11px] font-black tracking-widest">
-                        {message.steps.some(s => s.status === 'running') ? 'Processando...' : 'Fluxo de Execução'}
+                      <span className="flex-1 tracking-tight text-foreground/70 uppercase text-[9px] font-bold tracking-wider">
+                        {message.steps.some((s: any) => s.status === 'running') ? 'Processando...' : 'Fluxo de Ações'}
                       </span>
-                      <ChevronDown size={18} className="text-muted-foreground/50 transition-transform group-open/accordion:rotate-180 shrink-0" />
+                      <ChevronDown size={12} className="text-muted-foreground/40 transition-transform group-open/accordion:rotate-180 shrink-0" />
                     </summary>
                     
-                    <div className="px-5 pb-5 pt-3 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-300 relative">
-                      <div className="absolute left-[27px] top-4 bottom-8 w-px bg-white/5 z-0" />
+                    <div className="px-3 pb-2 pt-1 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-200 relative">
+                      <div className="absolute left-[17px] top-1 bottom-4 w-px bg-white/5 z-0" />
                       
-                      {message.steps.map((step, i) => (
-                        <div key={i} className="flex items-center gap-4 py-2 group/step relative z-10">
+                      {message.steps.map((step: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2.5 py-0.5 group/step relative z-10">
                           <div className={cn(
-                            "shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-all duration-500",
+                            "shrink-0 w-4 h-4 flex items-center justify-center rounded-full border transition-all duration-300",
                             step.status === 'running' 
-                              ? "bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]" 
+                              ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
                               : step.status === 'success' 
-                                ? "bg-white/[0.03] border-border text-muted-foreground" 
-                                : "bg-transparent border-border text-muted-foreground/40"
+                                ? "bg-white/[0.03] border-white/10 text-muted-foreground" 
+                                : "bg-transparent border-white/5 text-muted-foreground/30"
                           )}>
-                            <step.icon size={12} strokeWidth={2} />
+                            <step.icon size={8} strokeWidth={2.5} />
                           </div>
                           <span className={cn(
-                            "text-[13px] font-medium transition-colors truncate",
+                            "text-[10px] sm:text-[11px] font-medium transition-colors truncate",
                             step.status === 'running' ? "text-foreground" : step.status === 'success' ? "text-muted-foreground" : "text-muted-foreground/40"
                           )}>
                             {step.label}
@@ -136,17 +135,17 @@ export const MessageItem = React.memo(({
                       ))}
                       
                       {hasFiles && isLastMessage && generatedFiles.length > 0 && (
-                        <div className="pt-4 mt-2 border-t border-border">
-                          <div className="flex items-center gap-3 px-1 mb-4">
-                            <div className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                              <Edit2 size={12} className="text-emerald-400" strokeWidth={2} />
+                        <div className="pt-2 mt-2 border-t border-white/5">
+                          <div className="flex items-center gap-2 px-1 mb-1.5">
+                            <div className="w-4 h-4 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20">
+                              <Edit2 size={8} className="text-emerald-400" strokeWidth={2} />
                             </div>
-                            <span className="text-[12px] font-black text-foreground tracking-widest uppercase">
+                            <span className="text-[9px] font-bold text-foreground tracking-wider uppercase">
                               Workdir <span className="ml-1 text-muted-foreground font-medium">({generatedFiles.length})</span>
                             </span>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {generatedFiles.map((f, idx) => (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {generatedFiles.map((f: any, idx: number) => (
                               <button 
                                 key={f.name}
                                 onClick={() => {
@@ -154,16 +153,16 @@ export const MessageItem = React.memo(({
                                    setActiveTab('code');
                                 }}
                                 className={cn(
-                                  "flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all hover:bg-white/[0.06]",
+                                  "flex items-center gap-2 p-1.5 rounded-md border text-left transition-all hover:bg-white/[0.04]",
                                   activeFileIndex === idx 
-                                    ? "bg-white/[0.08] border-white/20" 
-                                    : "bg-white/[0.02] border-border"
+                                    ? "bg-white/[0.06] border-white/10" 
+                                    : "bg-white/[0.01] border-white/5"
                                 )}
                               >
-                                <FileCode size={18} className={activeFileIndex === idx ? "text-emerald-400" : "text-muted-foreground"} />
+                                <FileCode size={12} className={activeFileIndex === idx ? "text-emerald-400" : "text-muted-foreground/70"} />
                                 <span className={cn(
-                                  "text-[12px] font-medium truncate flex-1",
-                                  activeFileIndex === idx ? "text-white" : "text-foreground/70"
+                                  "text-[10px] font-medium truncate flex-1",
+                                  activeFileIndex === idx ? "text-white" : "text-muted-foreground/70"
                                 )}>{f.name.split('/').pop()}</span>
                               </button>
                             ))}
@@ -321,8 +320,13 @@ export const MessageItem = React.memo(({
     </div>
   );
 }, (prev, next) => {
+  const stepsSame = (prev.message.steps?.length === next.message.steps?.length) && 
+                    (!prev.message.steps || prev.message.steps.every((s, i) => s.status === next.message.steps![i].status && s.label === next.message.steps![i].label));
+                    
   return prev.message.content === next.message.content &&
          prev.isLoading === next.isLoading &&
          prev.isLastMessage === next.isLastMessage &&
-         prev.activeFileIndex === next.activeFileIndex;
+         prev.activeFileIndex === next.activeFileIndex &&
+         prev.message.isError === next.message.isError &&
+         stepsSame;
 });

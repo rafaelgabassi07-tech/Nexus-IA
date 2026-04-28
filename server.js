@@ -105,7 +105,7 @@ app.post('/api/chat', limiter, async (req, res) => {
       model: targetModel,
       contents: contents,
       config: {
-        systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+        systemInstruction: systemPrompt || undefined,
         tools: tools,
         temperature: temperature
       }

@@ -585,29 +585,49 @@ export default function App() {
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         <div className={cn(
-          "flex flex-col flex-1 bg-background border-r border-white/10 min-h-0",
-          activeTab !== 'chat' && "hidden md:flex",
-          activeTab === 'settings' && "md:hidden"
+          "flex-1 flex flex-col bg-background border-r border-white/10 min-h-0",
+          (activeTab !== 'chat' && activeTab !== 'settings') && "hidden md:flex",
+          activeTab === 'settings' ? "flex" : (activeTab === 'chat' ? "flex" : "hidden md:flex")
         )}>
-          <ChatLog 
-            messages={messages}
-            isLoading={isLoading}
-            activeAgent={activeAgent}
-            generatedFiles={generatedFiles}
-            activeFileIndex={activeFileIndex}
-            setActiveFileIndex={setActiveFileIndex}
-            setActiveTab={setActiveTab}
-            scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
-            showScrollButton={showScrollButton}
-            scrollToBottom={scrollToBottom}
-            setInputMessage={setInputMessage}
-            handleSendMessage={handleSendMessage}
-            handleRegenerate={handleRegenerate}
-          />
+          {activeTab === 'settings' ? (
+            <div className="flex-1 overflow-hidden h-full">
+              <SettingsPanel 
+                settingsTab={settingsTab} setSettingsTab={setSettingsTab}
+                draftApiKey={draftApiKey} setDraftApiKey={setDraftApiKey}
+                draftSelectedModel={draftSelectedModel} setDraftSelectedModel={setDraftSelectedModel}
+                draftTemperature={draftTemperature} setDraftTemperature={setDraftTemperature}
+                draftSystemPrompt={draftSystemPrompt} setDraftSystemPrompt={setDraftSystemPrompt}
+                draftActiveAgentId={draftActiveAgentId} setDraftActiveAgentId={setDraftActiveAgentId}
+                apiPresets={apiPresets} customAgents={customAgents}
+                hasSettingsChanges={hasSettingsChanges} saveSettings={saveSettings}
+                setIsPresetFormOpen={setIsPresetFormOpen} setEditingPreset={setEditingPreset} deletePreset={deletePreset} setPresetForm={setPresetForm}
+                setIsAgentFormOpen={setIsAgentFormOpen} setEditingAgent={setEditingAgent} deleteAgent={deleteAgent} setAgentForm={setAgentForm}
+                allAgents={allAgents}
+                isSystemPromptExpanded={isSystemPromptExpanded} setIsSystemPromptExpanded={setIsSystemPromptExpanded}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          ) : (
+            <>
+              <ChatLog 
+                messages={messages}
+                isLoading={isLoading}
+                activeAgent={activeAgent}
+                generatedFiles={generatedFiles}
+                activeFileIndex={activeFileIndex}
+                setActiveFileIndex={setActiveFileIndex}
+                setActiveTab={setActiveTab}
+                scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
+                showScrollButton={showScrollButton}
+                scrollToBottom={scrollToBottom}
+                setInputMessage={setInputMessage}
+                handleSendMessage={handleSendMessage}
+                handleRegenerate={handleRegenerate}
+              />
 
-          <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-background shrink-0 border-t border-white/5">
-            <div className="max-w-3xl mx-auto flex flex-col px-1">
-              <div className="relative bg-white/[0.02] border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10 rounded-2xl transition-all duration-200 shadow-xl flex flex-col">
+              <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-background shrink-0 border-t border-white/5">
+                <div className="max-w-3xl mx-auto flex flex-col px-1">
+              <div className="relative bg-white/[0.02] border border-white/5 focus-within:border-white/10 focus-within:ring-2 focus-within:ring-blue-500/20 rounded-2xl transition-all duration-300 shadow-xl flex flex-col">
                 {attachedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
                     {attachedFiles.map((f, i) => (
@@ -731,44 +751,51 @@ export default function App() {
               </div>
             </div>
           </div>
-        </div>
+        </>
+      )}
+    </div>
 
         <div className={cn(
           "flex-1 flex flex-col bg-background min-h-0",
           (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          <div className="hidden md:flex h-[49px] border-b border-white/5 bg-white/[0.01] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
-             <div className="bg-white/5 p-1 rounded-lg flex items-center">
-               <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", activeTab === 'preview' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Canvas</button>
-               <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === 'code' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
-             </div>
-             <div className="flex items-center gap-2">
-                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-white/50 hover:text-white rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
-             </div>
-          </div>
-
-          <div className="flex-1 relative flex flex-col bg-background">
-            {!hasFiles && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-background">
-                <div className="w-20 h-20 rounded-3xl bg-secondary/10 border border-border shadow-2xl flex items-center justify-center mb-6">
-                  {activeTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
-                </div>
-                <p className="text-[18px] font-semibold text-foreground">{activeTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
-                <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{activeTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
-              </div>
-            )}
-
-            <PreviewPane 
-              generatedFiles={generatedFiles}
-              previewKey={previewKey}
-              activeTab={activeTab}
-              isLoading={isLoading}
-              handleSendMessage={handleSendMessage}
-            />
+          {(() => {
+            const rightPaneTab = ['preview', 'code'].includes(activeTab) ? activeTab : 'preview';
             
-            {hasFiles && (
-              <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", activeTab !== 'code' && "hidden")}>
+            return (
+              <>
+                <div className="hidden md:flex h-[49px] border-b border-white/5 bg-white/[0.01] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
+                  <div className="bg-white/5 p-1 rounded-lg flex items-center">
+                    <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", rightPaneTab === 'preview' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Canvas</button>
+                    <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", rightPaneTab === 'code' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-white/50 hover:text-white rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
+                  </div>
+                </div>
+
+                <div className="flex-1 relative flex flex-col bg-background">
+                  {!hasFiles && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-background">
+                      <div className="w-20 h-20 rounded-3xl bg-secondary/10 border border-border shadow-2xl flex items-center justify-center mb-6">
+                        {rightPaneTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
+                      </div>
+                      <p className="text-[18px] font-semibold text-foreground">{rightPaneTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
+                      <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{rightPaneTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
+                    </div>
+                  )}
+
+                  <PreviewPane 
+                    generatedFiles={generatedFiles}
+                    previewKey={previewKey}
+                    activeTab={rightPaneTab}
+                    isLoading={isLoading}
+                    handleSendMessage={handleSendMessage}
+                  />
+                  
+                  {hasFiles && (
+                    <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", rightPaneTab !== 'code' && "hidden")}>
                 <div className="h-10 border-b border-border bg-muted/20 flex items-center px-4 justify-between text-[12px] font-medium flex-shrink-0">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <span>Explorador de Projeto</span>
@@ -809,41 +836,11 @@ export default function App() {
               </div>
             )}
           </div>
-        </div>
-
-        {activeTab === 'settings' && (
-          <SettingsPanel 
-            settingsTab={settingsTab}
-            setSettingsTab={setSettingsTab}
-            draftApiKey={draftApiKey}
-            setDraftApiKey={setDraftApiKey}
-            draftSelectedModel={draftSelectedModel}
-            setDraftSelectedModel={setDraftSelectedModel}
-            draftTemperature={draftTemperature}
-            setDraftTemperature={setDraftTemperature}
-            draftSystemPrompt={draftSystemPrompt}
-            setDraftSystemPrompt={setDraftSystemPrompt}
-            draftActiveAgentId={draftActiveAgentId}
-            setDraftActiveAgentId={setDraftActiveAgentId}
-            apiPresets={apiPresets}
-            deletePreset={deletePreset}
-            allAgents={allAgents}
-            customAgents={customAgents}
-            deleteAgent={deleteAgent}
-            isSystemPromptExpanded={isSystemPromptExpanded}
-            setIsSystemPromptExpanded={setIsSystemPromptExpanded}
-            setEditingPreset={setEditingPreset}
-            setPresetForm={setPresetForm}
-            setIsPresetFormOpen={setIsPresetFormOpen}
-            setEditingAgent={setEditingAgent}
-            setAgentForm={setAgentForm}
-            setIsAgentFormOpen={setIsAgentFormOpen}
-            hasSettingsChanges={hasSettingsChanges}
-            setActiveTab={setActiveTab}
-            saveSettings={saveSettings}
-          />
-        )}
-      </main>
+        </>
+      );
+    })()}
+  </div>
+</main>
 
       <FloatingNav 
         activeTab={activeTab}
