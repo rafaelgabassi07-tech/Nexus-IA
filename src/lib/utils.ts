@@ -125,6 +125,11 @@ export const extractFilesFromMarkdown = (content: string) => {
           if (fileMatch) name = fileMatch[1];
         }
         
+        // Se o LLM omitiu a linguagem e colocou direto o nome do arquivo na primeira parte
+        if (!name && /^[\w.-/:\\\\]+\.\w+$/.test(lang)) {
+          name = lang;
+        }
+
         if (!name) {
           name = `nexus_asset_${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang === 'react' ? 'tsx' : lang}`;
         }

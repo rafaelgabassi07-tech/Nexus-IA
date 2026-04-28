@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
+import { OpenAI } from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
@@ -35,22 +36,17 @@ const limiter = rateLimit({
   message: { error: "Muitas requisições. Aguarde um momento." },
   standardHeaders: true,
   legacyHeaders: false,
-});
-
-const VALID_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-pro-exp-02-05',
-  'gemini-2.0-flash-thinking-exp-01-21',
+});const VALID_MODELS = [
+  'gemini-3-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite'
 ];
 
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'model']),
-    content: z.string().max(100000),
+    content: z.string().max(1000000),
     images: z.array(z.object({
       mimeType: z.string(),
       data: z.string()
@@ -80,24 +76,24 @@ app.post('/api/chat', limiter, async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
-    const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
-    if (!apiKeyToUse) {
-      throw new Error("GEMINI_API_KEY not configured");
-    }
-
-    const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-2.0-flash';
-    
+    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-3-flash';
     const recentMessages = messages.slice(-30);
 
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
+    if (!apiKeyToUse) throw new Error("Chave GEMINI_API_KEY não configurada.");
+    
+    const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
+    
     const contents = recentMessages.map(msg => ({
       role: msg.role === 'model' ? 'model' : 'user',
       parts: [
         ...(msg.images || []).map(img => ({
-          inlineData: {
-            mimeType: img.mimeType,
-            data: img.data
-          }
+          inlineData: { mimeType: img.mimeType, data: img.data }
         })),
         { text: msg.content }
       ]
@@ -105,24 +101,20 @@ app.post('/api/chat', limiter, async (req, res) => {
 
     const tools = searchGrounding ? [{ googleSearch: {} }] : [];
     
-    const responseStream = await ai.getGenerativeModel({ 
+    const responseStream = await ai.models.generateContentStream({
       model: targetModel,
-      systemInstruction: systemPrompt,
-      tools: tools
-    }).generateContentStream({
       contents: contents,
-      generationConfig: {
-        temperature: temperature,
+      config: {
+        systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+        tools: tools,
+        temperature: temperature
       }
     }, { signal: controller.signal });
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-
-    for await (const chunk of responseStream.stream) {
-      res.write(`data: ${JSON.stringify({ text: chunk.text() })}\n\n`);
+    for await (const chunk of responseStream) {
+      if (chunk.text) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      }
     }
     
     res.write('data: [DONE]\n\n');
@@ -134,13 +126,13 @@ app.post('/api/chat', limiter, async (req, res) => {
       return;
     }
 
-    console.error('Error generating content:', { message: error.message, status: error.status });
-    let errorMessage = error.message || "Failed to generate content";
+    console.error('Error generating content:', error);
+    let errorMessage = (error instanceof Error ? error.message : String(error)) || "Failed to generate content";
     
-    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID")) {
+    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("Incorrect API key")) {
       errorMessage = "Chave da API inválida.";
-    } else if (errorMessage.toLowerCase().includes("quota")) {
-      errorMessage = "Cota de tokens excedida para este modelo.";
+    } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("rate limit")) {
+      errorMessage = "Cota ou Rate Limit excedida para este modelo.";
     }
 
     if (!res.headersSent) {

@@ -51,7 +51,7 @@ export function useChatSession({
   }, []);
 
 
-  const sendMessage = useCallback(async (content: string, attachedFiles: File[] = []) => {
+  const sendMessage = useCallback(async (content: string, attachedFiles: File[] = [], messagesToUse?: Message[]) => {
     if (isLoading) return;
 
     let finalMessage = content;
@@ -95,8 +95,17 @@ export function useChatSession({
       ...(imageAttachments.length > 0 ? { images: imageAttachments } as any : {})
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    const updatedMessages = messagesToUse || [...messages, userMessage];
+    if (!messagesToUse) {
+      setMessages(updatedMessages);
+    }
+
+    // ARCHITECTURE FIX: Inject current files context for the LLM
+    // This allows the model to perform "edits" instead of just adding new code.
+    const filesContext = generatedFiles.length > 0 
+      ? `\n\nESTADO ATUAL DO PROJETO:\n${generatedFiles.map(f => `Arquivo: ${f.name}\n\`\`\`${f.lang}\n${f.code}\n\`\`\``).join('\n\n')}`
+      : '';
+
     setIsLoading(true);
 
     abortControllerRef.current = new AbortController();
@@ -125,16 +134,20 @@ export function useChatSession({
     let thoughtStepId = '';
     let lastContentLength = 0;
     let lastThoughtUpdate = 0;
-
+    let turnGeneratedFilesCount = 0;
+    
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: abortControllerRef.current.signal,
         body: JSON.stringify({
-          messages: updatedMessages.map(m => ({ 
+          messages: updatedMessages.map((m, idx) => ({ 
             role: m.role, 
-            content: m.content,
+            // Only inject file context on the last user message to keep tokens low
+            content: (idx === updatedMessages.length - 1 && m.role === 'user') 
+              ? m.content + filesContext 
+              : m.content,
             images: (m as any).images 
           })),
           systemPrompt,
@@ -194,31 +207,55 @@ export function useChatSession({
                   updateSteps(steps.map(s => s.id === thoughtStepId ? { ...s, label: `Pensando... (${elapsed}s)` } : s));
                 }
 
-                // File detection
-                const newContent = fullResponse.slice(lastContentLength);
-                if (newContent.length > 2) {
-                  const currentFiles = extractFilesFromMarkdown(fullResponse);
-                  if (currentFiles.length > generatedFiles.length) {
-                    const newFile = currentFiles[currentFiles.length - 1];
-                    const currentSteps = [...steps];
-                    if (currentSteps[currentSteps.length - 1].status === 'running') {
-                      currentSteps[currentSteps.length - 1].status = 'success';
+                  // File detection
+                  const newContent = fullResponse.slice(lastContentLength);
+                  if (newContent.length > 2) {
+                    const currentFiles = extractFilesFromMarkdown(fullResponse);
+                    if (currentFiles.length > turnGeneratedFilesCount) {
+                      turnGeneratedFilesCount = currentFiles.length;
+                      const newFile = currentFiles[currentFiles.length - 1];
+                      const currentSteps = [...steps];
+                      if (currentSteps[currentSteps.length - 1].status === 'running') {
+                        currentSteps[currentSteps.length - 1].status = 'success';
+                      }
+                      currentSteps.push({ 
+                        id: generateId(), 
+                        label: `Criando: ${newFile.name.split('/').pop()}`, 
+                        status: 'success', 
+                        icon: FileCode 
+                      });
+                      updateSteps(currentSteps);
+                      
+                      // Use setGeneratedFiles callback form to avoid stale closures
+                      setGeneratedFiles(prevFiles => {
+                        const merged = [...prevFiles];
+                        currentFiles.forEach(cf => {
+                          const existingIdx = merged.findIndex(f => f.name === cf.name);
+                          if (existingIdx >= 0) merged[existingIdx] = cf;
+                          else merged.push(cf);
+                        });
+                        const focusedIdx = merged.findIndex(f => f.name === newFile.name);
+                        setActiveFileIndex(Math.max(0, focusedIdx));
+                        return merged;
+                      });
+                    } else if (currentFiles.length === turnGeneratedFilesCount && currentFiles.length > 0) {
+                       setGeneratedFiles(prevFiles => {
+                         const merged = [...prevFiles];
+                         currentFiles.forEach(cf => {
+                            const existingIdx = merged.findIndex(f => f.name === cf.name);
+                            if (existingIdx >= 0) merged[existingIdx] = cf;
+                            else merged.push(cf);
+                         });
+                         return merged;
+                       });
                     }
-                    currentSteps.push({ 
-                      id: generateId(), 
-                      label: `Criando: ${newFile.name.split('/').pop()}`, 
-                      status: 'success', 
-                      icon: FileCode 
-                    });
-                    updateSteps(currentSteps);
-                    setGeneratedFiles(currentFiles);
-                    setActiveFileIndex(currentFiles.length - 1);
-                  }
 
                   // Writing indicator
-                  const openBlockMatch = fullResponse.match(/```(\w+)?(?:[:\s]+)?([\w\.\/\-\_]+)?\n([^`]*)$/);
+                  const openBlockMatch = fullResponse.match(/```[ \t]*(?:(\w+)[ \t]+)?(?:file:[ \t]*)?([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || fullResponse.match(/```([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || fullResponse.match(/```(\w+)[ \t]*\n([^`]*)$/i);
                   if (openBlockMatch) {
-                    const fileName = openBlockMatch[2] || `projeto_${generatedFiles.length + 1}`;
+                    const matchedName = openBlockMatch[2] || openBlockMatch[1] || `script`;
+                    const isFileName = matchedName.includes('.');
+                    const fileName = isFileName ? matchedName : `script`;
                     const writingLabel = `Codificando: ${fileName.split('/').pop()}...`;
                     if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
                       const currentSteps = [...steps];
@@ -254,8 +291,19 @@ export function useChatSession({
       // Finalize
       const finalFiles = extractFilesFromMarkdown(fullResponse);
       if (finalFiles.length > 0) {
-        setGeneratedFiles(finalFiles);
-        setFileHistory(prev => [...prev, { timestamp: Date.now(), files: finalFiles }]);
+        setGeneratedFiles(prev => {
+          const merged = [...prev];
+          finalFiles.forEach(newFile => {
+            const existingIdx = merged.findIndex(f => f.name === newFile.name);
+            if (existingIdx >= 0) {
+              merged[existingIdx] = newFile;
+            } else {
+              merged.push(newFile);
+            }
+          });
+          setFileHistory(history => [...history, { timestamp: Date.now(), files: merged }]);
+          return merged;
+        });
       }
       
       updateSteps(steps.map(s => ({ ...s, status: s.status === 'running' ? 'success' : s.status })));

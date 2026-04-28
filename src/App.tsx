@@ -5,7 +5,6 @@ import {
   Brain, Mic, MicOff, ExternalLink,
   RotateCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
 import { FileTree } from './components/FileTree';
@@ -16,12 +15,13 @@ import { FloatingNav } from './components/FloatingNav';
 import { SettingsPanel, SettingsDialogs } from './components/SettingsPanel';
 
 import { 
-  APIPreset, AgentDefinition
+  APIPreset, AgentDefinition, Message
 } from './types';
 import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
 import { 
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem 
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  SelectLabel, SelectGroup
 } from './components/ui/select';
 import { 
   Dialog, DialogContent, DialogTitle 
@@ -42,7 +42,7 @@ import {
   deriveChatTitle,
   debounce
 } from './lib/utils';
-import { NEXUS_MODELS, DEFAULT_MODEL } from './lib/models';
+import { NEXUS_MODELS, DEFAULT_MODEL, GROUPED_MODELS } from './lib/models';
 import { SidebarHistory } from './components/SidebarHistory';
 import { PreviewPane } from './components/PreviewPane';
 
@@ -435,23 +435,27 @@ export default function App() {
   };
 
 
-  const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string) => {
+  const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string, messagesToUse?: Message[]) => {
     if (e) e.preventDefault();
     const messageToSend = overridePrompt || inputMessage;
+    const isRegenerate = !!messagesToUse;
     
-    if ((!messageToSend.trim() && attachedFiles.length === 0) || isLoading) return;
+    if (!isRegenerate && ((!messageToSend.trim() && attachedFiles.length === 0) || isLoading)) return;
 
     // Reset UI state
-    setInputMessage('');
-    setAttachedFiles([]);
+    if (!isRegenerate) {
+      setInputMessage('');
+      setAttachedFiles([]);
+    }
+    
     if (activeTab !== 'chat') setActiveTab('chat');
 
     try {
-      if (inputMessage.trim() && !overridePrompt) {
-        pushToInputHistory(inputMessage);
+      if (!isRegenerate && messageToSend.trim() && !overridePrompt) {
+        pushToInputHistory(messageToSend);
       }
       
-      await sendMessage(messageToSend, attachedFiles);
+      await sendMessage(messageToSend, attachedFiles, messagesToUse);
       
       // Ensure we stay at bottom on success
       if (isMounted.current) {
@@ -464,6 +468,20 @@ export default function App() {
       }
     }
   }, [inputMessage, attachedFiles, isLoading, activeTab, sendMessage, pushToInputHistory, scrollToBottom, setActiveTab]);
+
+  const handleRegenerate = useCallback(() => {
+    if (messages.length < 2 || isLoading) return;
+    
+    const lastUserIndex = [...messages].reverse().findIndex(m => m.role === 'user');
+    if (lastUserIndex === -1) return;
+    
+    const actualIndex = messages.length - 1 - lastUserIndex;
+    const lastUserMessage = messages[actualIndex];
+    const previousMessages = messages.slice(0, actualIndex);
+    
+    setMessages(previousMessages);
+    handleSendMessage(undefined, lastUserMessage.content, previousMessages);
+  }, [messages, isLoading, handleSendMessage, setMessages]);
 
   useEffect(() => {
     const scrollContainer = scrollRef.current;
@@ -539,7 +557,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#131314] text-zinc-200 overflow-hidden font-sans relative pb-safe">
+    <div className="flex flex-col h-[100dvh] bg-background text-foreground overflow-hidden font-sans relative pb-safe">
       
       <SidebarHistory 
         isSidebarOpen={isSidebarOpen}
@@ -562,14 +580,12 @@ export default function App() {
       <Header 
         activeAgent={activeAgent}
         messages={messages}
-        generatedFiles={generatedFiles}
         currentChatTitle={sessions.find(s => s.id === currentChatId)?.title}
-        historyEntry={fileHistory}
       />
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         <div className={cn(
-          "flex flex-col flex-1 bg-[#131314] border-r border-[#333538] min-h-0",
+          "flex flex-col flex-1 bg-background border-r border-white/10 min-h-0",
           activeTab !== 'chat' && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
@@ -586,15 +602,16 @@ export default function App() {
             scrollToBottom={scrollToBottom}
             setInputMessage={setInputMessage}
             handleSendMessage={handleSendMessage}
+            handleRegenerate={handleRegenerate}
           />
 
-          <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-[#131314] shrink-0 border-t border-[#333538]/50">
+          <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-background shrink-0 border-t border-white/5">
             <div className="max-w-3xl mx-auto flex flex-col px-1">
-              <div className="relative bg-[#1e1f20] border border-[#333538] focus-within:border-[#a8c7fa]/50 focus-within:ring-1 focus-within:ring-[#a8c7fa]/20 rounded-2xl transition-all duration-200 shadow-xl flex flex-col">
+              <div className="relative bg-white/[0.02] border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10 rounded-2xl transition-all duration-200 shadow-xl flex flex-col">
                 {attachedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
                     {attachedFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1 bg-[#282a2d] text-[12px] text-[#f1f3f4] px-2.5 py-1 rounded-md border border-[#333538]">
+                      <div key={i} className="flex items-center gap-1 bg-white/5 text-[12px] text-white/80 px-2.5 py-1 rounded-md border border-white/10">
                         <span className="truncate max-w-[150px]">{f.name}</span>
                         <button onClick={() => setAttachedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-[#8e918f] hover:text-white ml-1">×</button>
                       </div>
@@ -638,7 +655,7 @@ export default function App() {
                         }
                       }}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors flex items-center justify-center" title="Arquivos">
+                    <label htmlFor="file-upload" className="cursor-pointer p-2 text-white/60 hover:bg-white/5 hover:text-white rounded-lg transition-colors flex items-center justify-center" title="Arquivos">
                       <Paperclip size={15} strokeWidth={2.5} />
                     </label>
 
@@ -651,7 +668,7 @@ export default function App() {
                         }
                       }}
                     />
-                    <button onClick={() => imageInputRef.current?.click()} className="p-2 hover:bg-[#333538]/50 hover:text-[#e3e3e3] rounded-lg transition-colors hidden sm:flex" title="Imagens">
+                    <button onClick={() => imageInputRef.current?.click()} className="p-2 text-white/60 hover:bg-white/5 hover:text-white rounded-lg transition-colors hidden sm:flex" title="Imagens">
                       <ImageIcon size={15} strokeWidth={2.5} />
                     </button>
                     
@@ -681,13 +698,17 @@ export default function App() {
                         </div>
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl min-w-[180px]">
-                        {NEXUS_MODELS.map(m => (
-                          <SelectItem key={m.id} value={m.id}>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-[11px] truncate">{m.name}</span>
-                              <span className="text-[9px] opacity-40 truncate">{m.contextWindow.toLocaleString()} tokens</span>
-                            </div>
-                          </SelectItem>
+                        {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
+                          <SelectGroup key={groupName}>
+                            <SelectLabel className="text-[#a8c7fa] text-[10px] uppercase font-bold tracking-wider pt-2 pb-1 px-2">{groupName}</SelectLabel>
+                            {models.map(m => (
+                              <SelectItem key={m.id} value={m.id}>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-bold text-[11px] truncate">{m.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
                         ))}
                       </SelectContent>
                     </Select>
@@ -713,28 +734,28 @@ export default function App() {
         </div>
 
         <div className={cn(
-          "flex-1 flex flex-col bg-[#131314] min-h-0",
+          "flex-1 flex flex-col bg-background min-h-0",
           (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
           activeTab === 'settings' && "md:hidden"
         )}>
-          <div className="hidden md:flex h-[49px] border-b border-[#333538] bg-[#1a1b1e] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
-             <div className="bg-[#282a2d] p-1 rounded-lg flex items-center">
-               <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", activeTab === 'preview' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]")}>Canvas</button>
-               <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === 'code' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-[#a8c7fa]" />}</button>
+          <div className="hidden md:flex h-[49px] border-b border-white/5 bg-white/[0.01] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
+             <div className="bg-white/5 p-1 rounded-lg flex items-center">
+               <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", activeTab === 'preview' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Canvas</button>
+               <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === 'code' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
              </div>
              <div className="flex items-center gap-2">
-                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
+                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-white/50 hover:text-white rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
              </div>
           </div>
 
-          <div className="flex-1 relative flex flex-col bg-white">
+          <div className="flex-1 relative flex flex-col bg-background">
             {!hasFiles && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-[#131314]">
-                <div className="w-20 h-20 rounded-3xl bg-[#1e1f20] border border-[#333538] shadow-2xl flex items-center justify-center mb-6">
-                  {activeTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-[#a8c7fa]" />}
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-background">
+                <div className="w-20 h-20 rounded-3xl bg-secondary/10 border border-border shadow-2xl flex items-center justify-center mb-6">
+                  {activeTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
                 </div>
-                <p className="text-[18px] font-semibold text-[#f1f3f4]">{activeTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
-                <p className="text-[14px] mt-2 text-[#8e918f] text-center max-w-[280px]">{activeTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
+                <p className="text-[18px] font-semibold text-foreground">{activeTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
+                <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{activeTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
               </div>
             )}
 
@@ -747,37 +768,42 @@ export default function App() {
             />
             
             {hasFiles && (
-              <div className={cn("absolute inset-0 z-20 flex flex-col bg-[#050505]", activeTab !== 'code' && "hidden")}>
-                <div className="h-10 border-b border-[#1a1b1e] bg-[#0d0d0d] flex items-center px-4 gap-2 text-[11px] font-medium justify-between">
-                   <div className="flex items-center gap-2">
-                     <span className="text-[#5f6368]">Preview</span>
-                     <span className="text-[#333538]">/</span>
-                     <span className="text-[#8e918f]">{generatedFiles[activeFileIndex]?.name}</span>
-                   </div>
-                   <div className="flex items-center gap-4">
-                     {fileHistory.length > 1 && (
-                       <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
-                         const idx = parseInt(val || '0', 10);
-                         const updatedHistory = fileHistory.slice(0, idx + 1);
-                         setFileHistory(updatedHistory);
-                         setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
-                         setActiveFileIndex(0);
-                       }}>
-                         <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
-                         <SelectContent>
-                           {fileHistory.map((h, i) => <SelectItem key={i} value={i.toString()} className="text-[11px]">v{i+1} - {new Date(h.timestamp).toLocaleTimeString()}</SelectItem>)}
-                         </SelectContent>
-                       </Select>
-                     )}
-                   </div>
+              <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", activeTab !== 'code' && "hidden")}>
+                <div className="h-10 border-b border-border bg-muted/20 flex items-center px-4 justify-between text-[12px] font-medium flex-shrink-0">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span>Explorador de Projeto</span>
+                  </div>
+                  <div>
+                    {fileHistory.length > 1 && (
+                      <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
+                        const idx = parseInt(val || '0', 10);
+                        const updatedHistory = fileHistory.slice(0, idx + 1);
+                        setFileHistory(updatedHistory);
+                        setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
+                        setActiveFileIndex(0);
+                      }}>
+                        <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10 text-white focus:ring-0 shadow-none"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-popover border-border text-popover-foreground rounded-lg">
+                          {fileHistory.map((h, i) => <SelectItem key={i} value={i.toString()} className="text-[11px]">v{i+1} - {new Date(h.timestamp).toLocaleTimeString()}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                  <div className="hidden md:flex h-full border-r border-[#1a1b1e]">
+                  <div className="hidden md:flex h-full border-r border-border">
                     <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
                   </div>
-                  <div className="flex-1 overflow-auto bg-[#050505]">
-                    <CodeBlock language={generatedFiles[activeFileIndex]?.lang} value={generatedFiles[activeFileIndex]?.code || ''} noMargin fastMode={isLoading} />
+                  <div className="flex-1 flex flex-col min-w-0 bg-background">
+                    {generatedFiles[activeFileIndex] && (
+                      <div className="h-9 border-b border-border bg-muted/20 flex items-center px-4 text-[12px] font-mono text-muted-foreground flex-shrink-0 select-none">
+                        <span className="opacity-50 mr-1">/</span>{generatedFiles[activeFileIndex].name}
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-auto relative">
+                      <CodeBlock language={generatedFiles[activeFileIndex]?.lang} value={generatedFiles[activeFileIndex]?.code || ''} noMargin fastMode={isLoading} />
+                    </div>
                   </div>
                 </div>
               </div>

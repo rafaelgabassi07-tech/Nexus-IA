@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Layout, Activity, AlertCircle, RefreshCcw } from 'lucide-react';
 import { Button } from './ui/button';
@@ -29,18 +29,7 @@ export const PreviewPane = ({
       if (htmlFile) return htmlFile.code;
 
       if (generatedFiles.length > 0) {
-        const entryFile = generatedFiles.find(f => 
-          f.name.toLowerCase().includes('app') || 
-          f.name.toLowerCase().includes('main') || 
-          f.name.toLowerCase().includes('index')
-        ) || generatedFiles[0];
-
-        // Process code to handle local imports and exports
-        let processedCode = entryFile.code
-          .replace(/import\s+.*\s+from\s+['"]\.\/.*['"];?/g, '// Local import removed\n')
-          .replace(/export\s+default\s+function\s+/g, 'function ')
-          .replace(/export\s+default\s+class\s+/g, 'class ')
-          .replace(/export\s+default\s+/g, 'const _NEXUS_EXPORT_DEFAULT = ');
+        const filesJson = JSON.stringify(generatedFiles.map(f => ({ name: f.name, code: f.code })));
 
         return `
 <!DOCTYPE html>
@@ -49,22 +38,31 @@ export const PreviewPane = ({
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Preview</title>
+    <!-- Use Babel Standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.3.1",
-        "react-dom": "https://esm.sh/react-dom@18.3.1",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.418.0",
-        "motion/react": "https://esm.sh/motion@11.11.13/react",
-        "framer-motion": "https://esm.sh/framer-motion@11.11.13",
-        "clsx": "https://esm.sh/clsx@2.1.1",
-        "tailwind-merge": "https://esm.sh/tailwind-merge@2.3.0",
-        "lucide-react/dist/esm/icons/*": "https://esm.sh/lucide-react@0.418.0/dist/esm/icons/*.js"
-      }
-    }
+    <!-- We load basic React and dependencies from ESM.sh to global variables so require() can return them -->
+    <script type="module">
+      import React from 'https://esm.sh/react@18.3.1';
+      import * as ReactDOMClient from 'https://esm.sh/react-dom@18.3.1/client';
+      import * as LucideReact from 'https://esm.sh/lucide-react@0.418.0';
+      import * as Recharts from 'https://esm.sh/recharts@2.12.7';
+      import * as FramerMotion from 'https://esm.sh/framer-motion@11.11.13';
+      import clsx from 'https://esm.sh/clsx@2.1.1';
+      import { twMerge } from 'https://esm.sh/tailwind-merge@2.4.0';
+      import * as DateFns from 'https://esm.sh/date-fns@3.6.0';
+      
+      window.React = React;
+      window.ReactDOMClient = ReactDOMClient;
+      window.LucideReact = LucideReact;
+      window.Recharts = Recharts;
+      window.FramerMotion = FramerMotion;
+      window.clsx = clsx;
+      window.twMerge = twMerge;
+      window.DateFns = DateFns;
+      
+      // Signal dependencies are ready
+      window.dispatchEvent(new Event('deps-loaded'));
     </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
@@ -82,40 +80,120 @@ export const PreviewPane = ({
         Compilando Virtual Canvas...
       </div>
     </div>
-    <script type="text/babel" data-type="module">
-      import React from 'react';
-      import { createRoot } from 'react-dom/client';
-      import * as LucideReact from 'lucide-react';
+    
+    <script>
+      window.VirtualFiles = ${filesJson};
       
-      window.React = React;
-      window.LucideReact = LucideReact;
+      const requireCache = {};
 
-      try {
-        ${processedCode}
+      function resolvePath(basePath, relativePath) {
+        if (!relativePath.startsWith('.')) return relativePath; // node module
         
-        let ComponentToRender = null;
-        if (typeof App !== 'undefined') ComponentToRender = App;
-        else if (typeof _NEXUS_EXPORT_DEFAULT !== 'undefined') ComponentToRender = _NEXUS_EXPORT_DEFAULT;
-        else if (typeof exports !== 'undefined' && exports.default) ComponentToRender = exports.default;
+        const baseParts = basePath.split('/');
+        baseParts.pop(); // remove file name
         
-        if (!ComponentToRender) {
-          const globals = Object.keys(window);
-          const possibleEntry = globals.find(g => (g === 'App' || g === 'Application' || g === 'Main') && typeof window[g] === 'function');
-          if (possibleEntry) ComponentToRender = window[possibleEntry];
+        const relativeParts = relativePath.split('/');
+        
+        for (const part of relativeParts) {
+          if (part === '.') continue;
+          if (part === '..') {
+            baseParts.pop();
+          } else {
+            baseParts.push(part);
+          }
         }
-
-        if (!ComponentToRender) {
-          throw new Error("Não foi possível encontrar um componente para renderizar. Certifique-se de declarar um componente 'App' ou usar 'export default'.");
-        }
-
-        const rootLayout = document.getElementById('root');
-        rootLayout.innerHTML = '';
-        const root = createRoot(rootLayout);
-        root.render(<ComponentToRender />);
-      } catch (err) {
-        console.error("Preview Runtime Error:", err);
-        window.parent.postMessage({ type: 'NEXUS_RUNTIME_ERROR', error: err.stack || err.message }, '*');
+        return baseParts.join('/');
       }
+      
+      window.require = function(moduleName, importerPath = '') {
+         if (moduleName === 'react') return window.React;
+         if (moduleName === 'react-dom/client') return window.ReactDOMClient;
+         if (moduleName === 'lucide-react') return window.LucideReact;
+         if (moduleName === 'recharts') return window.Recharts;
+         if (moduleName === 'framer-motion' || moduleName === 'motion/react') return window.FramerMotion;
+         if (moduleName === 'clsx') return window.clsx;
+         if (moduleName === 'tailwind-merge') return { twMerge: window.twMerge };
+         if (moduleName === 'date-fns') return window.DateFns;
+         
+         let fileName = resolvePath(importerPath, moduleName);
+         
+         const fileOverride = window.VirtualFiles.find(f => f.name === moduleName);
+         if (fileOverride) fileName = moduleName;
+         
+         if (!fileName.includes('.')) {
+           const possible = [fileName + '.tsx', fileName + '.ts', fileName + '.jsx', fileName + '.js', fileName + '/index.tsx', fileName + '/index.ts'];
+           for (const p of possible) {
+             if (window.VirtualFiles.find(f => f.name === p)) {
+                fileName = p;
+                break;
+             }
+           }
+         }
+         
+         if (requireCache[fileName]) return requireCache[fileName].exports;
+         
+         const fileCtx = window.VirtualFiles.find(f => f.name === fileName);
+         if (!fileCtx) {
+           console.warn("Module not found in virtual filesystem:", moduleName, "->", fileName);
+           return {};
+         }
+         
+         const module = { exports: {} };
+         requireCache[fileName] = module;
+         
+         try {
+           const compiled = Babel.transform(fileCtx.code, {
+             presets: ['env', 'react', 'typescript']
+           }).code;
+           
+           const customRequire = function(mod) { return window.require(mod, fileName); };
+           const fn = new Function('require', 'module', 'exports', 'React', compiled);
+           fn(customRequire, module, module.exports, window.React);
+         } catch(e) {
+           console.error("Error evaluating", fileName, e);
+           const rootLayout = document.getElementById('root');
+           rootLayout.innerHTML = '<div style="color:red;padding:20px;font-family:monospace;background:#330000;height:100vh;"><b>Error compiling ' + fileName + '</b><br/><br/>' + e.message + '</div>';
+           throw e;
+         }
+         
+         return module.exports;
+      };
+
+      function mountApp() {
+        try {
+          const entryFile = window.VirtualFiles.find(f => {
+            const name = f.name.toLowerCase().split('/').pop();
+            return name === 'app.tsx' || 
+                   name === 'main.tsx' || 
+                   name === 'index.tsx' ||
+                   name === 'app.ts' || 
+                   name === 'main.ts' || 
+                   name === 'index.ts';
+          }) || window.VirtualFiles[0];
+
+          if (!entryFile) throw new Error("No files to mount.");
+
+          const exports = window.require(entryFile.name);
+          
+          let ComponentToRender = exports.default || exports.App || exports.Main || Object.values(exports)[0];
+
+          if (!ComponentToRender) {
+             throw new Error("Não foi possível encontrar um componente para renderizar. Certifique-se de exportar o componente principal usando 'export default'.");
+          }
+
+          const rootLayout = document.getElementById('root');
+          rootLayout.innerHTML = '';
+          const root = window.ReactDOMClient.createRoot(rootLayout);
+          root.render(window.React.createElement(ComponentToRender));
+        } catch (err) {
+          console.error("Preview Runtime Error:", err);
+          window.parent.postMessage({ type: 'NEXUS_RUNTIME_ERROR', error: err.stack || err.message }, '*');
+        }
+      }
+
+      window.addEventListener('deps-loaded', () => {
+         mountApp();
+      });
     </script>
 </body>
 </html>`;

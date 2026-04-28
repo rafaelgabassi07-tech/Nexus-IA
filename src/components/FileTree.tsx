@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Folder, File, ChevronRight, ChevronDown } from 'lucide-react';
+import { Folder, File, ChevronRight, ChevronDown, FileJson, FileType, FileCode } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 type FileNode = {
@@ -7,6 +7,17 @@ type FileNode = {
   type: 'file' | 'folder';
   children?: Record<string, FileNode>;
   originalIndex?: number;
+};
+
+const getFileIcon = (fileName: string, isSelected: boolean) => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  const className = cn("opacity-60", isSelected && "text-[#a8c7fa] opacity-100");
+  
+  if (['ts', 'tsx'].includes(ext || '')) return <FileType size={14} className={className} />;
+  if (['js', 'jsx'].includes(ext || '')) return <FileCode size={14} className={className} />;
+  if (['json'].includes(ext || '')) return <FileJson size={14} className={className} />;
+  if (['css', 'html'].includes(ext || '')) return <FileCode size={14} className={className} />;
+  return <File size={14} className={className} />;
 };
 
 export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { files: {name: string}[], activeFileIndex: number, onSelect: (idx: number) => void, fullWidth?: boolean }) {
@@ -63,7 +74,7 @@ export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { file
           ) : (
             <>
               <span className="w-[14px]" />
-              <File size={13} className={cn("opacity-60", isSelected && "text-[#a8c7fa] opacity-100")} />
+              {getFileIcon(node.name, isSelected)}
             </>
           )}
           <span className="truncate">{node.name}</span>

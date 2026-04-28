@@ -22,6 +22,7 @@ interface ChatLogProps {
   scrollToBottom: () => void;
   setInputMessage: (msg: string) => void;
   handleSendMessage: (e?: any, content?: string) => void;
+  handleRegenerate?: () => void;
 }
 
 export const ChatLog = ({
@@ -36,7 +37,8 @@ export const ChatLog = ({
   showScrollButton,
   scrollToBottom,
   setInputMessage,
-  handleSendMessage
+  handleSendMessage,
+  handleRegenerate
 }: ChatLogProps) => {
   const parentRef = scrollRef;
 
@@ -129,6 +131,7 @@ export const ChatLog = ({
                 isLoading={isLoading}
                 isLastMessage={virtualRow.index === messages.length - 1}
                 handleSendMessage={handleSendMessage}
+                handleRegenerate={handleRegenerate}
               />
             </div>
           );
