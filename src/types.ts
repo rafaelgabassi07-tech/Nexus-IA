@@ -1,4 +1,9 @@
 
+
+import { AgentDefinition } from './agents';
+
+export type { AgentDefinition };
+
 export type TechnicalStep = {
   id: string;
   label: string;
@@ -13,6 +18,7 @@ export type Message = {
   content: string;
   isError?: boolean;
   steps?: TechnicalStep[];
+  images?: { mimeType: string; data: string }[];
 };
 
 export type APIPreset = {
@@ -26,22 +32,15 @@ export type ChatSession = {
   title: string;
   messages: Message[];
   updatedAt: number;
-  fileHistory?: { timestamp: number, files: {name: string, lang: string, code: string}[] }[];
+  timestamp?: number;
+  lastMessage?: string;
+  fileHistory?: { timestamp: number, files: GeneratedFile[] }[];
 };
 
 export type GeneratedFile = {
   name: string;
   lang: string;
   code: string;
-};
-
-export type AgentDefinition = {
-  id: string;
-  name: string;
-  iconName: string;
-  color: string;
-  shortDescription: string;
-  systemPrompt: string;
 };
 
 export type FileHistoryEntry = {

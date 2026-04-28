@@ -5,85 +5,90 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
+import helmet from 'helmet';
+import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '50mb' }));
 
-// Configuração do CORS
+// Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+app.use(express.json({ limit: '10mb' }));
+
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGIN || 'http://localhost:3000',
-  methods: ['POST'],
-  allowedHeaders: ['Content-Type'],
+  origin: process.env.ALLOWED_ORIGIN || '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 app.use(cors(corsOptions));
 
-// Configuração do Rate Limit
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minuto
-  max: 20, // limite de 20 requisições
+  windowMs: 1 * 60 * 1000, 
+  max: 30, 
   message: { error: "Muitas requisições. Aguarde um momento." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// API Route for interacting with the Gemini-powered Agents
+const VALID_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-pro-exp-02-05',
+  'gemini-2.0-flash-thinking-exp-01-21',
+];
+
+const ChatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'model']),
+    content: z.string().max(100000),
+    images: z.array(z.object({
+      mimeType: z.string(),
+      data: z.string()
+    })).optional()
+  })).max(100),
+  apiKey: z.string().optional(),
+  model: z.string().max(100),
+  systemPrompt: z.string().max(50000).optional(),
+  temperature: z.number().min(0).max(2),
+  searchGrounding: z.boolean().optional()
+});
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+app.get('/api/models', (req, res) => {
+  res.json({ models: VALID_MODELS });
+});
+
 app.post('/api/chat', limiter, async (req, res) => {
-  // Adiciona timeout de 60 segundos
-  req.setTimeout(60000);
-  res.setTimeout(60000);
-
-  const { messages, apiKey, model, systemPrompt, temperature, searchGrounding } = req.body || {};
-
-  // Validar temperature
-  const temp = parseFloat(temperature);
-  if (isNaN(temp) || temp < 0 || temp > 2) {
-    return res.status(400).json({ error: 'Temperature inválida. Deve ser entre 0 e 2.' });
+  const result = ChatRequestSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: 'Payload inválido', details: result.error.format() });
   }
 
-  // Whitelist de modelos permitidos - Por favor, NÃO remova modelos válidos para evitar quebras
-  const ALLOWED_MODELS = [
-    'gemini-2.0-pro-exp-02-05',
-    'gemini-2.0-flash-thinking-exp-01-21',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite-preview-02-05',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-3.1-pro-preview',
-    'gemini-3.1-flash-lite-preview',
-    'gemini-3-flash-preview',
-    'gemini-2.5-flash'
-  ];
-  if (model && !ALLOWED_MODELS.includes(model)) {
-    return res.status(400).json({ error: `Modelo '${model}' não permitido.` });
-  }
-
-  // Validar messages
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'Campo messages inválido.' });
-  }
-
-  const targetModel = model || 'gemini-3-flash-preview';
-
-  let clientClosed = false;
-  req.on('close', () => {
-    clientClosed = true;
-  });
+  const { messages, apiKey, model, systemPrompt, temperature, searchGrounding } = result.data;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
-    // Use Google Gen AI (Gemini) API
     const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
     if (!apiKeyToUse) {
       throw new Error("GEMINI_API_KEY not configured");
     }
+
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
+    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-2.0-flash';
     
-    // Truncar histórico para as últimas 20 mensagens
-    const recentMessages = (messages || []).slice(-20);
+    const recentMessages = messages.slice(-30);
 
     const contents = recentMessages.map(msg => ({
       role: msg.role === 'model' ? 'model' : 'user',
@@ -98,113 +103,44 @@ app.post('/api/chat', limiter, async (req, res) => {
       ]
     }));
 
-    let success = false;
-    let lastError;
+    const tools = searchGrounding ? [{ googleSearch: {} }] : [];
     
-    // Lista de modelos para tentar (começa pelo requisitado e usa opções mais seguras de fallback)
-    const baseFallback = ['gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-flash-latest'];
-    const modelsToTry = [...new Set([targetModel, ...baseFallback])];
-
-    for (let mIndex = 0; mIndex < modelsToTry.length; mIndex++) {
-      if (success || clientClosed) break;
-      const currentModel = modelsToTry[mIndex];
-      
-      let retries = mIndex === 0 ? 2 : 1; // Tenta o modelo principal 2 vezes (total 3), fallbacks 1 vez
-      let delay = 2000;
-
-      while (retries >= 0) {
-        try {
-          const tools = searchGrounding ? [{ googleSearchRetrieval: {} }] : [];
-          
-          const responseStream = await ai.getGenerativeModel({ 
-            model: currentModel,
-            systemInstruction: systemPrompt,
-            tools: tools
-          }).generateContentStream({
-            contents: contents,
-            generationConfig: {
-              temperature: temperature !== undefined ? parseFloat(temperature) : 0.7,
-            }
-          });
-
-          // Setup Server-Sent Events after stream is successfully initialized
-          if (!res.headersSent) {
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('Connection', 'keep-alive');
-          }
-
-          for await (const chunk of responseStream) {
-             if (clientClosed) break;
-             res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
-          }
-          
-          if (!clientClosed) {
-            res.write('data: [DONE]\n\n');
-            res.end();
-          }
-          
-          success = true;
-          break; // Sucesso, sai do loop do while
-        } catch (err) {
-          lastError = err;
-          const msg = String(err.message || "").toLowerCase();
-          // Check if the error is a temporary infrastructure constraint
-          const isTemporary = msg.includes("503") || 
-                              msg.includes("unavailable") || 
-                              msg.includes("high demand") || 
-                              msg.includes("tempararily_unavailable") || 
-                              msg.includes("overloaded") ||
-                              msg.includes("429");
-                              
-          if (res.headersSent) {
-            throw err; // Se já enviou headers, não dá para fazer fallback silencioso
-          }
-          
-          if (!isTemporary) {
-            break; // Se não for um erro temporário (ex: erro de auth), avança para lançar o erro
-          }
-          
-          if (retries === 0) {
-            console.warn(`[Warning] Model ${currentModel} falhou com erro temporário. Tentando próximo modelo se houver.`);
-            break; // Fim das retentativas desse modelo
-          }
-          
-          console.warn(`[Warning] Model ${currentModel} overloaded or hit rate limit. Retrying in ${delay}ms... (${retries} retries left)`);
-          await new Promise(r => setTimeout(r, delay));
-          delay *= 1.5;
-          retries--;
-        }
+    const responseStream = await ai.getGenerativeModel({ 
+      model: targetModel,
+      systemInstruction: systemPrompt,
+      tools: tools
+    }).generateContentStream({
+      contents: contents,
+      generationConfig: {
+        temperature: temperature,
       }
+    }, { signal: controller.signal });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    for await (const chunk of responseStream.stream) {
+      res.write(`data: ${JSON.stringify({ text: chunk.text() })}\n\n`);
     }
     
-    if (!success && lastError) {
-      throw lastError;
-    }
+    res.write('data: [DONE]\n\n');
+    res.end();
 
   } catch (error) {
-    if (clientClosed) return;
-    console.error('Error generating content:', error);
+    if (error.name === 'AbortError') {
+      if (!res.headersSent) res.status(504).json({ error: "Request timed out" });
+      return;
+    }
+
+    console.error('Error generating content:', { message: error.message, status: error.status });
     let errorMessage = error.message || "Failed to generate content";
-    try {
-      if (errorMessage.includes('{')) {
-        const jsonStr = errorMessage.substring(errorMessage.indexOf('{'));
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.error && parsed.error.message) {
-          errorMessage = parsed.error.message;
-        }
-      }
-    } catch(e) {}
     
-    // Custom logic to handle quota and invalid API key errors for UX
-    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("GEMINI_API_KEY not configured")) {
-      errorMessage = "Chave da API não configurada ou inválida. Por favor, certifique-se de que a variável GEMINI_API_KEY foi definida nas configurações do ambiente.";
-    } else if (errorMessage.includes("limit: 0")) {
-      errorMessage = `A Chave de API utilizada não tem permissão para usar o modelo '${targetModel}' (limite 0). Tente usar o modelo Gemini 3 Flash.`;
-    } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("exceeded")) {
-      errorMessage = "Limite de cota ou tokens excedido. O prompt é muito grande e consome muitos tokens de contexto, ultrapassando o limite da cota gratuita da sua Chave de API imediatamente. Para resolver: adicione um cartão de crédito no Google AI Studio (faturamento ativado) para remover a restrição de tokens por minuto.";
-    } else if (errorMessage.includes("UNAVAILABLE") || errorMessage.includes("503") || errorMessage.includes("high demand")) {
-      errorMessage = "O modelo está com alta demanda no momento (Erro 503). Isso geralmente é temporário. Por favor, aguarde alguns instantes e tente enviar sua mensagem novamente.";
+    if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID")) {
+      errorMessage = "Chave da API inválida.";
+    } else if (errorMessage.toLowerCase().includes("quota")) {
+      errorMessage = "Cota de tokens excedida para este modelo.";
     }
 
     if (!res.headersSent) {
@@ -213,18 +149,17 @@ app.post('/api/chat', limiter, async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       res.end();
     }
+  } finally {
+    clearTimeout(timeoutId);
   }
 });
 
-// Serve frontend based on environment
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.resolve(__dirname, 'dist')));
   app.get('*', (req, res) => {
     res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
   });
 } else {
-  // In development, we load Vite as a middleware. This enables us to serve
-  // both the Express API and the Vite frontend on the same port (3000).
   const { createServer } = await import('vite');
   const vite = await createServer({
     server: { middlewareMode: true },
@@ -233,12 +168,9 @@ if (process.env.NODE_ENV === 'production') {
   app.use(vite.middlewares);
 }
 
-// Our platform exposes port 3000 to the internet
 const port = process.env.PORT || 3000;
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  app.listen(port, () => {
-    console.log(`Development Server listening on port ${port}`);
-  });
-}
+app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+});
 
 export default app;

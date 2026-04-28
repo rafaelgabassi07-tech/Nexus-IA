@@ -50,7 +50,8 @@ export function useChatSession({
     abortControllerRef.current?.abort();
   }, []);
 
-  const sendMessage = async (content: string, attachedFiles: File[] = []) => {
+
+  const sendMessage = useCallback(async (content: string, attachedFiles: File[] = []) => {
     if (isLoading) return;
 
     let finalMessage = content;
@@ -200,7 +201,9 @@ export function useChatSession({
                   if (currentFiles.length > generatedFiles.length) {
                     const newFile = currentFiles[currentFiles.length - 1];
                     const currentSteps = [...steps];
-                    if (currentSteps[currentSteps.length - 1].status === 'running') currentSteps[currentSteps.length - 1].status = 'success';
+                    if (currentSteps[currentSteps.length - 1].status === 'running') {
+                      currentSteps[currentSteps.length - 1].status = 'success';
+                    }
                     currentSteps.push({ 
                       id: generateId(), 
                       label: `Criando: ${newFile.name.split('/').pop()}`, 
@@ -215,8 +218,8 @@ export function useChatSession({
                   // Writing indicator
                   const openBlockMatch = fullResponse.match(/```(\w+)?(?:[:\s]+)?([\w\.\/\-\_]+)?\n([^`]*)$/);
                   if (openBlockMatch) {
-                    const fileName = openBlockMatch[2] || `arquivo_${generatedFiles.length + 1}`;
-                    const writingLabel = `Escrevendo código em ${fileName.split('/').pop()}...`;
+                    const fileName = openBlockMatch[2] || `projeto_${generatedFiles.length + 1}`;
+                    const writingLabel = `Codificando: ${fileName.split('/').pop()}...`;
                     if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
                       const currentSteps = [...steps];
                       const last = currentSteps[currentSteps.length - 1];
@@ -237,7 +240,7 @@ export function useChatSession({
                   const updatedSteps = steps.map(s => 
                     s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
                   );
-                  updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando código...', status: 'running', icon: Code }]);
+                  updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando ativos de código...', status: 'running', icon: Code }]);
                 }
 
                 setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: fullResponse } : m));
@@ -266,7 +269,7 @@ export function useChatSession({
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  };
+  }, [messages, isLoading, activeAgent, apiKey, selectedModel, systemPrompt, temperature, searchGrounding, generatedFiles.length]);
 
   return {
     messages,

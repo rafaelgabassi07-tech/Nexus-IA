@@ -2,11 +2,10 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Loader2, ArrowUp,
   Paperclip, Image as ImageIcon, Terminal, Layout,
-  Plus, Trash2, X,
-  Brain, Activity, Mic, MicOff, ExternalLink,
-  RotateCcw, FolderOpen, Layers,
+  Brain, Mic, MicOff, ExternalLink,
+  RotateCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
 import { FileTree } from './components/FileTree';
@@ -17,7 +16,7 @@ import { FloatingNav } from './components/FloatingNav';
 import { SettingsPanel, SettingsDialogs } from './components/SettingsPanel';
 
 import { 
-  APIPreset, ChatSession, AgentDefinition
+  APIPreset, AgentDefinition
 } from './types';
 import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
@@ -28,13 +27,45 @@ import {
   Dialog, DialogContent, DialogTitle 
 } from './components/ui/dialog';
 
-import { AGENTS } from './agents';
-import { 
-  cn, generateId, safeLocalStorageSet, safeStorageString, safeStorageNumber, extractFilesFromMarkdown 
-} from './lib/utils';
 import { useChatSession } from './hooks/useChatSession';
+import { AGENTS } from './agents';
+
+import { 
+  useSettingsStore, 
+  useUIStore, 
+  useChatHistoryStore 
+} from './store/appStore';
+import { 
+  cn, 
+  generateId, 
+  safeLocalStorageSet,
+  deriveChatTitle,
+  debounce
+} from './lib/utils';
+import { NEXUS_MODELS, DEFAULT_MODEL } from './lib/models';
+import { SidebarHistory } from './components/SidebarHistory';
+import { PreviewPane } from './components/PreviewPane';
 
 export default function App() {
+  const { 
+    apiKey, setApiKey, 
+    selectedModel, setSelectedModel, 
+    activeAgentId, setActiveAgentId,
+    apiPresets, setApiPresets,
+    activePresetId, setActivePresetId,
+    temperature, setTemperature,
+    searchGrounding, setSearchGrounding
+  } = useSettingsStore();
+
+  const { 
+    activeTab, setActiveTab,
+    settingsTab, setSettingsTab,
+    isSidebarOpen, setIsSidebarOpen,
+    setIsSaving
+  } = useUIStore();
+
+  const { sessions, addSession, removeSession, clearHistory } = useChatHistoryStore();
+
   const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nexus_custom_agents');
@@ -45,26 +76,11 @@ export default function App() {
 
   const allAgents = useMemo(() => [...AGENTS, ...customAgents], [customAgents]);
 
-  const [activeAgentId, setActiveAgentId] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return safeStorageString('nexus_active_agent_id', AGENTS[0].id);
-    }
-    return AGENTS[0].id;
-  });
-
   const activeAgent = useMemo(() => {
     return allAgents.find(a => a.id === activeAgentId) || AGENTS[0];
   }, [allAgents, activeAgentId]);
 
-  const [apiKey, setApiKey] = useState(() => safeStorageString('nexus_api_key', ''));
-  const [selectedModel, setSelectedModel] = useState(() => safeStorageString('nexus_selected_model', 'gemini-2.0-flash'));
-  const [temperature, setTemperature] = useState<number>(() => {
-    return safeStorageNumber('nexus_temperature', 0.7);
-  });
-  const [isSearchGroundingActive, setIsSearchGroundingActive] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(() => {
-    return safeStorageString('nexus_system_prompt', activeAgent.systemPrompt);
-  });
+  const [systemPrompt, setSystemPrompt] = useState(activeAgent.systemPrompt);
 
   const {
     messages,
@@ -84,61 +100,36 @@ export default function App() {
     selectedModel,
     systemPrompt,
     temperature,
-    searchGrounding: isSearchGroundingActive
+    searchGrounding
   });
 
-  const [apiPresets, setApiPresets] = useState<APIPreset[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nexus_api_presets');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
-
-  const [activePresetId, setActivePresetId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = safeStorageString('nexus_active_preset_id', '');
-      return saved ? saved : null;
-    }
-    return null;
-  });
-
-  const [chatHistory, setChatHistory] = useState<ChatSession[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nexus_chat_history');
-      if (saved) {
-        try { return JSON.parse(saved); } catch (e) {}
-      }
-    }
-    return [];
-  });
-  
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Mounted ref for async safety
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => { isMounted.current = false; };
+  }, []);
+
   const [inputMessage, setInputMessage] = useState('');
   const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
   const [chatInputHistoryIndex, setChatInputHistoryIndex] = useState(0);
 
-  const pushToInputHistory = (val: string) => {
-    if (val === chatInputHistory[chatInputHistoryIndex]) return;
-    const newHistory = chatInputHistory.slice(0, chatInputHistoryIndex + 1);
-    newHistory.push(val);
-    if (newHistory.length > 50) newHistory.shift();
-    setChatInputHistory(newHistory);
-    setChatInputHistoryIndex(newHistory.length - 1);
-  };
+  const pushToInputHistory = useCallback(debounce((val: string) => {
+    setChatInputHistory(prev => {
+      if (val === prev[prev.length - 1]) return prev;
+      const next = [...prev, val];
+      return next.slice(-50);
+    });
+  }, 500), []);
 
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [activeTab, setActiveTab] = useState<'chat' | 'preview' | 'code' | 'settings'>('chat');
   const [previewKey, setPreviewKey] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [isSystemPromptExpanded, setIsSystemPromptExpanded] = useState(false);
 
-  const [settingsTab, setSettingsTab] = useState<'overview' | 'general' | 'agent' | 'security'>('overview');
   const [isPresetFormOpen, setIsPresetFormOpen] = useState(false);
   const [editingPreset, setEditingPreset] = useState<APIPreset | null>(null);
   const [presetForm, setPresetForm] = useState<Partial<APIPreset>>({});
@@ -161,19 +152,10 @@ export default function App() {
   const [draftActivePresetId, setDraftActivePresetId] = useState(activePresetId);
 
   useEffect(() => {
-    const validModels = [
-      'gemini-3.1-pro-preview',
-      'gemini-3.1-flash-lite-preview',
-      'gemini-3-flash-preview', 
-      'gemini-2.5-flash', 
-      'gemini-2.0-flash', 
-      'gemini-2.0-flash-lite', 
-      'gemini-flash-latest'
-    ];
-    if (!validModels.includes(selectedModel)) {
-      setSelectedModel('gemini-3-flash-preview');
-      setDraftSelectedModel('gemini-3-flash-preview');
-      safeLocalStorageSet('nexus_selected_model', 'gemini-3-flash-preview');
+    const validIds = NEXUS_MODELS.map(m => m.id);
+    if (!validIds.includes(selectedModel)) {
+      setSelectedModel(DEFAULT_MODEL);
+      setDraftSelectedModel(DEFAULT_MODEL);
     }
   }, [selectedModel]);
 
@@ -205,14 +187,6 @@ export default function App() {
     setActiveAgentId(draftActiveAgentId);
     setActivePresetId(draftActivePresetId);
     
-    safeLocalStorageSet('nexus_api_key', draftApiKey);
-    safeLocalStorageSet('nexus_selected_model', draftSelectedModel);
-    safeLocalStorageSet('nexus_temperature', draftTemperature.toString());
-    safeLocalStorageSet('nexus_system_prompt', draftSystemPrompt);
-    safeLocalStorageSet('nexus_active_agent_id', draftActiveAgentId);
-    if (draftActivePresetId) safeLocalStorageSet('nexus_active_preset_id', draftActivePresetId);
-    else localStorage.removeItem('nexus_active_preset_id');
-    // REMOVED: setActiveTab('chat');
     toast.success('Configurações aplicadas com sucesso');
   };
 
@@ -374,12 +348,11 @@ export default function App() {
   }, [resetChat]);
 
   useEffect(() => {
-    const currentChat = chatHistory.find(c => c.id === currentChatId);
+    const currentChat = sessions.find(c => c.id === currentChatId);
     document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
-  }, [currentChatId, chatHistory]);
+  }, [currentChatId, sessions]);
 
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [previewHtml, setPreviewHtml] = useState<string>('');
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollRef.current) {
@@ -392,6 +365,16 @@ export default function App() {
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current.abort();
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
 
   const toggleListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -451,38 +434,36 @@ export default function App() {
     }
   };
 
+
   const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string) => {
     if (e) e.preventDefault();
-    if ((!inputMessage.trim() && !overridePrompt && attachedFiles.length === 0) || isLoading) return;
-
     const messageToSend = overridePrompt || inputMessage;
     
-    // Manage input history for undo/redo
-    if (!overridePrompt && inputMessage.trim()) {
-      setChatInputHistory(prev => {
-        const next = prev.slice(0, chatInputHistoryIndex + 1);
-        if (next[next.length - 1] !== inputMessage) {
-          return [...next, inputMessage];
-        }
-        return next;
-      });
-      setChatInputHistoryIndex(prev => prev + 1);
-    }
+    if ((!messageToSend.trim() && attachedFiles.length === 0) || isLoading) return;
 
+    // Reset UI state
     setInputMessage('');
     setAttachedFiles([]);
-    setPreviewError(null);
-    
-    if (activeTab === 'preview' || activeTab === 'code' || activeTab === 'settings') {
-      setActiveTab('chat');
-    }
+    if (activeTab !== 'chat') setActiveTab('chat');
 
     try {
+      if (inputMessage.trim() && !overridePrompt) {
+        pushToInputHistory(inputMessage);
+      }
+      
       await sendMessage(messageToSend, attachedFiles);
+      
+      // Ensure we stay at bottom on success
+      if (isMounted.current) {
+        setTimeout(() => scrollToBottom('smooth'), 100);
+      }
     } catch (err) {
-      console.error("Failed to send message:", err);
+      if (isMounted.current) {
+        toast.error("Falha ao processar requisição.");
+        console.error("SendMessage Error:", err);
+      }
     }
-  }, [inputMessage, attachedFiles, isLoading, activeTab, sendMessage]);
+  }, [inputMessage, attachedFiles, isLoading, activeTab, sendMessage, pushToInputHistory, scrollToBottom, setActiveTab]);
 
   useEffect(() => {
     const scrollContainer = scrollRef.current;
@@ -512,151 +493,30 @@ export default function App() {
   }, [currentChatId, scrollToBottom]);
 
   useEffect(() => {
-    if (chatHistory.length > 0) {
-      setIsSaving(true);
-      safeLocalStorageSet('nexus_chat_history', chatHistory);
-      const timer = setTimeout(() => setIsSaving(false), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [chatHistory]);
+    setIsSaving(true);
+    const timer = setTimeout(() => setIsSaving(false), 1200);
+    return () => clearTimeout(timer);
+  }, [sessions]);
 
   useEffect(() => {
     if (messages.length > 1 && currentChatId) {
-      setChatHistory(prev => {
-        let exists = false;
-        const newHistory = prev.map(chat => {
-          if (chat.id === currentChatId) {
-            exists = true;
-            return {
-              ...chat,
-              messages,
-              updatedAt: Date.now(),
-              fileHistory,
-              title: chat.title === 'Novo Projeto' && messages[1]?.role === 'user'
-                ? messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')
-                : chat.title
-            };
-          }
-          return chat;
-        });
-
-        if (!exists) {
-           return [{
-             id: currentChatId,
-             title: messages[1]?.role === 'user' ? (messages[1].content.slice(0, 30) + (messages[1].content.length > 30 ? '...' : '')) : 'Novo Projeto',
-             messages,
-             updatedAt: Date.now(),
-             fileHistory
-           }, ...newHistory];
-        }
-
-        return newHistory;
-      });
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      const title = firstUserMsg ? deriveChatTitle(firstUserMsg.content) : 'Projeto Sincronizado';
+      
+      const session = {
+        id: currentChatId,
+        title,
+        timestamp: Date.now(),
+        lastMessage: messages[messages.length - 1].content.slice(0, 100),
+        messages,
+        fileHistory
+      };
+      
+      addSession(session as any);
     }
-  }, [messages, currentChatId, fileHistory]);
+  }, [messages, currentChatId, fileHistory, addSession]);
 
   const hasFiles = generatedFiles.length > 0;
-
-  useEffect(() => {
-    const buildPreviewHtml = () => {
-      const htmlFile = generatedFiles.find(f => f.lang === 'html');
-      if (htmlFile) return htmlFile.code;
-
-      if (generatedFiles.length > 0) {
-        const entryFile = generatedFiles.find(f => 
-          f.name.toLowerCase().includes('app') || 
-          f.name.toLowerCase().includes('main') || 
-          f.name.toLowerCase().includes('index')
-        ) || generatedFiles[0];
-
-        return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Preview</title>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@19.0.0",
-        "react-dom": "https://esm.sh/react-dom@19.0.0",
-        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.344.0",
-        "motion/react": "https://esm.sh/motion@11.11.13/react",
-        "framer-motion": "https://esm.sh/framer-motion@11.11.13",
-        "clsx": "https://esm.sh/clsx@2.1.0",
-        "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1"
-      }
-    }
-    </script>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-      body { margin: 0; font-family: 'Inter', sans-serif; background: #0d0d0e; color: #f1f3f4; }
-      #root { min-height: 100vh; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel" data-type="module">
-      import React from 'react';
-      import { createRoot } from 'react-dom/client';
-      import * as LucideReact from 'lucide-react';
-      
-      window.React = React;
-      window.LucideReact = LucideReact;
-
-      // Persistence Layer
-      const STORAGE_KEY = 'NEXUS_PREVIEW_STATE';
-      
-      const saveState = (state) => {
-        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-      };
-      
-      const loadState = () => {
-        try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY)); } catch (e) { return null; }
-      };
-
-      try {
-        ${entryFile.code}
-        const root = createRoot(document.getElementById('root'));
-        
-        // Wrap original render to support state restoration if the app implements it
-        root.render(<App initialNexusState={loadState()} />);
-        
-        // Periodically save state if needed, or rely on internal app logic
-        window.addEventListener('beforeunload', () => {
-          // If the app uses window.getNexusState, we save it
-          if (window.getNexusState) saveState(window.getNexusState());
-        });
-      } catch (err) {
-        console.error(err);
-        window.parent.postMessage({ type: 'NEXUS_FIX_ERROR', error: err.stack || err.message }, '*');
-      }
-    </script>
-</body>
-</html>`;
-      }
-      return '';
-    };
-
-    if (!isLoading) {
-      setPreviewHtml(buildPreviewHtml());
-    }
-  }, [generatedFiles, isLoading]);
-
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'NEXUS_FIX_ERROR' && e.data?.error) {
-        setPreviewError(e.data.error);
-        // handleSendMessage(undefined, `O seguinte erro ocorreu no preview: ${e.data.error}. Por favor, corrija.`);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [handleSendMessage]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -681,148 +541,30 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] bg-[#131314] text-zinc-200 overflow-hidden font-sans relative pb-safe">
       
-      <AnimatePresence mode="wait">
-        {isSidebarOpen && (
-          <div className="fixed inset-0 z-[9999]" key="sidebar-overlay">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSidebarOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute right-0 top-0 bottom-0 w-[320px] max-w-[85%] bg-[#1a1b1e] border-l border-white/10 flex flex-col shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-4 h-[64px] border-b border-white/5 flex justify-between items-center bg-[#131314]">
-                <h2 className="text-[#f1f3f4] font-medium flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-[#a8c7fa]/10 text-[#a8c7fa]">
-                    <Layers size={16} />
-                  </div>
-                  <span>Projetos</span>
-                </h2>
-                <button 
-                  onClick={() => setIsSidebarOpen(false)} 
-                  className="p-2 hover:bg-white/5 rounded-full text-[#8e918f] hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="p-4 pt-6">
-                <Button 
-                  onClick={() => {
-                    resetChat();
-                    setIsSidebarOpen(false);
-                  }}
-                  className="w-full bg-[#333538] hover:bg-[#4a4d51] text-[#f1f3f4] justify-start gap-3 h-12 border-none rounded-xl font-medium transition-all group"
-                >
-                  <Plus size={18} className="text-[#a8c7fa] group-hover:scale-110 transition-transform" />
-                  <span>Novo projeto</span>
-                </Button>
-              </div>
-
-              <div className="px-4 mb-2">
-                <input
-                  type="text"
-                  ref={searchInputRef}
-                  placeholder="Buscar projetos... (Ctrl+K)"
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                  className="w-full bg-[#282a2d] border border-[#333538] rounded-xl px-3 py-2 text-[13px] text-[#f1f3f4] placeholder:text-[#8e918f] outline-none focus:ring-1 focus:ring-[#a8c7fa]/30"
-                />
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-3 pb-8 space-y-2 custom-scrollbar">
-                {chatHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center pt-24 px-6 text-center space-y-4 opacity-40">
-                    <Layers size={48} className="text-[#8e918f]" strokeWidth={1} />
-                    <p className="text-[14px] font-medium text-[#f1f3f4]">Nenhum projeto</p>
-                    <p className="text-[12px] max-w-[180px]">Seus projetos anteriores aparecerão aqui.</p>
-                  </div>
-                ) : (
-                  chatHistory
-                    .filter(c => c.title.toLowerCase().includes(historySearch.toLowerCase()))
-                    .sort((a, b) => b.updatedAt - a.updatedAt)
-                    .map(chat => (
-                    <div 
-                      key={chat.id}
-                      className={cn(
-                        "group relative flex flex-col gap-1 p-3.5 rounded-xl border border-transparent cursor-pointer transition-all duration-200",
-                        currentChatId === chat.id 
-                          ? "bg-[#333538] border-[#4a4d51] text-white shadow-lg" 
-                          : "text-[#b2b5b4] hover:bg-[#333538]/40 hover:text-white"
-                      )}
-                      onClick={() => {
-                        setCurrentChatId(chat.id);
-                        setMessages(chat.messages);
-                        if (chat.fileHistory) {
-                          setFileHistory(chat.fileHistory);
-                          const latestFiles = chat.fileHistory.length > 0 ? chat.fileHistory[chat.fileHistory.length - 1].files : [];
-                          setGeneratedFiles(latestFiles);
-                        } else {
-                          const fullContent = chat.messages.filter(m => m.role === 'model').map(m => m.content).join('\n');
-                          const files = extractFilesFromMarkdown(fullContent);
-                          setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
-                          setGeneratedFiles(files);
-                        }
-                        setActiveFileIndex(0);
-                        setIsSidebarOpen(false);
-                      }}
-                    >
-                      <div className="flex items-center gap-2 pr-8">
-                        <FolderOpen size={14} className={cn("shrink-0", currentChatId === chat.id ? "text-[#a8c7fa]" : "text-[#8e918f]")} />
-                        <span className="text-[14px] font-medium truncate">{chat.title}</span>
-                      </div>
-                      <span className="text-[11px] opacity-50 pl-6">
-                        {new Date(chat.updatedAt).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setChatHistory(prev => prev.filter(c => c.id !== chat.id));
-                          if (currentChatId === chat.id) resetChat();
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-[#8e918f] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all z-20"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {chatHistory.length > 0 && (
-                <div className="p-4 border-t border-white/5 bg-[#131314]/50">
-                  <button 
-                    onClick={() => {
-                      setIsClearHistoryModalOpen(true);
-                      setIsSidebarOpen(false);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-[12px] text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-all font-medium"
-                  >
-                    <Trash2 size={14} />
-                    Limpar tudo
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <SidebarHistory 
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        historySearch={historySearch}
+        setHistorySearch={setHistorySearch}
+        sessions={sessions}
+        currentChatId={currentChatId}
+        setCurrentChatId={setCurrentChatId}
+        setMessages={setMessages}
+        setFileHistory={setFileHistory}
+        setGeneratedFiles={setGeneratedFiles}
+        setActiveFileIndex={setActiveFileIndex}
+        removeSession={removeSession}
+        resetChat={resetChat}
+        setIsClearHistoryModalOpen={setIsClearHistoryModalOpen}
+        deriveChatTitle={deriveChatTitle}
+      />
 
       <Header 
         activeAgent={activeAgent}
-        selectedModel={selectedModel}
-        setSelectedModel={setSelectedModel}
-        setDraftSelectedModel={setDraftSelectedModel}
-        isSaving={isSaving}
         messages={messages}
+        generatedFiles={generatedFiles}
+        currentChatTitle={sessions.find(s => s.id === currentChatId)?.title}
+        historyEntry={fileHistory}
       />
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
@@ -916,41 +658,37 @@ export default function App() {
                     <div className="h-4 w-px bg-white/5 mx-1" />
 
                     <button 
-                      onClick={() => setIsSearchGroundingActive(!isSearchGroundingActive)}
+                      onClick={() => setSearchGrounding(!searchGrounding)}
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[9.5px] font-black uppercase tracking-widest",
-                        isSearchGroundingActive 
+                        searchGrounding 
                           ? "bg-blue-500/20 border-blue-500/40 text-blue-300" 
                           : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.05]"
                       )}
                       title="Ativar busca Web"
                     >
-                       <ExternalLink size={11} className={cn(isSearchGroundingActive ? "animate-pulse" : "")} />
+                       <ExternalLink size={11} className={cn(searchGrounding ? "animate-pulse" : "")} />
                        <span className="hidden sm:inline">Web</span>
                     </button>
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <Select value={selectedModel} onValueChange={(val) => {
-                      if (val) {
-                        setSelectedModel(val);
-                        setDraftSelectedModel(val);
-                        safeLocalStorageSet('nexus_selected_model', val);
-                      }
-                    }}>
+                    <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
                       <SelectTrigger className="flex h-7 bg-white/[0.02] border-white/5 text-[9.5px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0 min-w-0 sm:min-w-[95px] border-none shadow-none rounded-md transition-all hover:bg-white/5">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Brain size={12} className="shrink-0 opacity-40" />
                           <span className="truncate max-w-[70px] hidden sm:inline">{selectedModel.split('-').slice(0, 2).join('-')}</span>
                         </div>
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl">
-                        <SelectItem value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</SelectItem>
-                        <SelectItem value="gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Thinking</SelectItem>
-                        <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                        <SelectItem value="gemini-2.0-flash-lite-preview-02-05">Gemini 2.0 Lite</SelectItem>
-                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl min-w-[180px]">
+                        {NEXUS_MODELS.map(m => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-bold text-[11px] truncate">{m.name}</span>
+                              <span className="text-[9px] opacity-40 truncate">{m.contextWindow.toLocaleString()} tokens</span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
 
@@ -985,8 +723,7 @@ export default function App() {
                <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === 'code' ? "bg-[#444746] text-[#e3e3e3] shadow-sm" : "text-[#8e918f] hover:text-[#e3e3e3]")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-[#a8c7fa]" />}</button>
              </div>
              <div className="flex items-center gap-2">
-                <button onClick={() => { const blob = new Blob([previewHtml], { type: 'text/html' }); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors"><ArrowUp size={16} className="rotate-45" /></button>
-                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors"><RotateCcw size={16} /></button>
+                <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-[#8e918f] hover:text-[#e3e3e3] rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
              </div>
           </div>
 
@@ -1001,58 +738,13 @@ export default function App() {
               </div>
             )}
 
-            {previewHtml && (
-              <div className={cn("w-full h-full relative", activeTab !== 'preview' && "hidden")}>
-                <iframe key={previewKey} srcDoc={previewHtml} className="w-full h-full border-none relative z-20" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
-                
-                {previewError && (
-                  <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-[#1e1f20] border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
-                      <div className="flex items-center gap-4 text-red-400">
-                        <div className="p-3 rounded-full bg-red-400/10">
-                          <Activity size={24} />
-                        </div>
-                        <h3 className="text-lg font-bold">Erro Detectado</h3>
-                      </div>
-                      
-                      <div className="bg-black/40 rounded-xl p-4 font-mono text-xs text-red-200/80 overflow-auto max-h-[200px] border border-white/5">
-                        {previewError}
-                      </div>
-                      
-                      <div className="flex flex-col gap-3 pt-2">
-                        <div className="flex gap-2">
-                          <Button 
-                            onClick={() => {
-                              setPreviewKey(k => k + 1);
-                              setPreviewError(null);
-                            }}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold h-12 rounded-xl"
-                          >
-                            Reiniciar
-                          </Button>
-                          <Button 
-                            onClick={() => {
-                              setPreviewError(null);
-                              handleSendMessage(undefined, `Corrija o seguinte erro no código que está falhando no preview: ${previewError}`);
-                            }}
-                            className="flex-[2] bg-red-500 hover:bg-red-600 text-white font-bold h-12 rounded-xl"
-                          >
-                            Corrigir com IA
-                          </Button>
-                        </div>
-                        <Button 
-                          variant="ghost"
-                          onClick={() => setPreviewError(null)}
-                          className="w-full text-[#8e918f] hover:text-white"
-                        >
-                          Fechar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <PreviewPane 
+              generatedFiles={generatedFiles}
+              previewKey={previewKey}
+              activeTab={activeTab}
+              isLoading={isLoading}
+              handleSendMessage={handleSendMessage}
+            />
             
             {hasFiles && (
               <div className={cn("absolute inset-0 z-20 flex flex-col bg-[#050505]", activeTab !== 'code' && "hidden")}>
@@ -1156,14 +848,14 @@ export default function App() {
           <p className="text-[13px] text-[#8e918f] mt-2">Esta ação apagará todos os seus projetos salvos localmente.</p>
           <div className="flex justify-end gap-3 mt-8">
             <Button variant="ghost" onClick={() => setIsClearHistoryModalOpen(false)}>Melhor não</Button>
-            <Button onClick={() => { setChatHistory([]); localStorage.removeItem('nexus_chat_history'); resetChat(); setIsClearHistoryModalOpen(false); }} className="bg-red-500 hover:bg-red-600">Sim, apagar tudo</Button>
+            <Button onClick={() => { clearHistory(); resetChat(); setIsClearHistoryModalOpen(false); }} className="bg-red-500 hover:bg-red-600">Sim, apagar tudo</Button>
           </div>
         </DialogContent>
       </Dialog>
       
       <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/5 bg-[#131314]/50 backdrop-blur-sm relative z-50">
         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
-          <span className="hidden sm:inline">Engine: Gemini 3.1</span>
+          <span className="hidden sm:inline">Engine: {selectedModel}</span>
           <span className="hidden md:inline">Grounding: Enabled</span>
           <div className="flex gap-1.5">
             <div className="w-1 h-1 rounded-full bg-white/10" />

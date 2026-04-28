@@ -65,34 +65,100 @@ export function safeStorageNumber(key: string, defaultValue: number): number {
   }
 }
 
+
+export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+export function deriveChatTitle(content: string): string {
+  if (!content) return "Novo Protocolo";
+  // Remove code blocks
+  const cleanContent = content.replace(/```[\s\S]*?```/g, "").trim();
+  if (!cleanContent) return "Código de Matriz";
+  const title = cleanContent.split('\n')[0].slice(0, 40).trim();
+  return title + (cleanContent.length > title.length ? "..." : "");
+}
+
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  // Basic heuristic: ~4 chars per token
+  return Math.ceil(text.length / 4);
+}
+
+export function formatTokenCount(count: number): string {
+  if (count < 1000) return count.toString();
+  return (count / 1000).toFixed(1) + 'k';
+}
+
 export const extractFilesFromMarkdown = (content: string) => {
   const files: { name: string, lang: string, code: string }[] = [];
-  const lineRegex = /```(\w+)?([^\n]*)\n([\s\S]*?)(?:```|$)/g;
-  let match;
-  while ((match = lineRegex.exec(content)) !== null) {
-    const lang = match[1] || 'text';
-    const meta = (match[2] || '').trim();
-    let name = '';
-    
-    if (meta) {
-      const fileMatch = meta.match(/(?:file:\s*)?([\w.-/:\\\\]+\.\w+)/i);
-      if (fileMatch) {
-        name = fileMatch[1];
-      } else {
-        const fallbackMatch = meta.match(/([\w.-/:\\\\]+)/);
-        if (fallbackMatch) name = fallbackMatch[1];
+  const lines = content.split('\n');
+  
+  let currentFile: { name: string, lang: string, code: string[] } | null = null;
+  let inFence = false;
+  let fenceLength = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fenceMatch = line.match(/^(\s*)(`{3,})/);
+
+    if (fenceMatch) {
+      const currentFenceLength = fenceMatch[2].length;
+      
+      if (!inFence) {
+        // Opening fence
+        inFence = true;
+        fenceLength = currentFenceLength;
+        
+        const afterFence = line.slice(fenceMatch[0].length).trim();
+        const parts = afterFence.split(/\s+/);
+        const lang = parts[0] || 'text';
+        const meta = parts.slice(1).join(' ');
+        
+        let name = '';
+        if (meta) {
+          const fileMatch = meta.match(/(?:file:\s*)?([\w.-/:\\\\]+\.\w+)/i);
+          if (fileMatch) name = fileMatch[1];
+        }
+        
+        if (!name) {
+          name = `nexus_asset_${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang === 'react' ? 'tsx' : lang}`;
+        }
+        
+        currentFile = { name, lang, code: [] };
+      } else if (currentFenceLength >= fenceLength) {
+        // Closing fence
+        if (currentFile) {
+          files.push({
+            name: currentFile.name,
+            lang: currentFile.lang,
+            code: currentFile.code.join('\n')
+          });
+        }
+        currentFile = null;
+        inFence = false;
+        fenceLength = 0;
+      } else if (currentFile) {
+        // It's a nested fence shorter than the opening one
+        currentFile.code.push(line);
       }
+    } else if (inFence && currentFile) {
+      currentFile.code.push(line);
     }
-    
-    if (!name) {
-      name = `file_${files.length + 1}.${lang === 'typescript' ? 'ts' : lang === 'javascript' ? 'js' : lang}`;
-    }
-    
+  }
+
+  // Handle unclosed fences gracefully
+  if (inFence && currentFile) {
     files.push({
-      lang: lang,
-      name: name,
-      code: match[3]
+      name: currentFile.name,
+      lang: currentFile.lang,
+      code: currentFile.code.join('\n')
     });
   }
+
   return files;
 };

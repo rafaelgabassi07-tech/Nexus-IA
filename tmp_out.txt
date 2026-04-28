@@ -1,1 +1,0 @@
-                   <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
