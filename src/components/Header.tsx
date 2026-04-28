@@ -1,6 +1,8 @@
+import { History } from 'lucide-react';
 import { AgentDefinition, Message } from '../types';
 import { AgentIcon } from './AgentIcon';
 import { cn } from '../lib/utils';
+import { useUIStore } from '../store/appStore';
 
 interface HeaderProps {
   activeAgent: AgentDefinition;
@@ -12,6 +14,8 @@ export const Header = ({
   activeAgent, 
   currentChatTitle,
 }: HeaderProps) => {
+  const { isSidebarOpen, setIsSidebarOpen } = useUIStore();
+
   return (
     <header className="h-[64px] min-h-[64px] py-1 flex items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-md flex-shrink-0 border-b border-border relative z-[60]">
       <div className="flex items-center gap-4 group cursor-pointer" onClick={() => window.location.reload()}>
@@ -46,6 +50,19 @@ export const Header = ({
             </span>
           </div>
         )}
+
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className={cn(
+            "flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300",
+            isSidebarOpen 
+              ? "bg-[#a8c7fa]/10 text-[#a8c7fa] border border-[#a8c7fa]/20" 
+              : "bg-white/[0.02] text-[#8e918f] border border-white/5 hover:bg-white/[0.05] hover:text-[#e3e3e3]"
+          )}
+          title="Histórico de Projetos"
+        >
+          <History size={20} strokeWidth={2} className={cn("transition-transform duration-300", isSidebarOpen ? "-rotate-12" : "hover:-rotate-12")} />
+        </button>
       </div>
     </header>
   );

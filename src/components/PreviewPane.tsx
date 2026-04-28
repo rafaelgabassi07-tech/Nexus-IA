@@ -143,6 +143,7 @@ export const PreviewPane = ({
          
          try {
            const compiled = Babel.transform(fileCtx.code, {
+             filename: fileName,
              presets: ['env', 'react', 'typescript']
            }).code;
            

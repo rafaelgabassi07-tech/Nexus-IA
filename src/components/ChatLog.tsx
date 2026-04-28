@@ -1,5 +1,4 @@
 import React from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Brain, Layout, Code, Terminal, Activity, ArrowDown
 } from 'lucide-react';
@@ -20,7 +19,6 @@ interface ChatLogProps {
   scrollRef: React.RefObject<HTMLDivElement>;
   showScrollButton: boolean;
   scrollToBottom: () => void;
-  setInputMessage: (msg: string) => void;
   handleSendMessage: (e?: any, content?: string) => void;
   handleRegenerate?: () => void;
 }
@@ -36,30 +34,14 @@ export const ChatLog = ({
   scrollRef,
   showScrollButton,
   scrollToBottom,
-  setInputMessage,
   handleSendMessage,
   handleRegenerate
 }: ChatLogProps) => {
-  const parentRef = scrollRef;
-
-  const rowVirtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const msg = messages[index];
-      if (!msg) return 100;
-      if (msg.role === 'user') return 60;
-      if (msg.steps) return 300;
-      return 150;
-    },
-    overscan: 5,
-  });
-
   return (
     <div 
-      ref={parentRef}
+      ref={scrollRef}
       className={cn(
-        "flex-1 overflow-y-auto px-3 py-4 custom-scrollbar relative",
+        "flex-1 overflow-y-auto px-4 py-4 custom-scrollbar relative",
         messages.length === 0 && "flex flex-col"
       )}
     >
@@ -81,7 +63,7 @@ export const ChatLog = ({
             ].map((s, i) => (
               <button 
                 key={i} 
-                onClick={() => setInputMessage(s.prompt)}
+                onClick={() => handleSendMessage(undefined, s.prompt)}
                 className="group flex items-center text-left py-2 px-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] hover:border-white/20 transition-all cursor-pointer w-full relative overflow-hidden gap-3"
               >
                 <s.icon size={14} className={cn("shrink-0", s.color)} />
@@ -95,47 +77,23 @@ export const ChatLog = ({
         </div>
       )}
 
-      <div 
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-        id="chat-log-container" 
-        className="w-full"
-      >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const msg = messages[virtualRow.index];
-          if (!msg) return null;
-          
-          return (
-            <div
-              key={virtualRow.index}
-              ref={rowVirtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <MessageItem 
-                message={msg}
-                index={virtualRow.index}
-                activeAgent={activeAgent}
-                generatedFiles={generatedFiles}
-                activeFileIndex={activeFileIndex}
-                setActiveFileIndex={setActiveFileIndex}
-                setActiveTab={setActiveTab}
-                isLoading={isLoading}
-                isLastMessage={virtualRow.index === messages.length - 1}
-                handleSendMessage={handleSendMessage}
-                handleRegenerate={handleRegenerate}
-              />
-            </div>
-          );
-        })}
+      <div className="w-full flex flex-col pt-2 pb-4 space-y-6">
+        {messages.map((msg, index) => (
+          <MessageItem 
+            key={msg.id || index}
+            message={msg}
+            index={index}
+            activeAgent={activeAgent}
+            generatedFiles={generatedFiles}
+            activeFileIndex={activeFileIndex}
+            setActiveFileIndex={setActiveFileIndex}
+            setActiveTab={setActiveTab}
+            isLoading={isLoading}
+            isLastMessage={index === messages.length - 1}
+            handleSendMessage={handleSendMessage}
+            handleRegenerate={handleRegenerate}
+          />
+        ))}
       </div>
 
       {showScrollButton && (

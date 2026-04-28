@@ -54,13 +54,15 @@ export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { file
     const isSelected = node.originalIndex === activeFileIndex;
 
     return (
-      <div key={path}>
+      <div key={path} className="relative group/node">
         <div
           className={cn(
-            "flex items-center gap-1.5 py-1.5 px-3 cursor-pointer select-none text-[12px] transition-colors group",
-            isSelected ? "bg-[#1a1b1e] text-[#e3e3e3] border-r-2 border-[#a8c7fa]" : "text-[#8e918f] hover:bg-white/[0.02] hover:text-[#e3e3e3]"
+            "flex items-center gap-1.5 py-[5px] px-2 cursor-pointer select-none text-[12px] font-mono transition-all group relative border-l-2",
+            isSelected 
+              ? "bg-blue-500/10 text-blue-100 border-blue-500/50 shadow-[inset_4px_0_10px_rgba(59,130,246,0.1)]" 
+              : "text-[#8e918f] border-transparent hover:bg-white/[0.03] hover:text-[#e3e3e3]"
           )}
-          style={{ paddingLeft: `${depth * 12 + 12}px` }}
+          style={{ paddingLeft: `${depth * 14 + 10}px` }}
           onClick={(e) => {
             if (node.type === 'folder') toggleFolder(path, e);
             else if (node.originalIndex !== undefined) onSelect(node.originalIndex);
@@ -68,8 +70,8 @@ export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { file
         >
           {node.type === 'folder' ? (
             <>
-              {isExpanded ? <ChevronDown size={14} className="opacity-50" /> : <ChevronRight size={14} className="opacity-50" />}
-              <Folder size={14} className="text-[#a8c7fa] opacity-80" />
+              {isExpanded ? <ChevronDown size={14} className="opacity-70 group-hover:opacity-100 transition-opacity" /> : <ChevronRight size={14} className="opacity-70 group-hover:opacity-100 transition-opacity" />}
+              <Folder size={14} className="text-[#dcb67a]" />
             </>
           ) : (
             <>
@@ -77,10 +79,10 @@ export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { file
               {getFileIcon(node.name, isSelected)}
             </>
           )}
-          <span className="truncate">{node.name}</span>
+          <span className="truncate tracking-tight">{node.name}</span>
         </div>
         {node.type === 'folder' && isExpanded && node.children && (
-          <div>
+          <div className="relative">
             {Object.values(node.children)
               .sort((a, b) => {
                 if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
@@ -95,15 +97,25 @@ export function FileTree({ files, activeFileIndex, onSelect, fullWidth }: { file
 
   return (
     <div className={cn(
-      "border-r border-[#1a1b1e] bg-[#0c0c0d] flex flex-col py-2 overflow-y-auto custom-scrollbar flex-shrink-0",
-      fullWidth ? "w-full" : "w-60"
+      "border-r border-white/5 bg-[#0a0b0d] flex flex-col pt-0 pb-24 md:pb-2 overflow-y-auto custom-scrollbar flex-shrink-0 text-muted-foreground shadow-[inset_0_0_40px_rgba(0,0,0,0.5)]",
+      fullWidth ? "w-full" : "w-full md:w-64"
     )}>
       {!fullWidth && (
-        <div className="px-4 py-2 mb-2 flex items-center justify-between">
-          <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Explorador</span>
+        <div className="px-4 py-3 pb-2 flex items-center justify-between border-b border-white/5 mb-2 bg-white/[0.01]">
+          <div className="flex items-center gap-2">
+            <Folder size={14} className="text-blue-400/80" />
+            <span className="text-[10px] font-black text-[#8e918f] uppercase tracking-[0.2em]">Projeto</span>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+          </div>
         </div>
       )}
-      <div className="pb-4">
+      <div className="pb-4 relative">
+        {/* Subtle vertical guide lines */}
+        <div className="absolute left-[19px] top-4 bottom-4 w-[1px] bg-white/[0.03] pointer-events-none" />
+        
         {Object.values(tree)
           .sort((a, b) => {
             if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;

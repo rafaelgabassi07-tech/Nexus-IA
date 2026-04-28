@@ -13,6 +13,7 @@ import { Header } from './components/Header';
 import { ChatLog } from './components/ChatLog';
 import { FloatingNav } from './components/FloatingNav';
 import { SettingsPanel, SettingsDialogs } from './components/SettingsPanel';
+import { SecurityModal } from './components/SecurityModal';
 
 import { 
   APIPreset, AgentDefinition, Message
@@ -40,7 +41,8 @@ import {
   generateId, 
   safeLocalStorageSet,
   deriveChatTitle,
-  debounce
+  debounce,
+  extractFilesFromMarkdown
 } from './lib/utils';
 import { NEXUS_MODELS, DEFAULT_MODEL, GROUPED_MODELS } from './lib/models';
 import { SidebarHistory } from './components/SidebarHistory';
@@ -60,11 +62,11 @@ export default function App() {
   const { 
     activeTab, setActiveTab,
     settingsTab, setSettingsTab,
-    isSidebarOpen, setIsSidebarOpen,
+    setIsSidebarOpen,
     setIsSaving
   } = useUIStore();
 
-  const { sessions, addSession, removeSession, clearHistory } = useChatHistoryStore();
+  const { sessions, addSession, clearHistory } = useChatHistoryStore();
 
   const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
     if (typeof window !== 'undefined') {
@@ -107,9 +109,6 @@ export default function App() {
   
   // Mounted ref for async safety
   const isMounted = useRef(true);
-  useEffect(() => {
-    return () => { isMounted.current = false; };
-  }, []);
 
   const [inputMessage, setInputMessage] = useState('');
   const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
@@ -129,7 +128,6 @@ export default function App() {
 
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [previewKey, setPreviewKey] = useState(0);
-  const [historySearch, setHistorySearch] = useState('');
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const [isSystemPromptExpanded, setIsSystemPromptExpanded] = useState(false);
@@ -143,6 +141,14 @@ export default function App() {
   const [agentForm, setAgentForm] = useState<Partial<AgentDefinition>>({});
 
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenSecurity = () => setIsSecurityModalOpen(true);
+    window.addEventListener('open-security-modal', handleOpenSecurity);
+    return () => window.removeEventListener('open-security-modal', handleOpenSecurity);
+  }, []);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -296,6 +302,40 @@ export default function App() {
     setChatInputHistory(['']);
     setChatInputHistoryIndex(0);
   }, [hookResetChat]);
+
+  useEffect(() => {
+    const handleLoadSession = (e: CustomEvent<string>) => {
+      const sessionId = e.detail;
+      const chat = sessions.find(c => c.id === sessionId);
+      if (chat) {
+        setCurrentChatId(chat.id);
+        setMessages(chat.messages);
+        if (chat.fileHistory) {
+          setFileHistory(chat.fileHistory);
+          const latestFiles = chat.fileHistory.length > 0 ? chat.fileHistory[chat.fileHistory.length - 1].files : [];
+          setGeneratedFiles(latestFiles);
+        } else {
+          const fullContent = chat.messages.filter(m => m.role === 'model').map(m => m.content).join('\n');
+          const files = extractFilesFromMarkdown(fullContent);
+          setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
+          setGeneratedFiles(files);
+        }
+        setActiveFileIndex(0);
+        setIsSidebarOpen(false);
+        setActiveTab('chat');
+      }
+    };
+    
+    window.addEventListener('loadSession', handleLoadSession as EventListener);
+    
+    const handleNewChat = () => resetChat();
+    window.addEventListener('newChat', handleNewChat);
+
+    return () => {
+      window.removeEventListener('loadSession', handleLoadSession as EventListener);
+      window.removeEventListener('newChat', handleNewChat);
+    };
+  }, [sessions, setMessages, setFileHistory, setGeneratedFiles, setActiveFileIndex, resetChat, setIsSidebarOpen, setActiveTab]);
 
   const undoInput = useCallback(() => {
     if (chatInputHistoryIndex > 0) {
@@ -580,24 +620,6 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] bg-background text-foreground overflow-hidden font-sans relative pb-safe">
       
-      <SidebarHistory 
-        isSidebarOpen={isSidebarOpen}
-        setIsSidebarOpen={setIsSidebarOpen}
-        historySearch={historySearch}
-        setHistorySearch={setHistorySearch}
-        sessions={sessions}
-        currentChatId={currentChatId}
-        setCurrentChatId={setCurrentChatId}
-        setMessages={setMessages}
-        setFileHistory={setFileHistory}
-        setGeneratedFiles={setGeneratedFiles}
-        setActiveFileIndex={setActiveFileIndex}
-        removeSession={removeSession}
-        resetChat={resetChat}
-        setIsClearHistoryModalOpen={setIsClearHistoryModalOpen}
-        deriveChatTitle={deriveChatTitle}
-      />
-
       <Header 
         activeAgent={activeAgent}
         messages={messages}
@@ -608,7 +630,7 @@ export default function App() {
         <div className={cn(
           "flex-1 flex flex-col bg-background border-r border-white/10 min-h-0",
           (activeTab !== 'chat' && activeTab !== 'settings') && "hidden md:flex",
-          activeTab === 'settings' ? "flex" : (activeTab === 'chat' ? "flex" : "hidden md:flex")
+          ['settings', 'chat'].includes(activeTab) ? "flex" : "hidden md:flex"
         )}>
           {activeTab === 'settings' ? (
             <div className="flex-1 overflow-hidden h-full flex flex-col">
@@ -641,7 +663,6 @@ export default function App() {
                 scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
                 showScrollButton={showScrollButton}
                 scrollToBottom={scrollToBottom}
-                setInputMessage={setInputMessage}
                 handleSendMessage={handleSendMessage}
                 handleRegenerate={handleRegenerate}
               />
@@ -765,17 +786,17 @@ export default function App() {
         <div className={cn(
           "flex-1 flex flex-col bg-background min-h-0",
           (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
-          activeTab === 'settings' && "md:hidden"
+          (activeTab === 'settings') && "md:hidden"
         )}>
           {(() => {
-            const rightPaneTab = ['preview', 'code'].includes(activeTab) ? activeTab : 'preview';
+            const rightPaneTab = ['preview', 'code', 'files'].includes(activeTab) ? activeTab : 'preview';
             
             return (
               <>
                 <div className="hidden md:flex h-[49px] border-b border-white/5 bg-white/[0.01] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
                   <div className="bg-white/5 p-1 rounded-lg flex items-center">
                     <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", rightPaneTab === 'preview' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Canvas</button>
-                    <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", rightPaneTab === 'code' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Arquivos {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
+                    <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", (rightPaneTab === 'code' || rightPaneTab === 'files') ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Código {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-white/50 hover:text-white rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
@@ -786,10 +807,10 @@ export default function App() {
                   {!hasFiles && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-background">
                       <div className="w-20 h-20 rounded-3xl bg-secondary/10 border border-border shadow-2xl flex items-center justify-center mb-6">
-                        {rightPaneTab === 'code' ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
+                        {(rightPaneTab === 'code' || rightPaneTab === 'files') ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
                       </div>
-                      <p className="text-[18px] font-semibold text-foreground">{rightPaneTab === 'code' ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
-                      <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{rightPaneTab === 'code' ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
+                      <p className="text-[18px] font-semibold text-foreground">{(rightPaneTab === 'code' || rightPaneTab === 'files') ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
+                      <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{(rightPaneTab === 'code' || rightPaneTab === 'files') ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
                     </div>
                   )}
 
@@ -802,10 +823,10 @@ export default function App() {
                   />
                   
                   {hasFiles && (
-                    <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", rightPaneTab !== 'code' && "hidden")}>
+                    <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", (rightPaneTab !== 'code' && rightPaneTab !== 'files') && "hidden")}>
                 <div className="h-10 border-b border-border bg-muted/20 flex items-center px-4 justify-between text-[12px] font-medium flex-shrink-0">
                   <div className="flex items-center gap-2 text-muted-foreground">
-                    <span>Explorador de Projeto</span>
+                    <span>Explorador de Arquivos</span>
                   </div>
                   <div>
                     {fileHistory.length > 1 && (
@@ -826,12 +847,15 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                  <div className="hidden md:flex h-full border-r border-border">
-                    <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={setActiveFileIndex} />
+                  <div className={cn("h-full border-r border-border w-full md:w-auto", rightPaneTab === 'files' ? "flex" : "hidden md:flex")}>
+                    <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={(index) => {
+                      setActiveFileIndex(index);
+                      if (window.innerWidth < 768) setActiveTab('code'); // Auto-switch to code after selecting file on mobile
+                    }} />
                   </div>
-                  <div className="flex-1 flex flex-col min-w-0 bg-background">
+                  <div className={cn("flex-1 flex-col min-w-0 bg-[#121316]", rightPaneTab === 'files' ? "hidden md:flex" : "flex")}>
                     {generatedFiles[activeFileIndex] && (
-                      <div className="h-9 border-b border-border bg-muted/20 flex items-center px-4 text-[12px] font-mono text-muted-foreground flex-shrink-0 select-none">
+                      <div className="h-9 border-b border-border bg-white/[0.02] flex items-center px-4 text-[12px] font-mono text-muted-foreground flex-shrink-0 select-none">
                         <span className="opacity-50 mr-1">/</span>{generatedFiles[activeFileIndex].name}
                       </div>
                     )}
@@ -853,8 +877,6 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         setSettingsTab={setSettingsTab}
-        isSidebarOpen={isSidebarOpen}
-        setIsSidebarOpen={setIsSidebarOpen}
         hasFiles={hasFiles}
       />
 
@@ -872,6 +894,8 @@ export default function App() {
         setAgentForm={setAgentForm}
         addOrUpdateAgent={addOrUpdateAgent}
       />
+
+      <SecurityModal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} />
 
       <Dialog open={isClearHistoryModalOpen} onOpenChange={setIsClearHistoryModalOpen}>
         <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 rounded-2xl">
@@ -902,6 +926,7 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #5f6368; }
       `}</style>
       <Toaster position="top-right" theme="dark" richColors closeButton />
+      <SidebarHistory />
     </div>
   );
 }

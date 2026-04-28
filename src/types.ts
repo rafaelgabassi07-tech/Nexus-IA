@@ -47,3 +47,11 @@ export type FileHistoryEntry = {
   timestamp: number;
   files: GeneratedFile[];
 };
+
+export type SecurityRule = {
+  id: string;
+  name: string;
+  pattern: string;
+  action: 'warn' | 'block';
+  active: boolean;
+};

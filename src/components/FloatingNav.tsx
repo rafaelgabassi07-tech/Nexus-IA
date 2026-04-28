@@ -1,15 +1,13 @@
 import { motion } from 'motion/react';
 import { 
-  MessageSquare, Layout, Terminal, Settings, History as HistoryIcon 
+  MessageSquare, Layout, Terminal, Settings, FolderOpen
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface FloatingNavProps {
-  activeTab: 'chat' | 'preview' | 'code' | 'settings';
+  activeTab: 'chat' | 'preview' | 'code' | 'settings' | 'files';
   setActiveTab: (tab: any) => void;
   setSettingsTab: (tab: any) => void;
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: (open: boolean) => void;
   hasFiles: boolean;
 }
 
@@ -17,14 +15,13 @@ export const FloatingNav = ({
   activeTab, 
   setActiveTab, 
   setSettingsTab, 
-  isSidebarOpen,
-  setIsSidebarOpen, 
   hasFiles 
 }: FloatingNavProps) => {
   const navItems = [
     { id: 'chat', icon: MessageSquare, label: 'Chat' },
     { id: 'preview', icon: Layout, label: 'Canvas' },
     { id: 'code', icon: Terminal, label: 'Código', dot: hasFiles },
+    { id: 'files', icon: FolderOpen, label: 'Arquivos' },
   ];
 
   return (
@@ -83,20 +80,6 @@ export const FloatingNav = ({
               <Settings size={22} strokeWidth={activeTab === 'settings' ? 2.5 : 2} className={cn(activeTab === 'settings' ? "text-[#a8c7fa] rotate-90 transition-transform duration-700" : "hover:rotate-45 transition-transform duration-500")} />
             </div>
             <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide leading-none">Ajustes</span>
-          </button>
-
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className={cn(
-              "relative flex flex-col items-center justify-center p-2 min-w-[56px] sm:min-w-[64px] gap-1.5 transition-colors z-10 group rounded-xl",
-              isSidebarOpen ? "text-white bg-white/10" : "text-[#8e918f] hover:text-[#f1f3f4] hover:bg-white/5"
-            )}
-          >
-            <HistoryIcon size={22} className={cn(
-              "transition-transform duration-300 ease-out",
-              isSidebarOpen ? "text-[#a8c7fa]" : "group-hover:-rotate-12"
-            )} strokeWidth={isSidebarOpen ? 2.5 : 2} />
-            <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide leading-none">Histórico</span>
           </button>
         </div>
       </nav>

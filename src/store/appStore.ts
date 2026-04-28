@@ -3,7 +3,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_MODEL } from '../lib/models';
-import { APIPreset, ChatSession } from '../types';
+import { APIPreset, ChatSession, SecurityRule } from '../types';
+
+export const defaultSecurityRules: SecurityRule[] = [
+  { id: '1', name: 'Block eval()', pattern: 'eval\\(', action: 'warn', active: true },
+  { id: '2', name: 'Warn innerHTML', pattern: '\\.innerHTML\\s*=', action: 'warn', active: true },
+  { id: '3', name: 'Hardcoded Secrets', pattern: '(API_KEY|SECRET|PASSWORD)\\s*=', action: 'warn', active: true },
+];
 
 interface SettingsState {
   apiKey: string;
@@ -14,6 +20,7 @@ interface SettingsState {
   temperature: number;
   searchGrounding: boolean;
   autoSave: boolean;
+  securityRules: SecurityRule[];
   
   setApiKey: (key: string) => void;
   setSelectedModel: (model: string) => void;
@@ -23,6 +30,7 @@ interface SettingsState {
   setTemperature: (temp: number) => void;
   setSearchGrounding: (active: boolean) => void;
   setAutoSave: (active: boolean) => void;
+  setSecurityRules: (rules: SecurityRule[]) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -36,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()(
       temperature: 0.7,
       searchGrounding: false,
       autoSave: true,
+      securityRules: defaultSecurityRules,
       
       setApiKey: (key) => set({ apiKey: key }),
       setSelectedModel: (selectedModel) => set({ selectedModel }),
@@ -45,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTemperature: (temperature) => set({ temperature }),
       setSearchGrounding: (searchGrounding) => set({ searchGrounding }),
       setAutoSave: (autoSave) => set({ autoSave }),
+      setSecurityRules: (securityRules) => set({ securityRules }),
     }),
     {
       name: 'nexus-settings-storage',
@@ -53,12 +63,12 @@ export const useSettingsStore = create<SettingsState>()(
 );
 
 interface UIState {
-  activeTab: 'chat' | 'code' | 'preview' | 'settings';
+  activeTab: 'chat' | 'code' | 'preview' | 'settings' | 'files';
   settingsTab: 'overview' | 'general' | 'agent' | 'security';
   isSidebarOpen: boolean;
   isSaving: boolean;
   
-  setActiveTab: (tab: 'chat' | 'code' | 'preview' | 'settings') => void;
+  setActiveTab: (tab: 'chat' | 'code' | 'preview' | 'settings' | 'files') => void;
   setSettingsTab: (tab: 'overview' | 'general' | 'agent' | 'security') => void;
   setIsSidebarOpen: (isOpen: boolean) => void;
   setIsSaving: (isSaving: boolean) => void;

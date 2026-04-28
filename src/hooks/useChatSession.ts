@@ -5,6 +5,8 @@ import {
 import { AgentDefinition } from '../agents';
 import { generateId, extractFilesFromMarkdown } from '../lib/utils';
 import { Terminal, Lightbulb, FileCode, Edit2, Code } from 'lucide-react';
+import { useSettingsStore } from '../store/appStore';
+import { toast } from 'sonner';
 
 interface UseChatSessionProps {
   activeAgent: AgentDefinition;
@@ -308,6 +310,35 @@ export function useChatSession({
             }
           });
           setFileHistory(history => [...history, { timestamp: Date.now(), files: merged }]);
+          
+          // Security Scanner
+          const { securityRules } = useSettingsStore.getState();
+          const activeRules = securityRules.filter(r => r.active);
+          if (activeRules.length > 0) {
+            merged.forEach(file => {
+              activeRules.forEach(rule => {
+                try {
+                  const regex = new RegExp(rule.pattern, 'i');
+                  if (regex.test(file.code)) {
+                    if (rule.action === 'warn') {
+                      toast.warning(`Alerta de Segurança em ${file.name}`, { 
+                        description: `Regra violada: ${rule.name}`
+                      });
+                    } else if (rule.action === 'block') {
+                      toast.error(`Bloqueio de Segurança em ${file.name}`, { 
+                        description: `O código violou a regra: ${rule.name}`
+                      });
+                      // Replace file code to block
+                      file.code = `// O código gerado foi bloqueado pelo scanner de segurança.\n// Regra violada: ${rule.name}`;
+                    }
+                  }
+                } catch(e) {
+                  console.error('Invalid regex rule', rule.pattern);
+                }
+              });
+            });
+          }
+
           return merged;
         });
       }

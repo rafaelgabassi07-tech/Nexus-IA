@@ -409,6 +409,15 @@ export const SettingsPanel = React.memo(({
               <h3 className="text-[14px] font-black text-white uppercase tracking-widest">Protocolos de Segurança</h3>
             </div>
 
+            <div className="flex justify-start mb-6">
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('open-security-modal'))}
+                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl transition-colors text-sm font-semibold flex items-center gap-2 border border-emerald-500/10 hover:border-emerald-500/30"
+              >
+                <ShieldCheck size={16} /> Configurar Scanner de Vulnerabilidades
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
