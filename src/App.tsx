@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  Loader2, ArrowUp,
-  Paperclip, Image as ImageIcon, Terminal, Layout,
-  Brain, Mic, MicOff,
-  RotateCcw
+  RotateCcw, Terminal, Layout,
+  Mic, MicOff, Paperclip, Image as ImageIcon,
+  Brain, Loader2, ArrowUp
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
@@ -22,7 +21,7 @@ import { Button } from './components/ui/button';
 import { Textarea } from './components/ui/textarea';
 import { 
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  SelectLabel, SelectGroup
+  SelectGroup, SelectLabel
 } from './components/ui/select';
 import { 
   Dialog, DialogContent, DialogTitle 
@@ -149,7 +148,6 @@ export default function App() {
     return () => window.removeEventListener('open-security-modal', handleOpenSecurity);
   }, []);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -396,7 +394,6 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setIsSidebarOpen(true);
-        setTimeout(() => searchInputRef.current?.focus(), 100);
       }
       if (e.key === 'Escape') {
         setIsSidebarOpen(false);
@@ -495,7 +492,6 @@ export default function App() {
     }
   };
 
-
   const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string, messagesToUse?: Message[]) => {
     if (e) e.preventDefault();
     const messageToSend = overridePrompt || inputMessage;
@@ -586,14 +582,14 @@ export default function App() {
         id: currentChatId,
         title,
         timestamp: Date.now(),
-        lastMessage: messages[messages.length - 1].content.slice(0, 100),
+        lastMessage: (messages[messages.length - 1]?.content || '').slice(0, 100),
         messages,
-        fileHistory
+        fileHistory: fileHistory || []
       };
       
       addSession(session as any);
     }
-  }, [messages, currentChatId, fileHistory, addSession]);
+  }, [messages.length, currentChatId, addSession]);
 
   const hasFiles = generatedFiles.length > 0;
 
@@ -623,7 +619,7 @@ export default function App() {
       <Header 
         activeAgent={activeAgent}
         messages={messages}
-        currentChatTitle={sessions.find(s => s.id === currentChatId)?.title}
+        currentChatTitle={sessions.find(s => s.id === currentChatId)?.title || ''}
       />
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
@@ -690,92 +686,88 @@ export default function App() {
                       e.target.style.height = e.target.scrollHeight + 'px';
                     }}
                     onKeyDown={onKeyDown}
-                  placeholder="Descreva o que você quer construir..."
-                  className={cn("w-full bg-transparent border-none text-base text-[#f1f3f4] px-4 py-3 min-h-[50px] max-h-[300px] resize-none outline-none leading-relaxed custom-scrollbar placeholder:text-[#8e918f] focus-visible:ring-0 shadow-none overflow-y-auto", attachedFiles.length > 0 && "pt-2")}
-                  rows={1}
-                />
-                
-                <div className="flex items-center justify-between px-3 pb-3 pt-0 gap-2">
-                  <div className="flex items-center gap-1 text-[#8e918f]">
-                    <button
-                      onClick={toggleListening}
-                      className={cn(
-                        "w-9 h-9 rounded-xl transition-colors flex items-center justify-center",
-                        isListening ? "text-red-400 bg-red-400/10" : "hover:bg-[#333538]/50 hover:text-[#e3e3e3]"
-                      )}
-                      title={isListening ? "Parar gravação" : "Digitar por voz"}
-                    >
-                      {isListening ? <MicOff size={16} strokeWidth={2.5} /> : <Mic size={16} strokeWidth={2.5} />}
-                    </button>
+                    placeholder="Descreva o que você quer construir..."
+                    className={cn("w-full bg-transparent border-none text-base text-[#f1f3f4] px-4 py-3 min-h-[50px] max-h-[300px] resize-none outline-none leading-relaxed custom-scrollbar placeholder:text-[#8e918f] focus-visible:ring-0 shadow-none overflow-y-auto", attachedFiles.length > 0 && "pt-2")}
+                    rows={1}
+                  />
 
-                    <input 
-                      type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
-                          setAttachedFiles(prev => [...prev, ...validFiles]);
-                        }
-                      }}
-                    />
-                    <label htmlFor="file-upload" className="w-9 h-9 cursor-pointer text-white/60 hover:bg-white/5 hover:text-white rounded-xl transition-colors flex items-center justify-center" title="Arquivos">
-                      <Paperclip size={16} strokeWidth={2.5} />
-                    </label>
+                  <div className="flex items-center justify-between px-3 pb-3 pt-0 gap-2">
+                    <div className="flex items-center gap-1 text-[#8e918f]">
+                      <button
+                        onClick={toggleListening}
+                        className={cn(
+                          "w-9 h-9 rounded-full transition-all flex items-center justify-center",
+                          isListening ? "text-red-400 bg-red-400/10" : "hover:text-blue-400 hover:bg-white/5"
+                        )}
+                        title={isListening ? "Parar gravação" : "Digitar por voz"}
+                      >
+                        {isListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
+                      </button>
 
-                    <input 
-                      type="file" accept="image/*" multiple hidden ref={imageInputRef}
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
-                          setAttachedFiles(prev => [...prev, ...validFiles]);
-                        }
-                      }}
-                    />
-                    <button onClick={() => imageInputRef.current?.click()} className="w-9 h-9 text-white/60 hover:bg-white/5 hover:text-white rounded-xl transition-colors hidden sm:flex items-center justify-center" title="Imagens">
-                      <ImageIcon size={16} strokeWidth={2.5} />
-                    </button>
-                    
-                    <div className="h-4 w-px bg-white/5 mx-1" />
+                      <input 
+                        type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
+                            setAttachedFiles(prev => [...prev, ...validFiles]);
+                          }
+                        }}
+                      />
+                      <label htmlFor="file-upload" className="w-9 h-9 cursor-pointer text-white/40 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex items-center justify-center" title="Arquivos">
+                        <Paperclip size={16} strokeWidth={2} />
+                      </label>
+
+                      <input 
+                        type="file" accept="image/*" multiple hidden ref={imageInputRef}
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
+                            setAttachedFiles(prev => [...prev, ...validFiles]);
+                          }
+                        }}
+                      />
+                      <button onClick={() => imageInputRef.current?.click()} className="w-9 h-9 text-white/40 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all hidden sm:flex items-center justify-center" title="Imagens">
+                        <ImageIcon size={16} strokeWidth={2} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
+                        <SelectTrigger className="flex h-8 bg-white/5 border-none text-[10px] text-blue-400/80 hover:text-white font-black uppercase tracking-[0.2em] focus:ring-0 px-3 min-w-0 sm:min-w-[120px] rounded-full transition-all items-center">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Brain size={14} className="shrink-0" />
+                            <span className="truncate hidden sm:inline">{selectedModel.split('-')[0]}</span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#0d0d0e] border-white/5 text-[#f1f3f4] rounded-2xl shadow-2xl backdrop-blur-xl">
+                          {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
+                            <SelectGroup key={groupName}>
+                              <SelectLabel className="text-[#8e918f] text-[9px] uppercase font-black tracking-widest pt-3 pb-1 px-3 opacity-50">{groupName}</SelectLabel>
+                              {models.map(m => (
+                                <SelectItem key={m.id} value={m.id} className="rounded-lg m-1">
+                                  <span className="font-bold text-[11px]">{m.name}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
+                        size="icon"
+                        className={cn(
+                          "h-9 w-9 rounded-full transition-all flex flex-shrink-0 items-center justify-center border-none shadow-lg",
+                          (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
+                            ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20" 
+                            : "bg-white/5 text-white/20 cursor-not-allowed"
+                        )}
+                      >
+                        {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={3} />}
+                      </Button>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
-                      <SelectTrigger className="flex h-9 bg-[#1e1f20] border border-white/10 text-[11px] text-[#a8c7fa] hover:text-white hover:bg-white/5 hover:border-white/20 font-bold uppercase tracking-widest focus:ring-0 px-3 py-0 min-w-0 sm:min-w-[110px] shadow-sm rounded-xl transition-all items-center">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Brain size={16} className="shrink-0 text-blue-400" />
-                          <span className="truncate hidden sm:inline">{selectedModel.split('-').slice(0, 2).join('-')}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-xl shadow-2xl min-w-[180px]">
-                        {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
-                          <SelectGroup key={groupName}>
-                            <SelectLabel className="text-[#a8c7fa] text-[10px] uppercase font-bold tracking-wider pt-2 pb-1 px-2">{groupName}</SelectLabel>
-                            {models.map(m => (
-                              <SelectItem key={m.id} value={m.id}>
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-bold text-[11px] truncate">{m.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
-                      size="icon"
-                      className={cn(
-                        "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none",
-                        (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
-                          ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow-md" 
-                          : "bg-[#282a2d] text-[#8e918f] cursor-not-allowed"
-                      )}
-                    >
-                      {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={3} />}
-                    </Button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
