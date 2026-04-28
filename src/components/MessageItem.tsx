@@ -306,11 +306,11 @@ export const MessageItem = React.memo(({
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => handleSendMessage()} 
+                  onClick={() => handleRegenerate?.()} 
                   className="mt-6 border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 gap-2 h-10 rounded-xl text-[12px] font-black uppercase tracking-widest px-6"
                 >
                    <Activity size={16} />
-                   Reprimir Erro e Tentar Novamente
+                   Tentar Novamente
                 </Button>
               )}
             </div>

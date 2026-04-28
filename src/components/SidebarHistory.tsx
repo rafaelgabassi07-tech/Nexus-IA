@@ -55,11 +55,11 @@ export const SidebarHistory = ({
             onClick={() => setIsSidebarOpen(false)}
           />
           <motion.div 
-            initial={{ x: '-100%' }}
+            initial={{ x: '100%' }}
             animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
+            exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200, duration: 0.3 }}
-            className="relative w-full max-w-[320px] bg-[#1e1f20] h-full shadow-2xl flex flex-col border-r border-white/5"
+            className="relative w-full max-w-[320px] bg-[#1e1f20] h-full shadow-2xl flex flex-col border-l border-white/5 ml-auto"
           >
             <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#131314]/50">
               <div className="flex items-center gap-3">

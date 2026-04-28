@@ -35,7 +35,7 @@ export const CodeBlock = ({ language, value, noMargin, fastMode }: CodeBlockProp
   }
 
   return (
-    <div className={cn("relative group/code flex flex-col h-full", !noMargin && "my-4")}>
+    <div className={cn("relative group/code flex flex-col h-full min-w-0 bg-transparent", !noMargin && "my-4")}>
       {!noMargin && (
         <div className="absolute right-3 top-3 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-2">
           {language && (
@@ -73,7 +73,9 @@ export const CodeBlock = ({ language, value, noMargin, fastMode }: CodeBlockProp
           background: 'transparent',
           border: 'none',
           lineHeight: '1.7',
-          flex: 1
+          flex: 1,
+          height: '100%',
+          overflow: 'auto'
         }}
         codeTagProps={{
           style: {

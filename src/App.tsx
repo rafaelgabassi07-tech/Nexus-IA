@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Loader2, ArrowUp,
   Paperclip, Image as ImageIcon, Terminal, Layout,
-  Brain, Mic, MicOff, ExternalLink,
+  Brain, Mic, MicOff,
   RotateCcw
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -54,7 +54,7 @@ export default function App() {
     apiPresets, setApiPresets,
     activePresetId, setActivePresetId,
     temperature, setTemperature,
-    searchGrounding, setSearchGrounding
+    searchGrounding
   } = useSettingsStore();
 
   const { 
@@ -117,9 +117,13 @@ export default function App() {
 
   const pushToInputHistory = useCallback(debounce((val: string) => {
     setChatInputHistory(prev => {
+      // Don't duplicate the last entry
       if (val === prev[prev.length - 1]) return prev;
+      
       const next = [...prev, val];
-      return next.slice(-50);
+      const newHistory = next.slice(-50);
+      setChatInputHistoryIndex(newHistory.length - 1);
+      return newHistory;
     });
   }, 500), []);
 
@@ -176,8 +180,25 @@ export default function App() {
       setDraftSystemPrompt(systemPrompt);
       setDraftActiveAgentId(activeAgentId);
       setDraftActivePresetId(activePresetId);
+    } else {
+      // Auto-save when leaving settings tab
+      if (
+        draftApiKey !== apiKey || 
+        draftSelectedModel !== selectedModel || 
+        draftTemperature !== temperature || 
+        draftSystemPrompt !== systemPrompt || 
+        draftActiveAgentId !== activeAgentId || 
+        draftActivePresetId !== activePresetId
+      ) {
+        setApiKey(draftApiKey);
+        setSelectedModel(draftSelectedModel);
+        setTemperature(draftTemperature);
+        setSystemPrompt(draftSystemPrompt);
+        setActiveAgentId(draftActiveAgentId);
+        setActivePresetId(draftActivePresetId);
+      }
     }
-  }, [activeTab, apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId]);
+  }, [activeTab]);
 
   const saveSettings = () => {
     setApiKey(draftApiKey);
@@ -590,7 +611,7 @@ export default function App() {
           activeTab === 'settings' ? "flex" : (activeTab === 'chat' ? "flex" : "hidden md:flex")
         )}>
           {activeTab === 'settings' ? (
-            <div className="flex-1 overflow-hidden h-full">
+            <div className="flex-1 overflow-hidden h-full flex flex-col">
               <SettingsPanel 
                 settingsTab={settingsTab} setSettingsTab={setSettingsTab}
                 draftApiKey={draftApiKey} setDraftApiKey={setDraftApiKey}
@@ -653,17 +674,17 @@ export default function App() {
                   rows={1}
                 />
                 
-                <div className="flex items-center justify-between p-2 pt-0 gap-2">
-                  <div className="flex items-center gap-0.5 text-[#8e918f]">
+                <div className="flex items-center justify-between px-3 pb-3 pt-0 gap-2">
+                  <div className="flex items-center gap-1 text-[#8e918f]">
                     <button
                       onClick={toggleListening}
                       className={cn(
-                        "p-2 rounded-lg transition-colors flex items-center justify-center",
+                        "w-9 h-9 rounded-xl transition-colors flex items-center justify-center",
                         isListening ? "text-red-400 bg-red-400/10" : "hover:bg-[#333538]/50 hover:text-[#e3e3e3]"
                       )}
                       title={isListening ? "Parar gravação" : "Digitar por voz"}
                     >
-                      {isListening ? <MicOff size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
+                      {isListening ? <MicOff size={16} strokeWidth={2.5} /> : <Mic size={16} strokeWidth={2.5} />}
                     </button>
 
                     <input 
@@ -675,8 +696,8 @@ export default function App() {
                         }
                       }}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer p-2 text-white/60 hover:bg-white/5 hover:text-white rounded-lg transition-colors flex items-center justify-center" title="Arquivos">
-                      <Paperclip size={15} strokeWidth={2.5} />
+                    <label htmlFor="file-upload" className="w-9 h-9 cursor-pointer text-white/60 hover:bg-white/5 hover:text-white rounded-xl transition-colors flex items-center justify-center" title="Arquivos">
+                      <Paperclip size={16} strokeWidth={2.5} />
                     </label>
 
                     <input 
@@ -688,36 +709,22 @@ export default function App() {
                         }
                       }}
                     />
-                    <button onClick={() => imageInputRef.current?.click()} className="p-2 text-white/60 hover:bg-white/5 hover:text-white rounded-lg transition-colors hidden sm:flex" title="Imagens">
-                      <ImageIcon size={15} strokeWidth={2.5} />
+                    <button onClick={() => imageInputRef.current?.click()} className="w-9 h-9 text-white/60 hover:bg-white/5 hover:text-white rounded-xl transition-colors hidden sm:flex items-center justify-center" title="Imagens">
+                      <ImageIcon size={16} strokeWidth={2.5} />
                     </button>
                     
                     <div className="h-4 w-px bg-white/5 mx-1" />
-
-                    <button 
-                      onClick={() => setSearchGrounding(!searchGrounding)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[9.5px] font-black uppercase tracking-widest",
-                        searchGrounding 
-                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300" 
-                          : "bg-white/[0.02] border-white/5 text-[#8e918f] hover:bg-white/[0.05]"
-                      )}
-                      title="Ativar busca Web"
-                    >
-                       <ExternalLink size={11} className={cn(searchGrounding ? "animate-pulse" : "")} />
-                       <span className="hidden sm:inline">Web</span>
-                    </button>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
-                      <SelectTrigger className="flex h-7 bg-white/[0.02] border-white/5 text-[9.5px] text-[#8e918f] hover:text-[#e3e3e3] font-bold uppercase tracking-widest focus:ring-0 px-2 py-0 min-w-0 sm:min-w-[95px] border-none shadow-none rounded-md transition-all hover:bg-white/5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <Brain size={12} className="shrink-0 opacity-40" />
-                          <span className="truncate max-w-[70px] hidden sm:inline">{selectedModel.split('-').slice(0, 2).join('-')}</span>
+                      <SelectTrigger className="flex h-9 bg-[#1e1f20] border border-white/10 text-[11px] text-[#a8c7fa] hover:text-white hover:bg-white/5 hover:border-white/20 font-bold uppercase tracking-widest focus:ring-0 px-3 py-0 min-w-0 sm:min-w-[110px] shadow-sm rounded-xl transition-all items-center">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Brain size={16} className="shrink-0 text-blue-400" />
+                          <span className="truncate hidden sm:inline">{selectedModel.split('-').slice(0, 2).join('-')}</span>
                         </div>
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-lg shadow-2xl min-w-[180px]">
+                      <SelectContent className="bg-[#1a1b1e] border-white/10 text-[#f1f3f4] rounded-xl shadow-2xl min-w-[180px]">
                         {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
                           <SelectGroup key={groupName}>
                             <SelectLabel className="text-[#a8c7fa] text-[10px] uppercase font-bold tracking-wider pt-2 pb-1 px-2">{groupName}</SelectLabel>
@@ -738,13 +745,13 @@ export default function App() {
                       disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
                       size="icon"
                       className={cn(
-                        "h-7 w-7 rounded-md transition-all flex flex-shrink-0 items-center justify-center border-none",
+                        "h-9 w-9 rounded-xl transition-all flex flex-shrink-0 items-center justify-center border-none",
                         (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
-                          ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow" 
+                          ? "bg-[#c2e7ff] hover:bg-[#b5cffb] text-[#001d35] shadow-md" 
                           : "bg-[#282a2d] text-[#8e918f] cursor-not-allowed"
                       )}
                     >
-                      {isLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowUp size={14} strokeWidth={3} />}
+                      {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={3} />}
                     </Button>
                   </div>
                 </div>
@@ -846,6 +853,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         setSettingsTab={setSettingsTab}
+        isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
         hasFiles={hasFiles}
       />
@@ -879,7 +887,6 @@ export default function App() {
       <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/5 bg-[#131314]/50 backdrop-blur-sm relative z-50">
         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
           <span className="hidden sm:inline">Engine: {selectedModel}</span>
-          <span className="hidden md:inline">Grounding: Enabled</span>
           <div className="flex gap-1.5">
             <div className="w-1 h-1 rounded-full bg-white/10" />
             <div className="w-1 h-1 rounded-full bg-white/10" />
