@@ -21,7 +21,7 @@ import {
 
 import { useChatSession } from './hooks/useChatSession';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
-import { AGENTS } from './agents';
+import { AGENTS } from './constants/defaultPrompts';
 
 import { 
   useSettingsStore, 
@@ -416,31 +416,6 @@ function AppContent() {
     document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
   }, [currentChatId, sessions]);
 
-  useEffect(() => {
-    const handleGlobalError = (event: ErrorEvent) => {
-      console.error('Captured global error:', event.error);
-    };
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Log more details to help debugging
-      console.error('Unhandled promise rejection source:', event.promise);
-      console.error('Unhandled promise rejection reason:', event.reason);
-      
-      const reason = event.reason;
-      const message = (reason instanceof Error ? reason.message : 
-                       typeof reason === 'string' ? reason : 
-                       reason?.message || JSON.stringify(reason)) || 'Unknown async error';
-      
-      console.error('Rejection message extracted:', message);
-      toast.error(`Erro assíncrono detectado: ${message.slice(0, 50)}...`);
-    };
-    window.addEventListener('error', handleGlobalError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    return () => {
-      window.removeEventListener('error', handleGlobalError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
-
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -597,7 +572,7 @@ function AppContent() {
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         <div className={cn(
-          "flex-1 flex flex-col bg-background border-r border-white/10 min-h-0 relative",
+          "flex-1 flex flex-col bg-background border-r border-white/30 min-h-0 relative",
           (activeTab !== 'chat' && activeTab !== 'settings') && "hidden md:flex",
           ['settings', 'chat'].includes(activeTab) ? "flex" : "hidden md:flex"
         )}>
@@ -664,6 +639,9 @@ function AppContent() {
                   pushToInputHistory={pushToInputHistory}
                   selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel}
+                  allAgents={allAgents}
+                  activeAgentId={activeAgentId}
+                  setActiveAgentId={setActiveAgentId}
                 />
               </motion.div>
             )}
@@ -737,7 +715,7 @@ function AppContent() {
         </DialogContent>
       </Dialog>
       
-      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/5 bg-[#131314]/50 backdrop-blur-sm relative z-50">
+      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/20 bg-[#141517] relative z-50">
         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
           <span className="hidden sm:inline">Motor: {selectedModel}</span>
           <div className="flex gap-1.5">

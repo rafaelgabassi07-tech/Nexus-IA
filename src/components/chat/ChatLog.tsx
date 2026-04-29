@@ -53,14 +53,11 @@ export const ChatLog = ({
                 exit={{ opacity: 0 }}
                 className="flex flex-col items-center justify-center pt-24"
               >
-                <div className="w-16 h-16 rounded-xl bg-white/[0.01] border border-white/5 flex items-center justify-center mb-8 relative group overflow-hidden">
-                  <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full opacity-40" />
-                  <AgentIcon iconName={activeAgent.iconName} size={28} className="text-white/60 group-hover:text-white transition-all" />
+                <div className="w-16 h-16 rounded-xl bg-white/[0.01] border border-white/20 flex items-center justify-center mb-8 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full opacity-80" />
+                  <AgentIcon iconName={activeAgent.iconName} size={28} className="text-white/90 group-hover:text-white transition-all" />
                 </div>
                 <h1 className="text-[14px] font-black text-white/90 uppercase tracking-[.6em] mb-4 italic leading-none">Protocolo Nexus</h1>
-                <p className="text-[10px] text-white/40 text-center max-w-[280px] font-bold uppercase tracking-[0.2em] px-6 leading-loose">
-                  Estabilizando link neural. Aguardando diretrizes táticas para orquestração do sistema.
-                </p>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-12 w-full max-w-lg px-4">
                   {[
@@ -72,7 +69,7 @@ export const ChatLog = ({
                     <button
                       key={p}
                       onClick={() => handleSendMessage(undefined, p)}
-                      className="px-4 py-2 bg-white/[0.02] border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/[0.04] hover:border-[#00d2ff]/30 transition-all text-left truncate italic"
+                      className="px-4 py-2 bg-white/[0.02] border border-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest text-white/90 hover:text-white hover:bg-white/[0.04] hover:border-[#00d2ff]/30 transition-all text-left truncate italic"
                     >
                       {`> ${p}`}
                     </button>

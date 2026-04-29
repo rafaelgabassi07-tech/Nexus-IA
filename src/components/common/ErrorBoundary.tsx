@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   </p>
                 </div>
 
-                <div className="w-full p-4 bg-black/40 border border-white/5 rounded-2xl text-left overflow-hidden">
+                <div className="w-full p-4 bg-black/40 border border-white/20 rounded-2xl text-left overflow-hidden">
                    <div className="flex items-center gap-2 mb-2">
                       <Terminal size={14} className="text-red-400" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-[#4a4d51]">Error Debug</span>
@@ -68,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
                    <Button 
                     variant="ghost"
                     onClick={() => window.location.href = '/'}
-                    className="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] transition-all border border-white/5 active:scale-95"
+                    className="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] transition-all border border-white/20 active:scale-95"
                    >
                      <Home size={16} className="mr-3" /> Voltar ao Início
                    </Button>

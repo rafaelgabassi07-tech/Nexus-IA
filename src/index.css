@@ -139,10 +139,10 @@
 
 @layer utilities {
   .glass {
-    @apply bg-black/40 backdrop-blur-3xl border border-white/5;
+    @apply bg-[#141517] border border-white/5;
   }
   .glass-lighter {
-    @apply bg-white/[0.03] backdrop-blur-2xl border border-white/10;
+    @apply bg-[#1c1d21] border border-white/10;
   }
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5];

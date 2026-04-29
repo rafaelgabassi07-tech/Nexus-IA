@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
@@ -44,14 +44,16 @@ const limiter = rateLimit({
   message: { error: "Muitas requisições. Aguarde um momento." },
   standardHeaders: true,
   legacyHeaders: false,
-});const MODEL_MAPPING = {
-  'gemini-3.1-flash-lite': 'gemini-1.5-flash',
-  'gemini-3-flash': 'gemini-1.5-flash',
-  'gemini-2.5-flash': 'gemini-1.5-flash',
-  'gemini-2.5-flash-lite': 'gemini-1.5-flash'
-};
+});
 
-const VALID_MODELS = Object.keys(MODEL_MAPPING);
+const VALID_MODELS = [
+  'gemini-2.5-pro',
+  'gemini-2.5-pro-preview-06-05',
+  'gemini-2.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash-lite',
+  'gemini-3.1-flash-lite-preview',
+];
 
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
@@ -83,12 +85,11 @@ app.post('/api/chat', limiter, async (req, res) => {
 
   const { messages, apiKey, model, systemPrompt, temperature, searchGrounding } = result.data;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutId = setTimeout(() => controller.abort(), 180000);
 
   try {
-    const targetModelId = VALID_MODELS.includes(model) ? model : 'gemini-3.1-flash-lite';
-    const targetModel = MODEL_MAPPING[targetModelId] || 'gemini-1.5-flash';
-    
+    let targetModel = model;
+
     const recentMessages = messages.slice(-30);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -102,22 +103,21 @@ app.post('/api/chat', limiter, async (req, res) => {
       return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada no servidor." });
     }
     
-    let genAI;
+    let ai;
     try {
-      genAI = new GoogleGenerativeAI(apiKeyToUse);
+      ai = new GoogleGenAI({ apiKey: apiKeyToUse });
     } catch (e) {
       return res.status(500).json({ error: "Falha ao inicializar Nexus Intelligence Core." });
     }
 
-    const modelInstance = genAI.getGenerativeModel({ 
-      model: targetModel,
-      systemInstruction: systemPrompt || undefined,
-    });
-    
     const contents = recentMessages.map(msg => ({
       role: msg.role === 'model' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
+      parts: [{ text: msg.content ? msg.content.trim() || ' ' : ' ' }]
     }));
+
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: ' ' }] });
+    }
 
     // Add images to the last user message if present
     if (contents.length > 0 && contents[contents.length-1].role === 'user' && messages[messages.length-1].images) {
@@ -132,18 +132,24 @@ app.post('/api/chat', limiter, async (req, res) => {
 
     const tools = searchGrounding ? [{ googleSearch: {} }] : [];
     
-    const streamingResult = await modelInstance.generateContentStream({
+    const streamingResult = await ai.models.generateContentStream({
+      model: targetModel,
       contents: contents,
-      tools: tools as any,
-      generationConfig: {
-        temperature: temperature
+      config: {
+        systemInstruction: systemPrompt || undefined,
+        temperature: temperature,
+        tools: tools,
+        ...(targetModel.includes('pro') ? {
+          thinkingConfig: {
+            thinkingBudget: 8000
+          }
+        } : {})
       }
     }, { signal: controller.signal });
 
-    for await (const chunk of streamingResult.stream) {
-      const text = chunk.text();
-      if (text) {
-        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    for await (const chunk of streamingResult) {
+      if (chunk.text) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
       }
     }
     
@@ -159,10 +165,35 @@ app.post('/api/chat', limiter, async (req, res) => {
     console.error('Error generating content:', error);
     let errorMessage = (error instanceof Error ? error.message : String(error)) || "Failed to generate content";
     
+    // Try to parse JSON from error message to extract deep details
+    try {
+      const match = errorMessage.match(/\{[\s\S]*\}/);
+      if (match) {
+        let parsed = JSON.parse(match[0]);
+        if (parsed.error && parsed.error.message) {
+          // It might be a double JSON string inside message
+          try {
+            const innerParsed = JSON.parse(parsed.error.message);
+            if (innerParsed.error && innerParsed.error.message) {
+               errorMessage = innerParsed.error.message;
+            } else {
+               errorMessage = parsed.error.message;
+            }
+          } catch(e) {
+             errorMessage = parsed.error.message;
+          }
+        }
+      }
+    } catch(e) {
+      // Ignored
+    }
+    
     if (errorMessage.includes("API key not valid") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("Incorrect API key")) {
       errorMessage = "Chave da API inválida.";
-    } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("rate limit")) {
+    } else if (errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("rate limit") || errorMessage.includes("429")) {
       errorMessage = "Cota ou Rate Limit excedida para este modelo.";
+    } else if (errorMessage.includes("503") || errorMessage.toLowerCase().includes("high demand") || errorMessage.toLowerCase().includes("overloaded")) {
+      errorMessage = "O modelo está sobrecarregado no momento. Tentando novamente mais tarde.";
     }
 
     if (!res.headersSent) {
