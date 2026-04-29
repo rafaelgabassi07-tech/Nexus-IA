@@ -1,4 +1,3 @@
-import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 export function LoadingSpinner({ text = 'Carregando...', fullScreen = false }: { text?: string, fullScreen?: boolean }) {

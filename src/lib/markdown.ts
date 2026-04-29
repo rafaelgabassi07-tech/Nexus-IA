@@ -1,5 +1,3 @@
-import { GeneratedFile } from '../types';
-
 export const extractFilesFromMarkdown = (content: string, uniquePrefix: string = '') => {
   const files: { name: string, lang: string, code: string }[] = [];
   const lines = content.split('\n');

@@ -23,10 +23,11 @@ export const cdns = `
   <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/react-is@18/umd/react-is.development.js"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/framer-motion@11/dist/framer-motion.js"></script>
-  <script crossorigin="anonymous" src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 `;

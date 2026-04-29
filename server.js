@@ -47,8 +47,6 @@ const limiter = rateLimit({
 });
 
 const VALID_MODELS = [
-  'gemini-3.1-pro-preview',
-  'gemini-2.5-pro',
   'gemini-2.5-flash',
   'gemini-3-flash-preview',
   'gemini-2.5-flash-lite',
@@ -131,20 +129,36 @@ app.post('/api/chat', limiter, async (req, res) => {
     }
 
     const tools = searchGrounding ? [{ googleSearch: {} }] : [];
+    let modelConfig: any = {
+      temperature: temperature,
+      systemInstruction: systemPrompt || undefined,
+      tools: tools,
+      topP: 0.95,
+      topK: 40,
+      maxOutputTokens: 8192
+    };
+
+    if (targetModel.includes('gemini-3-flash')) {
+      modelConfig.temperature = Math.min(temperature, 0.4); 
+      modelConfig.topP = 0.9;
+      modelConfig.maxOutputTokens = 8192;
+      // Optimized for coding with Gemini 3 Flash (fast and concise)
+    } else if (targetModel.includes('gemini-2.5-flash') && !targetModel.includes('lite')) {
+      modelConfig.temperature = Math.min(temperature, 0.5);
+      modelConfig.topP = 0.95;
+      modelConfig.maxOutputTokens = 8192;
+      // Gemini 2.5 Flash optimizations for thorough coding
+    } else if (targetModel.includes('lite')) {
+      modelConfig.temperature = Math.min(temperature, 0.3);
+      modelConfig.topK = 32;
+      modelConfig.maxOutputTokens = 4096;
+      // Lite models benefit from lower temperature for strict coding tasks
+    }
     
     const streamingResult = await ai.models.generateContentStream({
       model: targetModel,
       contents: contents,
-      config: {
-        systemInstruction: systemPrompt || undefined,
-        temperature: temperature,
-        tools: tools,
-        ...(targetModel.includes('pro') ? {
-          thinkingConfig: {
-            thinkingBudget: 8000
-          }
-        } : {})
-      }
+      config: modelConfig
     }, { signal: controller.signal });
 
     for await (const chunk of streamingResult) {

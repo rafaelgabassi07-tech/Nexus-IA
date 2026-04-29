@@ -6,6 +6,7 @@ export interface NexusModel {
   group: 'Google Gemini';
   tier?: 'pro' | 'standard' | 'lite';
   recommended?: boolean;
+  rateLimit?: string;
 }
 
 export const NEXUS_MODELS: NexusModel[] = [
@@ -14,40 +15,38 @@ export const NEXUS_MODELS: NexusModel[] = [
     name: 'Gemini 3.1 Flash Lite',
     contextWindow: 1048576,
     group: 'Google Gemini',
-    tier: 'lite'
+    tier: 'lite',
+    rateLimit: '500 rpd • 15 rpm',
+    recommended: false
   },
   {
     id: 'gemini-3-flash-preview',
     name: 'Gemini 3 Flash',
     contextWindow: 1048576,
     group: 'Google Gemini',
-    tier: 'standard'
+    tier: 'standard',
+    rateLimit: '20 rpd • 5 rpm',
+    recommended: true
   },
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     contextWindow: 1048576,
     group: 'Google Gemini',
-    tier: 'standard'
+    tier: 'standard',
+    rateLimit: '20 rpd • 5 rpm'
   },
   {
     id: 'gemini-2.5-flash-lite',
     name: 'Gemini 2.5 Flash Lite',
     contextWindow: 1048576,
     group: 'Google Gemini',
-    tier: 'lite'
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro Preview',
-    contextWindow: 1048576,
-    group: 'Google Gemini',
-    tier: 'pro',
-    recommended: true
+    tier: 'lite',
+    rateLimit: '20 rpd • 10 rpm'
   }
 ];
 
-export const DEFAULT_MODEL = 'gemini-3.1-pro-preview';
+export const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export const getModelById = (id: string) => 
   NEXUS_MODELS.find(m => m.id === id) || NEXUS_MODELS.find(m => m.id === DEFAULT_MODEL)!;

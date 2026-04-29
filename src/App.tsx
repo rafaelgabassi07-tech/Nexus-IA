@@ -108,7 +108,16 @@ function AppContent() {
   // Mounted ref for async safety
   const isMounted = useRef(true);
 
-  const [inputMessage, setInputMessage] = useState('');
+  const [inputMessage, _setInputMessage] = useState('');
+  const inputMessageRef = useRef('');
+  const setInputMessage = useCallback((val: string | ((prev: string) => string)) => {
+    _setInputMessage(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      inputMessageRef.current = next;
+      return next;
+    });
+  }, []);
+
   const [chatInputHistory, setChatInputHistory] = useState<string[]>(['']);
   const [chatInputHistoryIndex, setChatInputHistoryIndex] = useState(0);
 
@@ -126,7 +135,6 @@ function AppContent() {
 
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [previewKey, setPreviewKey] = useState(0);
-  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const [isSystemPromptExpanded, setIsSystemPromptExpanded] = useState(false);
 
@@ -146,8 +154,6 @@ function AppContent() {
     window.addEventListener('open-security-modal', handleOpenSecurity);
     return () => window.removeEventListener('open-security-modal', handleOpenSecurity);
   }, []);
-
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [draftApiKey, setDraftApiKey] = useState(apiKey);
   const [draftSelectedModel, setDraftSelectedModel] = useState(selectedModel);
@@ -416,25 +422,9 @@ function AppContent() {
     document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
   }, [currentChatId, sessions]);
 
-  const [isAtBottom, setIsAtBottom] = useState(true);
-
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-    };
-  }, []);
-
   const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string, messagesToUse?: Message[]) => {
     if (e) e.preventDefault();
-    const messageToSend = overridePrompt || inputMessage;
+    const messageToSend = overridePrompt || inputMessageRef.current;
     const isRegenerate = !!messagesToUse;
     
     if (!isRegenerate && ((!messageToSend.trim() && attachedFiles.length === 0) || isLoading)) return;
@@ -453,18 +443,13 @@ function AppContent() {
       }
       
       await sendMessage(messageToSend, attachedFiles, messagesToUse);
-      
-      // Ensure we stay at bottom on success
-      if (isMounted.current) {
-        setTimeout(() => scrollToBottom('smooth'), 100);
-      }
     } catch (err) {
       if (isMounted.current) {
         toast.error("Falha ao processar requisição.");
         console.error("SendMessage Error:", err);
       }
     }
-  }, [inputMessage, attachedFiles, isLoading, activeTab, sendMessage, pushToInputHistory, scrollToBottom, setActiveTab]);
+  }, [attachedFiles, isLoading, activeTab, sendMessage, pushToInputHistory, setActiveTab, setInputMessage]);
 
   const handleRegenerate = useCallback(() => {
     if (messages.length < 2 || isLoading) return;
@@ -481,33 +466,6 @@ function AppContent() {
       console.error("Failed to regenerate message:", err);
     });
   }, [messages, isLoading, handleSendMessage, setMessages]);
-
-  useEffect(() => {
-    const scrollContainer = scrollRef.current;
-    if (!scrollContainer) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      const atBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setIsAtBottom(atBottom);
-      setShowScrollButton(!atBottom && isLoading);
-    };
-
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, [isLoading]);
-
-  useEffect(() => {
-    if (isLoading && isAtBottom) {
-      scrollToBottom('auto');
-    }
-  }, [messages, isLoading, isAtBottom, scrollToBottom]);
-
-  useEffect(() => {
-    if (currentChatId) {
-      setTimeout(() => scrollToBottom('auto'), 100);
-    }
-  }, [currentChatId, scrollToBottom]);
 
   useEffect(() => {
     setIsSaving(true);
@@ -642,6 +600,8 @@ function AppContent() {
                   allAgents={allAgents}
                   activeAgentId={activeAgentId}
                   setActiveAgentId={setActiveAgentId}
+                  hasFiles={generatedFiles.length > 0}
+                  generatedFiles={generatedFiles}
                 />
               </motion.div>
             )}

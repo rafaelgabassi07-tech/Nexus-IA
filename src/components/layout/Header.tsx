@@ -43,7 +43,7 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
               <div className={cn("w-4 h-4 rounded-md flex items-center justify-center shadow-sm", activeAgent.color)}>
                 <AgentIcon iconName={activeAgent.iconName} size={10} className="text-foreground" />
               </div>
-              <span className="text-[12px] font-medium text-muted-foreground max-w-[150px] truncate leading-none pt-0.5">{currentChatTitle || activeAgent.name}</span>
+              <span className="text-[12px] font-medium text-muted-foreground max-w-[150px] truncate leading-none">{currentChatTitle || activeAgent.name}</span>
               {isSaving && (
                 <div className="flex items-center gap-1 ml-1">
                   <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />

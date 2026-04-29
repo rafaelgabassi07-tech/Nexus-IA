@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   Mic, MicOff, Paperclip, Image as ImageIcon,
   Loader2, ArrowUp, User
@@ -10,7 +10,7 @@ import {
 } from '../ui/popover';
 import { cn } from '../../lib/utils';
 import { GROUPED_MODELS } from '../../lib/models';
-import { AgentDefinition } from '../../types';
+import { AgentDefinition, GeneratedFile } from '../../types';
 
 interface ChatInputProps {
   inputMessage: string;
@@ -18,7 +18,7 @@ interface ChatInputProps {
   attachedFiles: File[];
   setAttachedFiles: React.Dispatch<React.SetStateAction<File[]>>;
   isLoading: boolean;
-  handleSendMessage: (e?: React.FormEvent) => Promise<void>;
+  handleSendMessage: (e?: React.FormEvent, overridePrompt?: string) => Promise<void>;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   isListening: boolean;
   toggleListening: () => void;
@@ -28,6 +28,61 @@ interface ChatInputProps {
   allAgents: AgentDefinition[];
   activeAgentId: string;
   setActiveAgentId: (id: string) => void;
+  hasFiles?: boolean;
+  generatedFiles?: GeneratedFile[];
+}
+
+function generateDynamicSuggestions(files: GeneratedFile[]): string[] {
+  if (!files || files.length === 0) return [];
+  
+  const suggestions: string[] = [];
+  let allCode = '';
+  files.forEach(f => {
+    allCode += f.code + '\n';
+  });
+
+  // Example basic checks
+  if (!allCode.includes('framer-motion') && !allCode.includes('motion/react')) {
+    suggestions.push("✨ Adicionar animações suaves com framer-motion");
+  }
+  
+  if (allCode.includes('console.log')) {
+    suggestions.push("🧹 Remover os console.log esquecidos no código");
+  }
+  
+  if (!allCode.includes('dark') && allCode.includes('className=')) {
+    suggestions.push("🌙 Implementar suporte real a Dark Mode");
+  }
+
+  // File size checks
+  files.forEach(f => {
+    if (f.code.split('\n').length > 200 && f.name.endsWith('.tsx')) {
+      suggestions.push(`🛠️ Componente grande: Extrair partes de ${f.name} em componentes menores`);
+    }
+  });
+
+  if (!allCode.includes('ErrorBoundary')) {
+    suggestions.push("🛡️ Adicionar Error Boundary para prevenção de falhas gerais");
+  }
+
+  if (allCode.includes('localStorage')) {
+    suggestions.push("💾 Melhorar armazenamento local e segurança dos dados");
+  }
+  
+  if (allCode.includes('useState') && !allCode.includes('useCallback') && !allCode.includes('useMemo')) {
+    suggestions.push("🚀 Otimizar re-renderizações com useMemo e useCallback");
+  }
+
+  if (!allCode.includes('lucide-react')) {
+    suggestions.push("🎨 Melhorar UI adicionando ícones (lucide-react)");
+  }
+
+  // Adding some generic but helpful ones applicable to most single-page apps
+  suggestions.push("📱 Revisar a responsividade para telas mobile");
+  suggestions.push("🐞 Fazer uma análise e correção geral de bugs e segurança");
+
+  // Keep them unique and shuffle
+  return Array.from(new Set(suggestions)).sort(() => 0.5 - Math.random()).slice(0, 4);
 }
 
 export const ChatInput = ({
@@ -46,10 +101,21 @@ export const ChatInput = ({
   allAgents,
   activeAgentId,
   setActiveAgentId,
+  hasFiles,
+  generatedFiles = [],
 }: ChatInputProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
+  const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (hasFiles && !isLoading) {
+      setRandomSuggestions(generateDynamicSuggestions(generatedFiles));
+    } else {
+      setRandomSuggestions([]);
+    }
+  }, [inputMessage, isLoading, hasFiles, generatedFiles]); // Reshuffle when message is cleared or finished loading
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -59,8 +125,19 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="p-3 bg-background shrink-0 border-t border-border z-20">
-      <div className="max-w-4xl mx-auto flex flex-col">
+    <div className="p-3 bg-background shrink-0 border-t border-border z-20 flex flex-col gap-2">
+      <div className="max-w-4xl mx-auto w-full flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 -m-1 p-1">
+        {!inputMessage && randomSuggestions.map((suggestion, i) => (
+          <button
+            key={i}
+            className="flex-shrink-0 animate-in fade-in slide-in-from-bottom-2 px-3 py-1.5 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50 rounded-full transition-all flex items-center gap-1.5"
+            onClick={() => handleSendMessage(undefined, suggestion).catch(console.error)}
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+      <div className="max-w-4xl mx-auto flex flex-col w-full">
         <div className="relative bg-card border border-border focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/5 rounded-xl transition-all duration-300 shadow-sm flex flex-col group/input overflow-hidden">
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1 px-3 pt-2 pb-0.5">
@@ -118,7 +195,7 @@ export const ChatInput = ({
 
             <div className="flex items-center gap-2">
               <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                <PopoverTrigger className="flex items-center h-7 bg-[#1a1a1a] rounded-lg border border-border px-2 hover:border-primary/40 transition-all shadow-md text-[9px] font-bold text-muted-foreground hover:text-foreground gap-1.5 uppercase tracking-wider">
+                <PopoverTrigger className="flex items-center h-5 bg-[#1a1a1a] rounded px-1.5 hover:border-primary/40 transition-all shadow-sm text-[8px] font-bold text-muted-foreground hover:text-foreground gap-1 uppercase tracking-widest border border-border/50">
                   <span className="truncate max-w-[80px]">{allAgents.find(a => a.id === activeAgentId)?.name || 'Persona'} / {Object.values(GROUPED_MODELS).flat().find(m => m.id === selectedModel)?.name || 'Modelo'}</span>
                 </PopoverTrigger>
                 <PopoverContent 
@@ -173,8 +250,8 @@ export const ChatInput = ({
                                 selectedModel === m.id ? "bg-white/10 text-foreground border-white/10" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                               )}
                             >
-                              <span className="font-bold text-[10px] leading-tight">{m.name}</span>
-                              <span className="text-[8px] opacity-40 truncate leading-none mt-1 uppercase tracking-tight">Nexus Engine {m.tier}</span>
+                              <span className="font-bold text-[11px] leading-tight">{m.name}</span>
+                              <span className="text-[9px] text-muted-foreground truncate leading-none mt-1 shadow-sm uppercase tracking-tight">Nexus Engine {m.tier}</span>
                             </button>
                           ))}
                         </div>

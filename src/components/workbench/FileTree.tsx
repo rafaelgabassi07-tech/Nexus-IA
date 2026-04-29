@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { FileCode, Activity, Layout, Terminal, Box, Search, X } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { FileCode, Activity, Layout, Terminal, Box, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GeneratedFile } from '../../types';
 
@@ -9,88 +9,165 @@ interface FileTreeProps {
   onSelect: (index: number) => void;
 }
 
+type TreeNode = {
+  name: string;
+  type: 'file' | 'folder';
+  path: string;
+  fileIndex?: number;
+  children?: TreeNode[];
+};
+
+function buildTree(files: GeneratedFile[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  
+  files.forEach((file, index) => {
+    // some file.name might start with / or no
+    const pathParts = file.name.replace(/^\//, '').split('/');
+    let currentLevel = root;
+    
+    let currentPath = '';
+
+    pathParts.forEach((part, i) => {
+      currentPath += (currentPath ? '/' : '') + part;
+      const isFile = i === pathParts.length - 1;
+      
+      let existingNode = currentLevel.find(n => n.name === part && n.type === (isFile ? 'file' : 'folder'));
+      
+      if (!existingNode) {
+        existingNode = {
+          name: part,
+          type: isFile ? 'file' : 'folder',
+          path: currentPath,
+          ...(isFile ? { fileIndex: index } : { children: [] })
+        };
+        currentLevel.push(existingNode);
+      }
+      
+      if (!isFile) {
+        currentLevel = existingNode.children!;
+      }
+    });
+  });
+
+  const sortNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name);
+      return a.type === 'folder' ? -1 : 1;
+    });
+    nodes.forEach(n => {
+      if (n.children) sortNodes(n.children);
+    });
+  };
+  
+  sortNodes(root);
+  return root;
+}
+
+const getIcon = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext === 'tsx' || ext === 'jsx') return <Layout size={14} className="text-primary" />;
+  if (ext === 'ts' || ext === 'js') return <FileCode size={14} className="text-primary" />;
+  if (ext === 'css') return <Activity size={14} className="text-purple-400" />;
+  if (ext === 'json') return <Box size={14} className="text-amber-400" />;
+  return <Terminal size={14} className="text-muted-foreground" />;
+};
+
+const FileTreeNode = ({ 
+  node, 
+  activeFileIndex, 
+  onSelect,
+  level = 0
+}: { 
+  node: TreeNode, 
+  activeFileIndex: number, 
+  onSelect: (idx: number) => void,
+  level?: number 
+}) => {
+  const [isOpen, setIsOpen] = useState(true);
+  
+  if (node.type === 'folder') {
+    return (
+      <div className="w-full flex flex-col">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-white/[0.04] text-muted-foreground hover:text-foreground transition-all rounded text-left group"
+          style={{ paddingLeft: `${level * 12 + 8}px` }}
+        >
+          {isOpen ? <ChevronDown size={12} className="opacity-60" /> : <ChevronRight size={12} className="opacity-60" />}
+          {isOpen ? <FolderOpen size={14} className="text-blue-400 opacity-80" /> : <Folder size={14} className="text-blue-400 opacity-80" />}
+          <span className="text-[12px] font-medium tracking-tight truncate">{node.name}</span>
+        </button>
+        {isOpen && node.children && (
+          <div className="flex flex-col">
+            {node.children.map(child => (
+              <FileTreeNode 
+                key={child.path} 
+                node={child} 
+                activeFileIndex={activeFileIndex} 
+                onSelect={onSelect} 
+                level={level + 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isActive = activeFileIndex === node.fileIndex;
+
+  return (
+    <button
+      onClick={() => onSelect(node.fileIndex!)}
+      className={cn(
+        "flex items-center gap-2 py-1.5 hover:bg-white/[0.04] transition-all rounded text-left group pr-2 w-full",
+        isActive ? "bg-white/[0.06] text-foreground font-semibold" : "text-muted-foreground/80 hover:text-foreground"
+      )}
+      style={{ paddingLeft: `${level * 12 + 24}px` }}
+    >
+      <div className={cn(
+        "shrink-0 transition-all",
+        isActive ? "opacity-100 scale-100" : "opacity-70 group-hover:opacity-100"
+      )}>
+        {getIcon(node.name)}
+      </div>
+      <span className={cn(
+        "text-[12px] truncate tracking-tight transition-colors",
+        isActive ? "text-primary" : ""
+      )}>
+        {node.name}
+      </span>
+    </button>
+  );
+};
+
 export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) => {
-  const [search, setSearch] = useState('');
+  const tree = useMemo(() => buildTree(files), [files]);
 
   if (!files || files.length === 0) return null;
-
-  const filteredFiles = files
-    .map((f, i) => ({ ...f, originalIndex: i }))
-    .filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
-
-  const getIcon = (fileName: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext === 'tsx' || ext === 'jsx') return <Layout size={14} className="text-primary" />;
-    if (ext === 'ts' || ext === 'js') return <FileCode size={14} className="text-primary" />;
-    if (ext === 'css') return <Activity size={14} className="text-purple-400" />;
-    if (ext === 'json') return <Box size={14} className="text-amber-400" />;
-    return <Terminal size={14} className="text-muted-foreground" />;
-  };
 
   return (
     <div className="w-full h-full flex flex-col bg-background/50 backdrop-blur-xl overflow-hidden py-2 md:min-w-[200px]">
       <div className="px-4 mb-3 mt-1 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-[9px] font-black text-muted-foreground uppercase tracking-[.3em] italic">Manifest Core</h3>
+          <h3 className="text-[9px] font-black text-muted-foreground uppercase tracking-[.3em] italic">Explorador</h3>
           <div className="h-px w-4 bg-primary/20" />
-        </div>
-        
-        <div className="relative group">
-          <Search size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <input 
-            type="text" 
-            placeholder="FILTER ASSETS..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-7 bg-white/[0.02] border border-border rounded-md pl-8 pr-8 text-[10px] font-bold text-muted-foreground focus:outline-none focus:border-primary/30 placeholder:text-foreground/5 uppercase tracking-tighter transition-all"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X size={10} />
-            </button>
-          )}
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-px px-1.5">
-        {filteredFiles.length > 0 ? (
-          filteredFiles.map((file) => (
-            <button
-              key={file.name + file.originalIndex}
-              onClick={() => onSelect(file.originalIndex)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-all duration-200 text-left group",
-                activeFileIndex === file.originalIndex 
-                  ? "bg-white/[0.04] text-foreground border border-border active-file-shadow" 
-                  : "text-muted-foreground/60 hover:bg-white/[0.02] border border-transparent"
-              )}
-            >
-              <div className={cn(
-                "shrink-0 transition-all duration-300",
-                activeFileIndex === file.originalIndex ? "opacity-100 scale-100" : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
-              )}>
-                {getIcon(file.name)}
-              </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <span className={cn(
-                  "text-[12px] font-bold truncate tracking-tight transition-colors",
-                  activeFileIndex === file.originalIndex ? "text-muted-foreground" : "group-hover:text-muted-foreground"
-                )}>
-                  {file.name.split('/').pop()}
-                </span>
-                <span className="text-[8px] font-black opacity-70 uppercase tracking-[.15em] mt-0.5 italic">
-                  {file.name.split('/').length > 1 ? file.name.split('/').slice(0, -1).join('/') : 'ROOT'}
-                </span>
-              </div>
-            </button>
-          ))
-        ) : (
-          <div className="py-10 flex flex-col items-center justify-center opacity-60 text-center px-4">
-            <Search size={20} className="mb-2" />
-            <span className="text-[10px] font-black uppercase tracking-widest">No match detected</span>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-1">
+        <div className="flex flex-col">
+          {tree.map(node => (
+            <FileTreeNode 
+              key={node.path} 
+              node={node} 
+              activeFileIndex={activeFileIndex} 
+              onSelect={onSelect} 
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 };
+

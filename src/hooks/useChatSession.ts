@@ -5,6 +5,8 @@ import {
 import { generateId, extractFilesFromMarkdown } from '../lib/utils';
 import { useSettingsStore } from '../store/appStore';
 import { toast } from 'sonner';
+import { parseSlashCommand } from '../lib/commands';
+import { runReviewSubAgents, isSubAgentCommand } from '../lib/subagents';
 
 interface UseChatSessionProps {
   activeAgent: AgentDefinition;
@@ -60,6 +62,18 @@ export function useChatSession({
     if (isLoading) return;
 
     let finalMessage = content;
+    const parsed = parseSlashCommand(content);
+    const activeCode = generatedFilesRef.current.length > 0 ? generatedFilesRef.current[activeFileIndex]?.code || null : null;
+    const activeFileName = generatedFilesRef.current.length > 0 ? generatedFilesRef.current[activeFileIndex]?.name || null : null;
+
+    if (parsed.isCommand && parsed.command) {
+      finalMessage = parsed.command.buildPrompt(parsed.args || '', {
+         activeFile: activeFileName,
+         activeFileContent: activeCode || '',
+         allFiles: generatedFilesRef.current.map(f => f.name)
+      });
+    }
+
     const imageAttachments: { mimeType: string; data: string }[] = [];
 
     // Filter out error messages
@@ -143,80 +157,82 @@ export function useChatSession({
     let turnGeneratedFilesCount = 0;
     
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          messages: updatedMessages.map((m, idx) => ({ 
-            role: m.role, 
-            // Only inject file context on the last user message to keep tokens low
-            content: (idx === updatedMessages.length - 1 && m.role === 'user') 
-              ? m.content + filesContext 
-              : m.content,
-            images: (m as any).images 
-          })),
-          systemPrompt,
-          temperature,
-          agentId: activeAgent.id,
-          apiKey,
-          model: selectedModel,
-          searchGrounding
-        })
-      });
+      let globalFullResponse = "";
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server returned ${res.status}`);
-      }
+      const performChatFetch = async (currentPrompt: string, prefixText: string = "") => {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: abortControllerRef.current?.signal,
+          body: JSON.stringify({
+            messages: updatedMessages.map((m, idx) => ({
+              role: m.role,
+              content: (idx === updatedMessages.length - 1 && m.role === 'user') 
+                ? currentPrompt + filesContext 
+                : m.content,
+              images: (m as any).images 
+            })),
+            systemPrompt,
+            temperature,
+            agentId: activeAgent.id,
+            apiKey,
+            model: selectedModel,
+            searchGrounding
+          })
+        });
 
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullResponse = "";
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server returned ${res.status}`);
+        }
 
-      if (reader) {
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let localFullResponse = prefixText;
+        globalFullResponse += prefixText;
 
-          buffer += decoder.decode(value, { stream: true });
+        if (reader) {
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          if (!hasStartedThinking && buffer.length > 0) {
-            hasStartedThinking = true;
-            thoughtStepId = generateId();
-            updateSteps([
-              { ...steps[0], status: 'success' },
-              { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: 'Lightbulb' as any }
-            ]);
-          }
+            buffer += decoder.decode(value, { stream: true });
 
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || "";
+            if (!hasStartedThinking && buffer.length > 0) {
+              hasStartedThinking = true;
+              thoughtStepId = generateId();
+              updateSteps([
+                { ...steps[0], status: 'success' },
+                { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: 'Lightbulb' as any }
+              ]);
+            }
 
-          for (const part of parts) {
-            if (part.startsWith('data: ')) {
-              const data = part.slice(6);
-              if (data === '[DONE]') break;
-              
-              let parsed;
-              try { parsed = JSON.parse(data); } catch (e) { continue; }
-              
-              if (parsed.error) throw new Error(parsed.error);
-              if (parsed.text) {
-                fullResponse += parsed.text;
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || "";
+
+            for (const part of parts) {
+              if (part.startsWith('data: ')) {
+                const data = part.slice(6);
+                if (data === '[DONE]') break;
                 
-                // Update thinking timer
-                if (hasStartedThinking && !hasStartedCoding && Date.now() - lastThoughtUpdate > 1000) {
-                  lastThoughtUpdate = Date.now();
-                  const elapsed = Math.round((Date.now() - startTime) / 1000);
-                  updateSteps(steps.map(s => s.id === thoughtStepId ? { ...s, label: `Pensando... (${elapsed}s)` } : s));
-                }
+                let parsed;
+                try { parsed = JSON.parse(data); } catch (e) { continue; }
+                
+                if (parsed.error) throw new Error(parsed.error);
+                if (parsed.text) {
+                  localFullResponse += parsed.text;
+                  globalFullResponse += parsed.text;
+                  
+                  if (hasStartedThinking && !hasStartedCoding && Date.now() - lastThoughtUpdate > 1000) {
+                    lastThoughtUpdate = Date.now();
+                    const elapsed = Math.round((Date.now() - startTime) / 1000);
+                    updateSteps(steps.map(s => s.id === thoughtStepId ? { ...s, label: `Pensando... (${elapsed}s)` } : s));
+                  }
 
-                  // File detection
-                  const newContent = fullResponse.slice(lastContentLength);
+                  const newContent = globalFullResponse.slice(lastContentLength);
                   if (newContent.length > 2) {
-                    const currentFiles = extractFilesFromMarkdown(fullResponse, messageId.slice(0, 5));
+                    const currentFiles = extractFilesFromMarkdown(globalFullResponse, messageId.slice(0, 5));
                     if (currentFiles.length > turnGeneratedFilesCount) {
                       turnGeneratedFilesCount = currentFiles.length;
                       const newFile = currentFiles[currentFiles.length - 1];
@@ -232,7 +248,6 @@ export function useChatSession({
                       });
                       updateSteps(currentSteps);
                       
-                      // Use setGeneratedFiles callback form to avoid stale closures
                       setGeneratedFiles(prevFiles => {
                         const merged = [...prevFiles];
                         currentFiles.forEach(cf => {
@@ -256,67 +271,81 @@ export function useChatSession({
                        });
                     }
 
-                  // Writing indicator
-                  const openBlockMatch = fullResponse.match(/```[ \t]*(?:(\w+)[ \t]+)?(?:file:[ \t]*)?([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || fullResponse.match(/```([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || fullResponse.match(/```(\w+)[ \t]*\n([^`]*)$/i);
-                  if (openBlockMatch) {
-                    const matchedName = openBlockMatch[2] || openBlockMatch[1] || `script`;
-                    const isFileName = matchedName.includes('.');
-                    const fileName = isFileName ? matchedName : `script`;
-                    const writingLabel = `Codificando: ${fileName.split('/').pop()}...`;
-                    if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
-                      const currentSteps = [...steps];
-                      const last = currentSteps[currentSteps.length - 1];
-                      if (last.status === 'running') {
-                        last.label = writingLabel;
-                        last.icon = 'Edit2' as any;
-                      } else {
-                        currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: 'Edit2' as any });
+                    const openBlockMatch = globalFullResponse.match(/```[ \t]*(?:(\w+)[ \t]+)?(?:file:[ \t]*)?([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || globalFullResponse.match(/```([\w.\/\-\_]+\.\w+)[ \t]*\n([^`]*)$/i) || globalFullResponse.match(/```(\w+)[ \t]*\n([^`]*)$/i);
+                    if (openBlockMatch) {
+                      const matchedName = openBlockMatch[2] || openBlockMatch[1] || `script`;
+                      const isFileName = matchedName.includes('.');
+                      const fileName = isFileName ? matchedName : `script`;
+                      const writingLabel = `Codificando: ${fileName.split('/').pop()}...`;
+                      if (steps.length > 0 && steps[steps.length - 1].label !== writingLabel) {
+                        const currentSteps = [...steps];
+                        const last = currentSteps[currentSteps.length - 1];
+                        if (last.status === 'running') {
+                          last.label = writingLabel;
+                          last.icon = 'Edit2' as any;
+                        } else {
+                          currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: 'Edit2' as any });
+                        }
+                        updateSteps(currentSteps);
                       }
-                      updateSteps(currentSteps);
                     }
                   }
-                }
 
-                if (!hasStartedCoding && fullResponse.includes('```')) {
-                  hasStartedCoding = true;
-                  const thoughtDuration = Math.round((Date.now() - startTime) / 1000);
-                  const updatedSteps = steps.map(s => 
-                    s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
-                  );
-                  updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando ativos de código...', status: 'running', icon: 'Code' as any }]);
-                }
+                  if (!hasStartedCoding && globalFullResponse.includes('```')) {
+                    hasStartedCoding = true;
+                    const thoughtDuration = Math.round((Date.now() - startTime) / 1000);
+                    const updatedSteps = steps.map(s => 
+                      s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
+                    );
+                    updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando ativos de código...', status: 'running', icon: 'Code' as any }]);
+                  }
 
-                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: fullResponse } : m));
-                lastContentLength = fullResponse.length;
+                  setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: globalFullResponse } : m));
+                  lastContentLength = globalFullResponse.length;
+                }
               }
             }
           }
         }
+        return localFullResponse;
+      };
+
+      if (parsed.isCommand && parsed.commandName && isSubAgentCommand(parsed.commandName)) {
+        await runReviewSubAgents({
+          files: generatedFilesRef.current,
+          activeFile: activeFileName,
+          target: parsed.args,
+          updateSteps,
+          appendMessage: (text) => {
+             globalFullResponse += text;
+             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: globalFullResponse } : m));
+          },
+          sendMessageToAI: async (prompt, prefix) => {
+             return await performChatFetch(prompt, prefix);
+          }
+        });
+      } else {
+        await performChatFetch(finalMessage, "");
       }
 
       // Finalize
-      const finalFiles = extractFilesFromMarkdown(fullResponse, messageId.slice(0, 5));
+      const finalFiles = extractFilesFromMarkdown(globalFullResponse, messageId.slice(0, 5));
       if (finalFiles.length > 0) {
         setGeneratedFiles(prev => {
           const merged = [...prev];
           finalFiles.forEach(newFile => {
             const existingIdx = merged.findIndex(f => f.name === newFile.name);
-            if (existingIdx >= 0) {
-              merged[existingIdx] = newFile;
-            } else {
-              merged.push(newFile);
-            }
+            if (existingIdx >= 0) merged[existingIdx] = newFile;
+            else merged.push(newFile);
           });
           setFileHistory(history => [...history, { timestamp: Date.now(), files: merged }]);
           
-          // Security Scanner
           const { securityRules } = useSettingsStore.getState();
           const activeRules = securityRules.filter(r => r.enabled);
           if (activeRules.length > 0) {
             merged.forEach(file => {
               activeRules.forEach(rule => {
                 let ruleViolated = false;
-                
                 if (rule.pattern) {
                   try {
                     const regex = new RegExp(rule.pattern, 'i');
@@ -327,7 +356,6 @@ export function useChatSession({
                     const target = condition.field === 'code' ? file.code : 
                                    condition.field === 'filename' ? file.name : 
                                    (file.name.split('.').pop() || '');
-                                   
                     try {
                       if (condition.operator === 'matches') return new RegExp(condition.pattern, 'i').test(target);
                       if (condition.operator === 'contains') return target.includes(condition.pattern);
@@ -337,23 +365,17 @@ export function useChatSession({
                     return false;
                   });
                 }
-
                 if (ruleViolated) {
                   if (rule.action === 'warn' || rule.action === 'suggest') {
-                    toast.warning(`Alerta de Segurança em ${file.name}`, { 
-                      description: rule.message || `Regra violada: ${rule.name}`
-                    });
+                    toast.warning(`Alerta de Segurança em ${file.name}`, { description: rule.message || `Regra violada: ${rule.name}` });
                   } else if (rule.action === 'block') {
-                    toast.error(`Bloqueio de Segurança em ${file.name}`, { 
-                      description: rule.message || `O código violou a regra: ${rule.name}`
-                    });
+                    toast.error(`Bloqueio de Segurança em ${file.name}`, { description: rule.message || `O código violou a regra: ${rule.name}` });
                     file.code = `// O código gerado foi bloqueado pelo scanner de segurança.\\n// Regra violada: ${rule.name}\\n// Detalhe: ${rule.message}\\n// Sugestão: ${rule.suggestion || ''}`;
                   }
                 }
               });
             });
           }
-
           return merged;
         });
       }

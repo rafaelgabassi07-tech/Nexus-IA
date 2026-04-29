@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { 
   Key, Brain, Shield, Trash2, Edit2, Plus, 
   ExternalLink, ChevronRight, Check
@@ -156,8 +155,8 @@ export const SettingsPanel = ({
                              <Shield size={14} className={cn(draftSelectedModel === model.id && "animate-pulse")} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-bold text-foreground uppercase tracking-tight leading-none">{model.name}</p>
-                            <p className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest mt-1 opacity-40 leading-none">Protocolo Nexus V3.1</p>
+                            <p className={cn("text-[14px] font-medium leading-none", draftSelectedModel === model.id ? "text-primary" : "text-foreground")}>{model.name}</p>
+                            <p className="text-[12px] font-mono text-muted-foreground mt-1 tracking-tight leading-none">{model.rateLimit || 'Protocolo Nexus V3.1'}</p>
                           </div>
                           {draftSelectedModel === model.id && (
                             <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">

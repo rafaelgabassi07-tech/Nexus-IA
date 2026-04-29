@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
   ArrowDown,
   Globe,
@@ -21,14 +21,11 @@ interface ChatLogProps {
   activeFileIndex: number;
   setActiveFileIndex: (index: number) => void;
   setActiveTab: (tab: any) => void;
-  scrollRef: React.RefObject<HTMLDivElement>;
-  showScrollButton: boolean;
-  scrollToBottom: () => void;
   handleSendMessage: (e?: any, content?: string, messagesToUse?: Message[]) => void;
   handleRegenerate: () => void;
 }
 
-export const ChatLog = ({
+export const ChatLog = memo(({
   messages,
   isLoading,
   activeAgent,
@@ -36,12 +33,70 @@ export const ChatLog = ({
   activeFileIndex,
   setActiveFileIndex,
   setActiveTab,
-  scrollRef,
-  showScrollButton,
-  scrollToBottom,
   handleSendMessage,
   handleRegenerate
 }: ChatLogProps) => {
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (scrollRef.current) {
+      const el = scrollRef.current;
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+      setIsAtBottom(isBottom);
+      setShowScrollButton(!isBottom);
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Use a ResizeObserver on the content to keep it scrolled if we are at bottom
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!contentRef.current) return;
+    
+    let lastHeight = contentRef.current.scrollHeight;
+    
+    const observer = new ResizeObserver(() => {
+      if (!contentRef.current) return;
+      const currentHeight = contentRef.current.scrollHeight;
+      
+      if (currentHeight !== lastHeight) {
+        lastHeight = currentHeight;
+        if (isAtBottom) {
+          scrollToBottom('auto');
+        }
+      }
+    });
+
+    observer.observe(contentRef.current);
+    
+    // Also observe the scroll logic
+    return () => observer.disconnect();
+  }, [isAtBottom, scrollToBottom]);
+
+  // Handle messages length change
+  useEffect(() => {
+    if (isAtBottom) {
+      setTimeout(() => scrollToBottom('smooth'), 100);
+    }
+  }, [messages.length]);
+
   return (
     <div className={cn("flex-1 overflow-hidden relative group/chat-log", messages.length === 0 && "h-full")}>
       <div 
@@ -51,7 +106,10 @@ export const ChatLog = ({
           messages.length > 0 ? "overflow-y-auto" : "overflow-hidden items-center justify-center"
         )}
       >
-        <div className={cn("max-w-3xl mx-auto space-y-6 w-full h-full flex flex-col items-center justify-center")}>
+        <div ref={contentRef} className={cn(
+          "max-w-3xl mx-auto space-y-6 w-full",
+          messages.length === 0 ? "h-full flex flex-col items-center justify-center" : ""
+        )}>
           <AnimatePresence initial={false}>
             {messages.length === 0 && (
               <motion.div 
@@ -119,4 +177,4 @@ export const ChatLog = ({
       )}
     </div>
   );
-};
+});

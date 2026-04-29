@@ -1,9 +1,9 @@
 import { 
-  RotateCcw, Layout, FolderOpen, ChevronLeft, Download, Terminal, Shield
+  Layout, ChevronLeft, Download, Terminal, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, memo } from 'react';
 import { cn } from '../../lib/utils';
 import { 
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem
@@ -29,7 +29,7 @@ interface WorkbenchProps {
 
 import JSZip from 'jszip';
 
-export const Workbench = ({
+export const Workbench = memo(({
   activeTab,
   setActiveTab,
   generatedFiles,
@@ -43,7 +43,7 @@ export const Workbench = ({
   setPreviewKey
 }: WorkbenchProps) => {
   const hasFiles = generatedFiles.length > 0;
-  const rightPaneTab = ['preview', 'code', 'files'].includes(activeTab) ? activeTab : 'preview';
+  const rightPaneTab = ['preview', 'code'].includes(activeTab) ? activeTab : 'preview';
 
   const handleDownload = useCallback(async () => {
     if (!hasFiles) {
@@ -89,7 +89,7 @@ export const Workbench = ({
       // Cmd/Ctrl + B = Toggle Sidebar/Files
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
-        setActiveTab(activeTab === 'files' ? 'preview' : 'files');
+        setActiveTab(activeTab === 'code' ? 'preview' : 'code');
       }
 
       // Alt + R = Reload Preview
@@ -112,30 +112,21 @@ export const Workbench = ({
     )}>
       {/* Mobile Top Bar */}
       <div className="flex md:hidden h-12 border-b border-border bg-card items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
-        <div className="flex items-center gap-3">
+        <button 
+          onClick={() => setActiveTab('chat')} 
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="flex bg-muted p-1 rounded-lg">
           <button 
-            onClick={() => setActiveTab('chat')} 
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-medium text-muted-foreground leading-none mb-1">Visualizando</span>
-            <span className="text-[13px] font-semibold text-foreground leading-none">
-              {rightPaneTab === 'preview' ? 'Preview' : rightPaneTab === 'code' ? 'Código' : 'Arquivos'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-           <button 
-             onClick={() => setPreviewKey(k => k + 1)} 
-             className={cn(
-               "w-8 h-8 flex items-center justify-center rounded-lg bg-muted transition-all text-muted-foreground hover:text-foreground hover:bg-white/10",
-               isLoading && "text-primary animate-spin"
-             )}
-           >
-             <RotateCcw size={16} />
-           </button>
+             onClick={() => setActiveTab('preview')} 
+             className={cn("px-4 h-[28px] rounded-md text-[11px] font-bold uppercase transition-all", rightPaneTab === 'preview' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+          >Preview</button>
+          <button 
+             onClick={() => setActiveTab('code')} 
+             className={cn("px-4 h-[28px] rounded-md text-[11px] font-bold uppercase transition-all", rightPaneTab === 'code' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+          >Código</button>
         </div>
       </div>
 
@@ -158,16 +149,7 @@ export const Workbench = ({
               rightPaneTab === 'code' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            Código
-          </button>
-          <button 
-            onClick={() => setActiveTab('files')} 
-            className={cn(
-              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
-              rightPaneTab === 'files' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            Estrutura
+            Código e Estrutura
           </button>
         </div>
 
@@ -201,13 +183,6 @@ export const Workbench = ({
           >
             <Download size={14} />
           </button>
-          <button 
-            onClick={() => setPreviewKey(k => k + 1)} 
-            className={cn("w-7 h-7 flex items-center justify-center rounded-md transition-all", isLoading ? "text-primary animate-spin" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
-            title="Atualizar"
-          >
-            <RotateCcw size={14} />
-          </button>
         </div>
       </div>
 
@@ -216,8 +191,7 @@ export const Workbench = ({
         {!hasFiles && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-background">
             <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-border flex items-center justify-center mb-6 relative group overflow-hidden">
-               {rightPaneTab === 'files' ? <FolderOpen size={24} className="text-muted-foreground" /> : 
-                rightPaneTab === 'code' ? <Terminal size={24} className="text-muted-foreground" /> : 
+               {rightPaneTab === 'code' ? <Terminal size={24} className="text-muted-foreground" /> : 
                 <Layout size={24} className="text-muted-foreground" />}
             </div>
             <h3 className="text-[14px] font-medium text-muted-foreground">Nenhum arquivo gerado</h3>
@@ -227,28 +201,19 @@ export const Workbench = ({
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          {rightPaneTab === 'files' && hasFiles && (
-            <motion.div 
-              key="filetree"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className="w-full md:w-[220px] flex-shrink-0 border-r border-border h-full z-40 bg-black/20"
-            >
-              <FileTree 
-                files={generatedFiles} 
-                activeFileIndex={activeFileIndex} 
-                onSelect={(idx) => {
-                  setActiveFileIndex(idx);
-                  if (window.innerWidth < 768) setActiveTab('code');
-                }} 
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {rightPaneTab === 'code' && hasFiles && (
+          <div className="w-full h-[250px] md:h-full md:w-[220px] flex-shrink-0 border-b md:border-b-0 md:border-r border-border z-40 bg-black/20 overflow-y-auto">
+            <FileTree 
+              files={generatedFiles} 
+              activeFileIndex={activeFileIndex} 
+              onSelect={(idx) => {
+                setActiveFileIndex(idx);
+              }} 
+            />
+          </div>
+        )}
 
-        <div className="flex-1 min-w-0 flex flex-col h-full bg-background">
+        <div className="flex-1 min-w-0 flex flex-col h-full bg-background overflow-hidden relative">
           <AnimatePresence mode="wait">
             {rightPaneTab === 'preview' ? (
               <motion.div 
@@ -261,6 +226,8 @@ export const Workbench = ({
                 <PreviewPane 
                   generatedFiles={generatedFiles}
                   previewKey={previewKey} 
+                  onReload={() => setPreviewKey((k: number) => k + 1)}
+                  isLoading={isLoading}
                 />
               </motion.div>
             ) : (
@@ -302,10 +269,11 @@ export const Workbench = ({
                     </div>
                   </div>
                 )}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 min-h-0">
                   <CodeBlock 
                     value={generatedFiles[activeFileIndex]?.code || "// Nenhum ativo selecionado"}
                     language={generatedFiles[activeFileIndex]?.name.split('.').pop() || 'typescript'}
+                    noMargin={true}
                   />
                 </div>
               </motion.div>
@@ -315,4 +283,4 @@ export const Workbench = ({
       </div>
     </div>
   );
-};
+});
