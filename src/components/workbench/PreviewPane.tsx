@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Monitor, Smartphone, Tablet, ExternalLink, Layout
+  Monitor, Smartphone, Tablet, ExternalLink, Layout, Maximize2, Trash2, Terminal as TerminalIcon
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { GeneratedFile } from '../../types';
 
@@ -15,6 +16,7 @@ export const PreviewPane = ({
   previewKey, 
 }: PreviewPaneProps) => {
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [logs, setLogs] = useState<{ type: string; args: any[] }[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const viewportWidths = {
@@ -23,7 +25,34 @@ export const PreviewPane = ({
     mobile: '375px'
   };
 
-  const [logs, setLogs] = useState<{ type: string, args: any[] }[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  const calculateScale = useCallback(() => {
+    if (!containerRef.current || viewport === 'desktop') {
+      setScale(1);
+      return;
+    }
+
+    const containerWidth = containerRef.current.clientWidth - 40;
+    const containerHeight = containerRef.current.clientHeight - 40;
+    
+    const targetWidth = viewport === 'tablet' ? 768 : 375;
+    const targetHeight = viewport === 'tablet' ? 1024 : 667;
+
+    const scaleX = containerWidth / targetWidth;
+    const scaleY = containerHeight / targetHeight;
+    const finalScale = Math.min(scaleX, scaleY, 1);
+    
+    setScale(finalScale);
+  }, [viewport]);
+
+  useEffect(() => {
+    calculateScale();
+    const observer = new ResizeObserver(calculateScale);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [calculateScale]);
 
   // Use a blob URL for the preview to avoid recursion and allow multi-file support
   useEffect(() => {
@@ -118,7 +147,7 @@ export const PreviewPane = ({
           <body>
             <div id="root">
               <div class="nexus-loading">
-                <h1 style="font-size: 14px; font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase;">Nexus Core Synthesis</h1>
+                <h1 style="font-size: 14px; font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase;">Síntese de Núcleo Nexus</h1>
                 <p style="font-size: 10px; opacity: 0.5;">Compilando matriz de renderização...</p>
               </div>
             </div>
@@ -172,41 +201,49 @@ export const PreviewPane = ({
 
   const [showConsole, setShowConsole] = useState(false);
 
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showConsole && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, showConsole]);
+
   return (
     <div className="flex-1 flex flex-col bg-[#121316] relative overflow-hidden">
       {/* Top Controls */}
-      <div className="h-8 border-b border-white/5 bg-black/20 backdrop-blur-2xl flex items-center justify-between px-2 shrink-0 z-20">
-        <div className="flex items-center gap-0.5 bg-white/[0.02] p-0.5 rounded border border-white/5">
+      <div className="h-10 md:h-8 border-b border-white/5 bg-black/40 backdrop-blur-3xl flex items-center justify-between px-3 shrink-0 z-20">
+        <div className="flex items-center gap-1 bg-white/[0.03] p-0.5 rounded-lg border border-white/5">
           <button 
             onClick={() => setViewport('desktop')}
-            className={cn("p-1 rounded transition-all", viewport === 'desktop' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
+            className={cn("p-1.5 md:p-1 rounded-md transition-all", viewport === 'desktop' ? "bg-[#00d2ff] text-black shadow-[0_0_10px_rgba(0,210,255,0.4)]" : "text-white/40 hover:text-white")}
           >
-            <Monitor size={10} />
+            <Monitor size={12} strokeWidth={2.5} />
           </button>
           <button 
             onClick={() => setViewport('tablet')}
-            className={cn("p-1 rounded transition-all", viewport === 'tablet' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
+            className={cn("p-1.5 md:p-1 rounded-md transition-all", viewport === 'tablet' ? "bg-[#00d2ff] text-black shadow-[0_0_10px_rgba(0,210,255,0.4)]" : "text-white/40 hover:text-white")}
           >
-            <Tablet size={10} />
+            <Tablet size={12} strokeWidth={2.5} />
           </button>
           <button 
             onClick={() => setViewport('mobile')}
-            className={cn("p-1 rounded transition-all", viewport === 'mobile' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
+            className={cn("p-1.5 md:p-1 rounded-md transition-all", viewport === 'mobile' ? "bg-[#00d2ff] text-black shadow-[0_0_10px_rgba(0,210,255,0.4)]" : "text-white/40 hover:text-white")}
           >
-            <Smartphone size={10} />
+            <Smartphone size={12} strokeWidth={2.5} />
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest">
+        <div className="flex items-center gap-2">
            <button 
              onClick={() => setShowConsole(!showConsole)}
              className={cn(
-               "px-2 h-5 rounded flex items-center gap-1.5 transition-all border",
-               showConsole ? "bg-white/10 text-white border-white/10" : "text-white/20 border-transparent hover:text-white/40"
+               "px-3 h-7 md:h-5 rounded-full flex items-center gap-2 transition-all border text-[9px] font-black uppercase tracking-widest",
+               showConsole ? "bg-white/10 text-white border-white/10" : "bg-white/[0.03] text-white/40 border-white/5 hover:text-white"
              )}
            >
-             <div className={cn("w-1 h-1 rounded-full", logs.some(l => l.type === 'error') ? "bg-red-500 animate-pulse" : logs.length > 0 ? "bg-blue-500" : "bg-white/20")} />
-             Terminal {logs.length > 0 && `(${logs.length})`}
+             <div className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor]", logs.some(l => l.type === 'error') ? "bg-red-500 text-red-500 animate-pulse" : logs.length > 0 ? "bg-blue-500 text-blue-500" : "bg-white/20 text-white/20")} />
+             Terminal
            </button>
 
            <button 
@@ -214,28 +251,46 @@ export const PreviewPane = ({
               const url = iframeRef.current?.src;
               if (url) window.open(url, '_blank');
              }}
-             className="w-6 h-6 flex items-center justify-center rounded bg-white/5 text-[#8e918f] hover:text-white transition-all"
+             className="w-8 h-8 md:w-6 md:h-6 flex items-center justify-center rounded-lg bg-white/[0.03] border border-white/5 text-white/40 hover:text-white hover:border-white/20 transition-all"
            >
             <ExternalLink size={12} />
            </button>
         </div>
       </div>
 
-      <div className="flex-1 relative bg-white/5 overflow-hidden flex justify-center items-start scrollbar-hide">
-        <div 
+      <div ref={containerRef} className="flex-1 relative bg-[#09090b] overflow-hidden flex justify-center items-center p-4">
+        <motion.div 
+          layout
+          initial={false}
+          animate={{
+            width: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 768 : 375,
+            height: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 1024 : 667,
+            scale: scale,
+          }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           className={cn(
-            "bg-white shadow-2xl transition-all duration-500 ease-nexus ring-1 ring-black/5 origin-top",
-            viewport === 'desktop' ? "w-full h-full" : 
-            viewport === 'tablet' ? "w-[768px] h-[1024px] rounded-2xl my-4 scale-[0.6] md:scale-[0.8]" : 
-            "w-[375px] h-[667px] rounded-2xl my-4 scale-[0.7] md:scale-[0.9]"
+            "bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden transition-shadow relative",
+            viewport === 'desktop' ? "w-full h-full" : "rounded-[2.5rem] border-[12px] border-[#1a1b1e] ring-1 ring-white/10"
           )}
         >
+          {/* Device Hardware Decorations */}
+          {viewport !== 'desktop' && (
+            <>
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-7 bg-[#1a1b1e] rounded-b-3xl z-30 flex items-center justify-center gap-2">
+                 <div className="w-8 h-1 bg-white/5 rounded-full" />
+                 <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+              </div>
+              <div className="absolute top-1/2 -left-[12px] w-[3px] h-10 bg-white/5 rounded-r-lg" />
+              <div className="absolute top-[45%] -right-[12px] w-[3px] h-16 bg-white/5 rounded-l-lg" />
+            </>
+          )}
+
           {generatedFiles.length === 0 ? (
             <div className="w-full h-full flex flex-col items-center justify-center text-[#8e918f] font-medium bg-[#0b0c0e]">
               <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-4 border border-white/5">
                 <Layout size={20} className="opacity-20" />
               </div>
-              <span className="text-[10px] uppercase tracking-[0.3em] font-black opacity-30">Nexus Canvas Ready</span>
+              <span className="text-[10px] uppercase tracking-[0.3em] font-black opacity-30">Nexus Pronto</span>
             </div>
           ) : (
             <iframe 
@@ -246,36 +301,71 @@ export const PreviewPane = ({
               title="Preview"
             />
           )}
-        </div>
+        </motion.div>
 
         {/* Console Overlay */}
-        {showConsole && (
-          <div className="absolute bottom-0 left-0 right-0 h-48 bg-[#0d0d0e]/95 backdrop-blur-3xl border-t border-white/10 z-[40] flex flex-col font-mono animate-in slide-in-from-bottom duration-300">
-            <div className="h-8 border-b border-white/5 flex items-center justify-between px-4 shrink-0 overflow-hidden">
-              <span className="text-[8px] font-black uppercase text-white/20 tracking-[.25em]">Output Matrix Logs</span>
-              <button onClick={() => setLogs([])} className="text-[8px] font-black uppercase text-white/10 hover:text-white/40">Clear</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-1.5 custom-scrollbar">
-              {logs.length === 0 ? (
-                <div className="h-full flex items-center justify-center">
-                  <span className="text-[10px] uppercase font-bold text-white/5 tracking-widest italic">Aguardando sinais...</span>
+        <AnimatePresence>
+          {showConsole && (
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 h-64 bg-[#0d0d0e]/95 backdrop-blur-3xl border-t border-white/10 z-[40] flex flex-col font-mono shadow-[0_-20px_50px_rgba(0,0,0,0.5)]"
+            >
+              <div className="h-9 border-b border-white/5 flex items-center justify-between px-4 shrink-0 bg-white/[0.02]">
+                <div className="flex items-center gap-3">
+                  <TerminalIcon size={12} className="text-blue-400" />
+                  <span className="text-[9px] font-black uppercase text-white/40 tracking-[.3em]">Terminal de Saída Cortex</span>
                 </div>
-              ) : (
-                logs.map((log, i) => (
-                  <div key={i} className={cn(
-                    "text-[11px] flex gap-3 border-l-2 pl-3 py-0.5",
-                    log.type === 'error' ? "text-red-400 border-red-500/50 bg-red-500/5" :
-                    log.type === 'warn' ? "text-amber-400 border-amber-500/50 bg-amber-500/5" :
-                    "text-white/60 border-white/5"
-                  )}>
-                    <span className="opacity-20 shrink-0 select-none">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                    <span className="break-all">{log.args.join(' ')}</span>
+                <div className="flex items-center gap-2">
+                   <button 
+                    onClick={() => setLogs([])} 
+                    className="flex items-center gap-1 text-[8px] font-black uppercase text-white/30 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded"
+                   >
+                     <Trash2 size={10} /> Limpar
+                   </button>
+                   <button 
+                    onClick={() => setShowConsole(false)}
+                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
+                   >
+                     <Maximize2 size={10} className="text-white/20" />
+                   </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar bg-black/20">
+                {logs.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20">
+                    <div className="w-10 h-10 rounded-full border border-dashed border-white/20 mb-3 animate-[spin_10s_linear_infinite]" />
+                    <span className="text-[10px] uppercase font-bold tracking-[0.5em] italic">Nenhum Sinal Detectado</span>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+                ) : (
+                  logs.map((log, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      key={i} 
+                      className={cn(
+                        "text-[11px] flex gap-3 border-l-2 pl-3 py-1 items-start transition-colors group",
+                        log.type === 'error' ? "text-red-400 border-red-500/80 bg-red-500/5" :
+                        log.type === 'warn' ? "text-amber-400 border-amber-500/80 bg-amber-500/5" :
+                        "text-white/70 border-blue-500/20 hover:bg-white/[0.02]"
+                      )}
+                    >
+                      <span className="text-white/10 font-bold shrink-0 select-none group-hover:text-blue-400/40 transition-colors">
+                        {new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                      <span className="break-all font-medium leading-relaxed">
+                        {log.args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ')}
+                      </span>
+                    </motion.div>
+                  ))
+                )}
+                <div ref={logsEndRef} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Viewport Info Overlay - Hidden when console is open to avoid clutter */}
@@ -283,12 +373,12 @@ export const PreviewPane = ({
         <div className="absolute bottom-6 right-6 z-30 hidden sm:flex pointer-events-none">
           <div className="bg-[#0d0d0e]/80 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-4">
             <div className="flex flex-col">
-              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">Resolution</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">Resolução</span>
               <span className="text-[12px] font-bold text-white tracking-tighter">{viewportWidths[viewport]} &times; Default</span>
             </div>
             <div className="w-px h-6 bg-white/10" />
             <div className="flex flex-col">
-              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">State</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">Estado</span>
               <span className="text-[12px] font-bold text-emerald-400 flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 Sincronizado

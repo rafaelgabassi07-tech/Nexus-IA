@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, MessageSquare, Code, Layout, Settings, 
-  Download, Trash2, X, Command, Zap, Files
+  Download, Trash2, Zap, Files, RotateCcw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useUIStore, useChatHistoryStore } from '../store/appStore';
@@ -16,20 +16,28 @@ export const CommandPalette = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const actions = [
-    { id: 'chat', name: 'Open Chat Matrix', icon: <MessageSquare size={16} />, shortcut: '1', action: () => setActiveTab('chat') },
-    { id: 'code', name: 'View Source Code', icon: <Code size={16} />, shortcut: '2', action: () => setActiveTab('code') },
-    { id: 'preview', name: 'Render Preview', icon: <Layout size={16} />, shortcut: '3', action: () => setActiveTab('preview') },
-    { id: 'files', name: 'Explorer Assets', icon: <Files size={16} />, shortcut: '4', action: () => setActiveTab('files') },
-    { id: 'settings', name: 'Core Settings', icon: <Settings size={16} />, shortcut: '5', action: () => setActiveTab('settings') },
-    { id: 'export', name: 'Export Matrix Bundle', icon: <Download size={16} />, shortcut: 'E', action: () => {
+    { id: 'chat', name: 'Abrir Protocolo de Chat', icon: <MessageSquare size={16} />, shortcut: '1', action: () => setActiveTab('chat') },
+    { id: 'code', name: 'Visualizar Código-Fonte', icon: <Code size={16} />, shortcut: '2', action: () => setActiveTab('code') },
+    { id: 'preview', name: 'Renderizar Visualização', icon: <Layout size={16} />, shortcut: '3', action: () => setActiveTab('preview') },
+    { id: 'files', name: 'Explorar Arquivos', icon: <Files size={16} />, shortcut: '4', action: () => setActiveTab('files') },
+    { id: 'settings', name: 'Configurações de Núcleo', icon: <Settings size={16} />, shortcut: '5', action: () => setActiveTab('settings') },
+    { id: 'debug', name: 'Alternar Logs do Sistema', icon: <Zap size={16} />, shortcut: 'L', action: () => {
+        const btn = document.querySelector('[title="Terminal"]') as HTMLButtonElement | null;
+        if (btn) btn.click();
+    }},
+    { id: 'reset', name: 'Reiniciar Kernel Nexus', icon: <RotateCcw size={16} />, shortcut: 'R', action: () => {
+        const btn = document.querySelector('[title="Reset Matrix"]') as HTMLButtonElement | null;
+        if (btn) btn.click();
+    }},
+    { id: 'export', name: 'Exportar Pacote de Dados', icon: <Download size={16} />, shortcut: 'E', action: () => {
         const btn = document.getElementById('nexus-export-trigger');
         if (btn) btn.click();
         else toast.info("Função de exportação não disponível nesta vista.");
     }},
-    { id: 'clear', name: 'Format Chat Protocols', icon: <Trash2 size={16} />, shortcut: 'D', action: () => {
+    { id: 'clear', name: 'Formatar Protocolos de Chat', icon: <Trash2 size={16} />, shortcut: 'D', action: () => {
         if (confirm("Deseja formatar todos os protocolos de chat? Isso é irreversível.")) {
             clearHistory();
-            toast.success("Protocolos formatados.");
+            toast.success("Protocolos formatados com sucesso.");
         }
     }},
   ];
@@ -98,7 +106,7 @@ export const CommandPalette = () => {
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder="DIGITE UM COMANDO NEXUS..."
+                  placeholder="SINTETIZAR COMANDO NEXUS..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full h-14 bg-transparent border-b border-white/5 pl-12 pr-4 text-sm font-bold text-white placeholder:text-white/5 focus:outline-none uppercase tracking-widest italic"
@@ -151,18 +159,18 @@ export const CommandPalette = () => {
               <div className="h-8 bg-white/[0.02] border-t border-white/5 flex items-center justify-between px-4">
                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1">
-                       <span className="text-[8px] text-white/20 font-black uppercase">Navigate</span>
+                       <span className="text-[8px] text-white/20 font-black uppercase">Navegar</span>
                        <div className="flex gap-1">
                           <span className="text-[8px] bg-white/10 px-1 rounded">↑</span>
                           <span className="text-[8px] bg-white/10 px-1 rounded">↓</span>
                        </div>
                     </div>
                     <div className="flex items-center gap-1">
-                       <span className="text-[8px] text-white/20 font-black uppercase">Execute</span>
+                       <span className="text-[8px] text-white/20 font-black uppercase">Executar</span>
                        <span className="text-[8px] bg-white/10 px-1 rounded">↵</span>
                     </div>
                  </div>
-                 <span className="text-[8px] font-black italic text-blue-500/40 uppercase tracking-tighter">Nexus Command Protocol 1.0</span>
+                 <span className="text-[8px] font-black italic text-blue-500/40 uppercase tracking-tighter">Protocolo de Comando Nexus 1.0</span>
               </div>
             </div>
           </motion.div>

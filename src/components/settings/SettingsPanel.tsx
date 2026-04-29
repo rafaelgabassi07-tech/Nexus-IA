@@ -100,25 +100,25 @@ export const SettingsPanel = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl space-y-4 hover:bg-white/[0.04] transition-all group">
                     <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform"><Key size={24} /></div>
-                    <h3 className="text-[18px] font-bold text-white tracking-tight">Chaves API</h3>
-                    <p className="text-[13px] text-[#8e918f] leading-relaxed">Gerencie suas chaves do Google AI Studio para processamento distribuído.</p>
+                    <h3 className="text-[17px] font-bold text-white tracking-tight">Chaves de API</h3>
+                    <p className="text-[13px] text-white/50 leading-relaxed font-medium">Gerencie suas chaves do Google AI Studio para processamento de alto desempenho.</p>
                     <button onClick={() => setSettingsTab('general')} className="flex items-center gap-1.5 text-blue-400 text-[11px] font-black uppercase tracking-widest pt-2 hover:gap-3 transition-all">Configurar <ChevronRight size={14} /></button>
                   </div>
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl space-y-4 hover:bg-white/[0.04] transition-all group">
                     <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform"><Brain size={24} /></div>
-                    <h3 className="text-[18px] font-bold text-white tracking-tight">Arquitetura de Agentes</h3>
-                    <p className="text-[13px] text-[#8e918f] leading-relaxed">Modifique o prompt de sistema e a temperatura da rede neural.</p>
+                    <h3 className="text-[17px] font-bold text-white tracking-tight">Arquitetura de Agentes</h3>
+                    <p className="text-[13px] text-white/50 leading-relaxed font-medium">Personalize a rede neural e os prompts de sistema para suas necessidades.</p>
                     <button onClick={() => setSettingsTab('agent')} className="flex items-center gap-1.5 text-purple-400 text-[11px] font-black uppercase tracking-widest pt-2 hover:gap-3 transition-all">Ajustar <ChevronRight size={14} /></button>
                   </div>
                 </div>
 
                 <div className="bg-blue-500/5 border border-blue-500/10 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-6">
                   <div className="flex-1 space-y-2 text-center md:text-left">
-                    <h4 className="text-[16px] font-bold text-white tracking-tight">Status do Nexus</h4>
-                    <p className="text-[12px] text-[#8e918f]">Todos os sistemas operando via Local Storage persistente.</p>
+                    <h4 className="text-[15px] font-bold text-white tracking-tight">Status do Nexus Core</h4>
+                    <p className="text-[12px] text-white/40 font-medium tracking-tight">Sistemas operando via Armazenamento Local Localizado.</p>
                   </div>
                   <div className="flex gap-2">
-                    <div className="px-4 py-2 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">Alpha v1.4</div>
+                    <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest">Versão Pro 3.1</div>
                   </div>
                 </div>
               </div>
@@ -275,11 +275,11 @@ export const SettingsPanel = ({
                   </div>
                 </div>
 
-                <div className="space-y-4 pt-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[14px] font-bold text-white tracking-tight uppercase tracking-widest">Matriz de Instrução (System)</h4>
-                    <button onClick={() => setIsSystemPromptExpanded(!isSystemPromptExpanded)} className="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors">{isSystemPromptExpanded ? 'Recolher' : 'Expandir'}</button>
-                  </div>
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[13px] font-black text-white tracking-widest uppercase">Instruções de Sistema</h4>
+                <button onClick={() => setIsSystemPromptExpanded(!isSystemPromptExpanded)} className="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors">{isSystemPromptExpanded ? 'Recolher' : 'Expandir'}</button>
+              </div>
                   <Textarea 
                     value={draftSystemPrompt}
                     onChange={(e) => setDraftSystemPrompt(e.target.value)}
@@ -303,21 +303,21 @@ export const SettingsPanel = ({
 
             {settingsTab === 'security' && (
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-emerald-500/5 border border-emerald-500/10 p-8 rounded-3xl space-y-6">
+                <div className="bg-emerald-500/5 border border-emerald-500/10 p-6 md:p-8 rounded-3xl space-y-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20"><Shield size={28} /></div>
+                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20"><Shield size={24} /></div>
                     <div>
-                      <h3 className="text-[20px] font-bold text-white tracking-tighter italic">Nível de Blindagem Ativo</h3>
-                      <p className="text-[12px] text-emerald-400/60 font-bold uppercase tracking-widest">Criptografia Local e Persistência Volátil</p>
+                      <h3 className="text-[17px] md:text-[20px] font-bold text-white tracking-tighter italic uppercase">Segurança Blindada</h3>
+                      <p className="text-[10px] md:text-[11px] text-emerald-400/60 font-black uppercase tracking-widest">Criptografia Local e Zero-Data Logging</p>
                     </div>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl group hover:bg-white/[0.04] transition-all">
                       <div className="flex items-center gap-3">
                          <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400"><Info size={16} /></div>
                          <div>
-                            <p className="text-[13px] font-bold text-white">Scanner de Segurança</p>
-                            <p className="text-[10px] text-[#8e918f] font-medium uppercase tracking-tight">Verificação heurística de vulnerabilidades no código.</p>
+                            <p className="text-[13px] font-bold text-white">Scanner Heurístico</p>
+                            <p className="text-[10px] text-white/30 font-medium uppercase tracking-tight">Análise em tempo real de vulnerabilidades no código.</p>
                          </div>
                       </div>
                       <Switch defaultChecked className="data-[state=checked]:bg-emerald-500" />
@@ -326,8 +326,8 @@ export const SettingsPanel = ({
                       <div className="flex items-center gap-3">
                          <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400"><Check size={16} /></div>
                          <div>
-                            <p className="text-[13px] font-bold text-white">OAuth Tunnel (Coming Soon)</p>
-                            <p className="text-[10px] text-[#8e918f] font-medium uppercase tracking-tight">Conexão segura via túnel reverso para assets externos.</p>
+                            <p className="text-[13px] font-bold text-white">Túnel OAuth (Em Breve)</p>
+                            <p className="text-[10px] text-white/30 font-medium uppercase tracking-tight">Conexão segura para serviços e APIs externas.</p>
                          </div>
                       </div>
                       <Switch disabled className="data-[state=checked]:bg-blue-500" />
@@ -339,9 +339,9 @@ export const SettingsPanel = ({
                    <h3 className="text-[14px] font-black uppercase text-[#4a4d51] tracking-[0.2em] border-l-2 border-emerald-500/40 pl-4">Regras de Validação</h3>
                    <div className="space-y-3">
                      {[
-                       { name: 'Previnição de Injeção XSS', active: true },
+                       { name: 'Prevenção de Injeção XSS', active: true },
                        { name: 'Bloqueio de Shell Inverso', active: true },
-                       { name: 'Redação de Chaves API Expositas', active: true }
+                       { name: 'Ocultação de Chaves API Expostas', active: true }
                      ].map((rule, i) => (
                        <div key={i} className="flex items-center justify-between p-4 bg-white/[0.01] border border-white/5 rounded-2xl">
                           <span className="text-[12px] font-bold text-[#f1f3f4]">{rule.name}</span>
@@ -405,59 +405,59 @@ export const SettingsDialogs = ({
     <>
       <Dialog open={isPresetFormOpen} onOpenChange={setIsPresetFormOpen}>
         <DialogContent className="max-w-md bg-[#0d0d0e] border-white/5 text-white p-6 rounded-3xl shadow-2xl">
-          <DialogHeader><DialogTitle className="text-[18px] font-bold tracking-tight">{editingPreset ? 'Editar Preset' : 'Novo Preset de API'}</DialogTitle></DialogHeader>
-          <div className="space-y-5 py-6">
+          <DialogHeader><DialogTitle className="text-[17px] font-bold tracking-tight">{editingPreset ? 'Editar Configuração' : 'Novo Preset de API'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Identificador do Preset</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome de Identificação</Label>
               <Input 
                 value={presetForm.name || ''} 
                 onChange={e => setPresetForm({...presetForm, name: e.target.value})}
-                placeholder="Ex: Produção, Testes, Lab..." 
-                className="bg-white/5 border-white/5 h-12 rounded-xl focus:ring-1 focus:ring-blue-500/30"
+                placeholder="Ex: Produção, Beta, Laboratório..." 
+                className="bg-white/5 border-white/10 h-11 rounded-xl focus:ring-1 focus:ring-blue-500/30 text-[13px]"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Chave API Sincronizada</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Chave de API do Google</Label>
               <Input 
                 type="password"
                 value={presetForm.apiKey || ''} 
                 onChange={e => setPresetForm({...presetForm, apiKey: e.target.value})}
                 placeholder="Insira sua GEMINI_API_KEY..." 
-                className="bg-white/5 border-white/5 h-12 rounded-xl focus:ring-1 focus:ring-blue-500/30"
+                className="bg-white/5 border-white/10 h-11 rounded-xl focus:ring-1 focus:ring-blue-500/30 text-[13px]"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={addOrUpdatePreset} className="w-full h-12 bg-blue-600 hover:bg-blue-500 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-blue-600/20">{editingPreset ? 'Salvar Matriz' : 'Registrar Preset'}</Button>
+            <Button onClick={addOrUpdatePreset} className="w-full h-11 bg-blue-600 hover:bg-blue-500 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-600/20">{editingPreset ? 'Aplicar Mudanças' : 'Registrar Preset'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isAgentFormOpen} onOpenChange={setIsAgentFormOpen}>
         <DialogContent className="max-w-lg bg-[#0d0d0e] border-white/5 text-white p-6 rounded-3xl shadow-2xl overflow-y-auto max-h-[80vh] custom-scrollbar">
-          <DialogHeader><DialogTitle className="text-[18px] font-bold tracking-tight">{editingAgent ? 'Ajustar Agente' : 'Manifestar Novo Agente'}</DialogTitle></DialogHeader>
-          <div className="space-y-5 py-6">
+          <DialogHeader><DialogTitle className="text-[17px] font-bold tracking-tight">{editingAgent ? 'Personalizar Agente' : 'Manifestar Novo Agente'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Nome do Avatar</Label>
-                <Input value={agentForm.name || ''} onChange={e => setAgentForm({...agentForm, name: e.target.value})} className="bg-white/5 border-white/5 h-12 rounded-xl" />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome de Exibição</Label>
+                <Input value={agentForm.name || ''} onChange={e => setAgentForm({...agentForm, name: e.target.value})} className="bg-white/5 border-white/10 h-11 rounded-xl text-[13px]" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Cor de Acesso</Label>
-                <Input value={agentForm.color || ''} onChange={e => setAgentForm({...agentForm, color: e.target.value})} className="bg-white/5 border-white/5 h-12 rounded-xl" placeholder="bg-blue-500" />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Classe CSS (Cor)</Label>
+                <Input value={agentForm.color || ''} onChange={e => setAgentForm({...agentForm, color: e.target.value})} className="bg-white/5 border-white/10 h-11 rounded-xl text-[13px]" placeholder="bg-blue-500" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Descrição de Interface</Label>
-              <Input value={agentForm.shortDescription || ''} onChange={e => setAgentForm({...agentForm, shortDescription: e.target.value})} className="bg-white/5 border-white/5 h-12 rounded-xl" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Descrição Breve</Label>
+              <Input value={agentForm.shortDescription || ''} onChange={e => setAgentForm({...agentForm, shortDescription: e.target.value})} className="bg-white/5 border-white/10 h-11 rounded-xl text-[13px]" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[11px] font-black uppercase tracking-widest opacity-40">Manual de Conduta (System Prompt)</Label>
-              <Textarea value={agentForm.systemPrompt || ''} onChange={e => setAgentForm({...agentForm, systemPrompt: e.target.value})} className="bg-white/5 border-white/5 h-48 rounded-2xl resize-none custom-scrollbar" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/40">Prompt de Sistema (Core)</Label>
+              <Textarea value={agentForm.systemPrompt || ''} onChange={e => setAgentForm({...agentForm, systemPrompt: e.target.value})} className="bg-white/5 border-white/10 h-40 rounded-2xl resize-none custom-scrollbar text-[12px] font-mono" />
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={addOrUpdateAgent} className="w-full h-12 bg-purple-600 hover:bg-purple-500 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-600/20">{editingAgent ? 'Fixar Ajustes' : 'Manifestar Agente'}</Button>
+            <Button onClick={addOrUpdateAgent} className="w-full h-11 bg-purple-600 hover:bg-purple-500 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-purple-600/20">{editingAgent ? 'Salvar Matriz' : 'Criar Entidade'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

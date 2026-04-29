@@ -91,10 +91,10 @@ export const MessageItem = React.memo(({
                  <AgentIcon iconName={activeAgent.iconName} size={12} />
                </AvatarFallback>
             </Avatar>
-            <div className="flex-1 text-[12px] leading-relaxed text-foreground/80 pr-2 overflow-hidden">
+            <div className="flex-1 text-[12px] leading-relaxed text-foreground pr-2 overflow-hidden">
               <div className="flex items-center gap-2 mb-1">
-                <div className={cn("text-[7px] font-black uppercase tracking-[.3em] text-white/20 leading-none italic", isLoading && isLastMessage && "animate-pulse text-blue-400/50")}>
-                  {activeAgent.name} // Intelligence Core
+                <div className={cn("text-[7px] font-black uppercase tracking-[.3em] text-white/50 leading-none italic", isLoading && isLastMessage && "animate-pulse text-blue-400")}>
+                  {activeAgent.name} // Núcleo de Inteligência
                 </div>
                 {isLoading && isLastMessage && (
                    <div className="flex gap-0.5">
@@ -128,10 +128,10 @@ export const MessageItem = React.memo(({
                           </div>
                         )}
                       </div>
-                      <span className="flex-1 tracking-tight text-white/30 uppercase text-[8px] font-black tracking-widest">
-                        {message.steps.some((s: any) => s.status === 'running') ? 'Syncing...' : 'Task Sequence'}
+                      <span className="flex-1 tracking-tight text-white/60 uppercase text-[8px] font-black tracking-widest">
+                        {message.steps.some((s: any) => s.status === 'running') ? 'Sincronizando...' : 'Sequência de Tarefas'}
                       </span>
-                      <ChevronDown size={10} className="text-white/10 transition-transform group-open/accordion:rotate-180 shrink-0" />
+                      <ChevronDown size={10} className="text-white/40 transition-transform group-open/accordion:rotate-180 shrink-0" />
                     </summary>
                     
                     <div className="px-2 pb-2 pt-0.5 space-y-0 relative">
@@ -160,14 +160,14 @@ export const MessageItem = React.memo(({
                               step.status === 'running' 
                                 ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
                                 : step.status === 'success' 
-                                  ? "bg-white/[0.02] border-white/5 text-white/20" 
-                                  : "bg-transparent border-white/5 text-white/10"
+                                  ? "bg-white/[0.02] border-white/10 text-white/40" 
+                                  : "bg-transparent border-white/5 text-white/20"
                             )}>
                               <StepIcon size={8} strokeWidth={2.5} />
                             </div>
                             <span className={cn(
                               "text-[10px] font-bold transition-colors truncate tracking-tight uppercase italic",
-                              step.status === 'running' ? "text-blue-400" : step.status === 'success' ? "text-white/30" : "text-white/10"
+                              step.status === 'running' ? "text-blue-400" : step.status === 'success' ? "text-white/60" : "text-white/30"
                             )}>
                               {step.label}
                             </span>
@@ -182,7 +182,7 @@ export const MessageItem = React.memo(({
                               <Edit2 size={8} className="text-emerald-400" strokeWidth={2} />
                             </div>
                             <span className="text-[8px] font-black text-white/30 tracking-widest uppercase">
-                              Manifest <span className="ml-1 text-white/10">[{generatedFiles.length}]</span>
+                              Manifesto <span className="ml-1 text-white/10">[{generatedFiles.length}]</span>
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-1">
@@ -200,10 +200,10 @@ export const MessageItem = React.memo(({
                                     : "bg-white/[0.01] border-white/5"
                                 )}
                               >
-                                <FileCode size={10} className={activeFileIndex === idx ? "text-emerald-400" : "text-white/20"} />
+                                <FileCode size={10} className={activeFileIndex === idx ? "text-emerald-400" : "text-white/40"} />
                                 <span className={cn(
                                   "text-[9px] font-bold truncate flex-1 tracking-tight",
-                                  activeFileIndex === idx ? "text-white/80" : "text-white/20"
+                                  activeFileIndex === idx ? "text-white/90" : "text-white/40"
                                 )}>{f.name.split('/').pop()}</span>
                               </button>
                             ))}
@@ -244,11 +244,11 @@ export const MessageItem = React.memo(({
                                       <FileCode size={16} />
                                     </div>
                                     <div>
-                                      <div className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-0.5">Asset Manifested</div>
-                                      <div className="text-[9px] text-white/20 font-bold uppercase tracking-tighter">Explore in Editor • {match[1]}</div>
+                                      <div className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-0.5">Ativo Manifestado</div>
+                                      <div className="text-[9px] text-white/40 font-bold uppercase tracking-tighter">Explorar no Editor • {match[1]}</div>
                                     </div>
                                   </div>
-                                  <Layout size={14} className="text-white/10" />
+                                  <Layout size={14} className="text-white/30" />
                                 </div>
                               );
                             }
@@ -268,7 +268,7 @@ export const MessageItem = React.memo(({
                             </code>
                           );
                         },
-                        p: ({ children }) => <p className="mb-3 last:mb-0 text-white/70 leading-relaxed font-medium">{children}</p>,
+                        p: ({ children }) => <p className="mb-3 last:mb-0 text-white/85 leading-relaxed font-medium">{children}</p>,
                         blockquote({ children }: any) {
                           let text = '';
                           try {
@@ -286,11 +286,11 @@ export const MessageItem = React.memo(({
                                 <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none select-none text-[10px] font-black uppercase tracking-[.2em] text-purple-300/60 hover:bg-purple-500/5 transition-colors">
                                   <div className="flex items-center gap-2">
                                     <Brain size={12} className="text-purple-400/60" />
-                                    <span>Strategic Logic</span>
+                                    <span>Lógica Estratégica</span>
                                   </div>
-                                  <ChevronDown size={12} className="opacity-30 transition-transform group-open/thought:rotate-180" />
+                                  <ChevronDown size={12} className="opacity-60 transition-transform group-open/thought:rotate-180" />
                                 </summary>
-                                <div className="px-4 pb-4 pt-1 text-white/40 text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
+                                <div className="px-4 pb-4 pt-1 text-white/60 text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
                                   {children}
                                 </div>
                               </details>
@@ -312,29 +312,29 @@ export const MessageItem = React.memo(({
                     onClick={() => {
                       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(message.content).catch(e => console.error("Clipboard API failed", e));
-                        toast.success('Stored');
+                        toast.success('Copiado');
                       }
                     }}
-                    className="p-1 px-1.5 rounded bg-white/5 text-[#8e918f]/40 hover:text-white transition-colors border border-white/5"
+                    className="p-1 px-1.5 rounded bg-white/10 text-white/50 hover:text-white transition-colors border border-white/10"
                   >
                     <Copy size={11} />
                   </button>
                   {isLastMessage && message.role === 'model' && (
                     <div className="flex items-center gap-3">
-                      <button
-                         onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")?.catch((err: any) => console.error("Failed to explain better:", err))}
-                         className="text-[9px] uppercase font-black tracking-widest text-[#8e918f]/40 hover:text-white/60 transition-colors"
-                      >
-                        Deconstruct
-                      </button>
+                          <button
+                             onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")?.catch((err: any) => console.error("Failed to explain better:", err))}
+                             className="text-[9px] uppercase font-black tracking-widest text-white/60 hover:text-white transition-colors"
+                          >
+                            Explicar
+                          </button>
                       {handleRegenerate && (
                          <button
                             onClick={handleRegenerate}
                             disabled={isLoading}
-                            className="text-[9px] uppercase font-black tracking-widest text-[#8e918f]/40 hover:text-white/60 transition-colors flex items-center gap-1"
+                            className="text-[9px] uppercase font-black tracking-widest text-white/60 hover:text-white transition-colors flex items-center gap-1"
                          >
                            <RotateCcw size={9} />
-                           Re-Process
+                           Processar
                          </button>
                       )}
                     </div>

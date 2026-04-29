@@ -48,6 +48,8 @@ const limiter = rateLimit({
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
   'gemini-3.1-pro-preview',
+  'gemini-2.5-flash-preview',
+  'gemini-2.5-flash-lite-preview',
   'gemini-flash-latest',
   'gemini-pro-latest'
 ];
@@ -94,9 +96,17 @@ app.post('/api/chat', limiter, async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
-    if (!apiKeyToUse) throw new Error("Chave GEMINI_API_KEY não configurada.");
+    if (!apiKeyToUse) {
+      console.error("CRITICAL: GEMINI_API_KEY is not defined in the environment.");
+      return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada no servidor." });
+    }
     
-    const genAI = new GoogleGenerativeAI(apiKeyToUse);
+    let genAI;
+    try {
+      genAI = new GoogleGenerativeAI(apiKeyToUse);
+    } catch (e) {
+      return res.status(500).json({ error: "Falha ao inicializar Nexus Intelligence Core." });
+    }
     const modelInstance = genAI.getGenerativeModel({ 
       model: targetModel,
       systemInstruction: systemPrompt || undefined,

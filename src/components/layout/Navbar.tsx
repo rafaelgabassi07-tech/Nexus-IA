@@ -39,20 +39,20 @@ export const Navbar = ({
             className={cn(
               "flex flex-col md:flex-row items-center gap-1 md:gap-2.5 px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all duration-300 relative group",
               activeTab === tab.id 
-                ? "text-blue-400 bg-white/5 shadow-inner" 
-                : "text-[#8e918f]/40 hover:text-white/60 hover:bg-white/[0.02]"
+                ? "text-[#00d2ff] bg-white/5 shadow-[inset_0_0_12px_rgba(0,210,255,0.05)]" 
+                : "text-white/40 hover:text-white/80 hover:bg-white/[0.05]"
             )}
           >
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-1 md:gap-2">
               <div className="relative">
-                <tab.icon size={activeTab === tab.id ? 16 : 14} className={cn("transition-all duration-300", activeTab === tab.id ? "scale-110" : "group-hover:scale-110 group-hover:opacity-100")} />
+                <tab.icon size={activeTab === tab.id ? 16 : 15} className={cn("transition-all duration-300", activeTab === tab.id ? "scale-110 drop-shadow-[0_0_8px_rgba(0,210,255,0.4)]" : "opacity-70 group-hover:opacity-100 group-hover:scale-110")} />
                 {tab.dot && (
                   <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400 border border-black shadow-sm" />
                 )}
               </div>
               <span className={cn(
                 "text-[7px] md:text-[9px] font-black uppercase tracking-[.25em] transition-all italic",
-                activeTab === tab.id ? "opacity-100" : "opacity-30 group-hover:opacity-60"
+                activeTab === tab.id ? "opacity-100" : "opacity-50 group-hover:opacity-80"
               )}>
                 {tab.label}
               </span>
@@ -60,17 +60,17 @@ export const Navbar = ({
           </button>
         ))}
 
-        <div className="hidden md:flex w-px h-4 bg-white/5 mx-2" />
+        <div className="hidden md:flex w-px h-4 bg-white/10 mx-2" />
         
         <button
           onClick={() => setActiveTab('files')}
           className={cn(
-            "hidden md:flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 text-[#8e918f]/40 hover:text-white group",
-            activeTab === 'files' && "text-blue-400 bg-white/5"
+            "hidden md:flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 text-white/40 hover:text-white group",
+            activeTab === 'files' && "text-[#00d2ff] bg-white/5"
           )}
         >
-          <FolderOpen size={14} className="opacity-40 group-hover:opacity-100 transition-opacity" />
-          <span className="text-[9px] font-black uppercase tracking-widest opacity-30 group-hover:opacity-60 italic">Fs</span>
+          <FolderOpen size={14} className="opacity-60 group-hover:opacity-100 transition-opacity" />
+          <span className="text-[9px] font-black uppercase tracking-widest opacity-50 group-hover:opacity-80 italic">Fs</span>
         </button>
 
         <button 
@@ -78,8 +78,8 @@ export const Navbar = ({
           className={cn(
             "hidden md:flex items-center justify-center w-8 h-8 rounded-lg border transition-all duration-300 ml-1.5",
             isSidebarOpen 
-              ? "bg-blue-600/10 border-blue-400/20 text-blue-400" 
-              : "border-white/5 bg-white/5 text-[#8e918f]/30 hover:text-white/60"
+              ? "bg-[#00d2ff]/10 border-[#00d2ff]/30 text-[#00d2ff]" 
+              : "border-white/10 bg-white/5 text-white/40 hover:text-white/80"
           )}
         >
           {isSidebarOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}

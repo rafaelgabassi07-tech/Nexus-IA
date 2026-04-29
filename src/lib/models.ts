@@ -26,6 +26,18 @@ export const NEXUS_MODELS: NexusModel[] = [
     group: 'Google Gemini'
   },
   {
+    id: 'gemini-2.5-flash-preview',
+    name: 'Gemini 2.5 Flash',
+    contextWindow: 1048576,
+    group: 'Google Gemini'
+  },
+  {
+    id: 'gemini-2.5-flash-lite-preview',
+    name: 'Gemini 2.5 Flash Lite',
+    contextWindow: 1048576,
+    group: 'Google Gemini'
+  },
+  {
     id: 'gemini-flash-latest',
     name: 'Gemini Flash Latest',
     contextWindow: 1048576,

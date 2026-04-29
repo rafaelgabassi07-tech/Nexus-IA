@@ -86,8 +86,8 @@ export const SidebarHistory = () => {
                   <Clock size={14} />
                 </div>
                 <div className="flex flex-col">
-                  <h2 className="text-[11px] font-black uppercase text-white tracking-widest leading-none">Projects</h2>
-                  <span className="text-[8px] text-[#8e918f] font-bold uppercase tracking-[0.2em] mt-1 opacity-40">System History</span>
+                  <h2 className="text-[11px] font-black uppercase text-white tracking-widest leading-none">Projetos</h2>
+                  <span className="text-[8px] text-[#8e918f] font-bold uppercase tracking-[0.2em] mt-1 opacity-40">Histórico do Sistema</span>
                 </div>
               </div>
               <Button 
@@ -106,7 +106,7 @@ export const SidebarHistory = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4d51] group-focus-within:text-blue-400 transition-colors" size={12} />
                 <Input 
                   ref={searchInputRef}
-                  placeholder="Filter context..." 
+                  placeholder="Filtrar contexto..." 
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
                   className="pl-9 bg-[#111113] border-white/5 focus-visible:ring-1 focus-visible:ring-blue-500/20 h-8 text-[11px] rounded-lg placeholder:text-[#333538] shadow-inner"
@@ -122,7 +122,7 @@ export const SidebarHistory = () => {
                     <Layers size={24} strokeWidth={1} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[12px] font-bold text-[#f1f3f4]/40 uppercase tracking-widest">Void Detected</p>
+                    <p className="text-[12px] font-bold text-[#f1f3f4]/40 uppercase tracking-widest">Nenhuma Sessão Encontrada</p>
                   </div>
                 </div>
               ) : (
@@ -148,7 +148,7 @@ export const SidebarHistory = () => {
                       </div>
                       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                         <span className="text-[12px] font-bold text-[#e3e3e3]/80 truncate group-hover:text-white transition-colors tracking-tight">
-                          {chat.title || 'Untitled Session'}
+                          {chat.title || 'Sessão Sem Título'}
                         </span>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-bold text-[#8e918f]/40 uppercase tracking-tighter italic">
@@ -186,7 +186,7 @@ export const SidebarHistory = () => {
                 className="w-full flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-600/10 mb-2 active:scale-95"
               >
                 <Plus size={14} strokeWidth={3} />
-                New Matrix
+                Nova Matriz
               </button>
               
               {sessions.length > 0 && (

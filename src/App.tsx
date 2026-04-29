@@ -739,7 +739,7 @@ function AppContent() {
       
       <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/5 bg-[#131314]/50 backdrop-blur-sm relative z-50">
         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
-          <span className="hidden sm:inline">Engine: {selectedModel}</span>
+          <span className="hidden sm:inline">Motor: {selectedModel}</span>
           <div className="flex gap-1.5">
             <div className="w-1 h-1 rounded-full bg-white/10" />
             <div className="w-1 h-1 rounded-full bg-white/10" />
