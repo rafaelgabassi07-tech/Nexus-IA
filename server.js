@@ -139,20 +139,20 @@ app.post('/api/chat', limiter, async (req, res) => {
     };
 
     if (targetModel.includes('gemini-3-flash')) {
-      modelConfig.temperature = Math.min(temperature, 0.4); 
-      modelConfig.topP = 0.9;
+      modelConfig.temperature = 0.2; // Optimized for high-precision coding
+      modelConfig.topP = 0.8;
+      modelConfig.topK = 20;
       modelConfig.maxOutputTokens = 8192;
-      // Optimized for coding with Gemini 3 Flash (fast and concise)
     } else if (targetModel.includes('gemini-2.5-flash') && !targetModel.includes('lite')) {
-      modelConfig.temperature = Math.min(temperature, 0.5);
-      modelConfig.topP = 0.95;
-      modelConfig.maxOutputTokens = 8192;
-      // Gemini 2.5 Flash optimizations for thorough coding
-    } else if (targetModel.includes('lite')) {
-      modelConfig.temperature = Math.min(temperature, 0.3);
+      modelConfig.temperature = 0.4;
+      modelConfig.topP = 0.9;
       modelConfig.topK = 32;
+      modelConfig.maxOutputTokens = 8192;
+    } else if (targetModel.includes('lite')) {
+      modelConfig.temperature = 0.1; // Lite models need very low temperature for logic
+      modelConfig.topP = 0.7;
+      modelConfig.topK = 16;
       modelConfig.maxOutputTokens = 4096;
-      // Lite models benefit from lower temperature for strict coding tasks
     }
     
     const streamingResult = await ai.models.generateContentStream({

@@ -577,9 +577,6 @@ function AppContent() {
                   activeFileIndex={activeFileIndex}
                   setActiveFileIndex={setActiveFileIndex}
                   setActiveTab={setActiveTab}
-                  scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
-                  showScrollButton={showScrollButton}
-                  scrollToBottom={scrollToBottom}
                   handleSendMessage={handleSendMessage}
                   handleRegenerate={handleRegenerate}
                 />
