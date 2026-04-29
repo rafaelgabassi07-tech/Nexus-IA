@@ -572,7 +572,7 @@ function AppContent() {
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         <div className={cn(
-          "flex-1 flex flex-col bg-background border-r border-white/30 min-h-0 relative",
+          "flex-1 flex flex-col bg-background border-r border-border min-h-0 relative",
           (activeTab !== 'chat' && activeTab !== 'settings') && "hidden md:flex",
           ['settings', 'chat'].includes(activeTab) ? "flex" : "hidden md:flex"
         )}>
@@ -705,23 +705,23 @@ function AppContent() {
       <SecurityModal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} />
 
       <Dialog open={isClearHistoryModalOpen} onOpenChange={setIsClearHistoryModalOpen}>
-        <DialogContent className="max-w-sm bg-[#131314] border-[#333538] text-white p-6 rounded-2xl">
+        <DialogContent className="max-w-sm bg-card border-border text-foreground p-6 rounded-2xl shadow-xl">
           <DialogTitle>Limpar Histórico?</DialogTitle>
-          <p className="text-[13px] text-[#8e918f] mt-2">Esta ação apagará todos os seus projetos salvos localmente.</p>
+          <p className="text-[13px] text-muted-foreground mt-2">Esta ação apagará todos os seus projetos salvos localmente.</p>
           <div className="flex justify-end gap-3 mt-8">
             <Button variant="ghost" onClick={() => setIsClearHistoryModalOpen(false)}>Melhor não</Button>
-            <Button onClick={() => { clearHistory(); resetChat(); setIsClearHistoryModalOpen(false); }} className="bg-red-500 hover:bg-red-600">Sim, apagar tudo</Button>
+            <Button onClick={() => { clearHistory(); resetChat(); setIsClearHistoryModalOpen(false); }} className="bg-red-500 text-white hover:bg-red-600">Sim, apagar tudo</Button>
           </div>
         </DialogContent>
       </Dialog>
       
-      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-white/20 bg-[#141517] relative z-50">
-        <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40">
+      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-border bg-card relative z-50">
+        <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">
           <span className="hidden sm:inline">Motor: {selectedModel}</span>
           <div className="flex gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-white/10" />
-            <div className="w-1 h-1 rounded-full bg-white/10" />
-            <div className="w-1 h-1 rounded-full bg-white/10" />
+            <div className="w-1 h-1 rounded-full bg-border" />
+            <div className="w-1 h-1 rounded-full bg-border" />
+            <div className="w-1 h-1 rounded-full bg-border" />
           </div>
         </div>
       </footer>
@@ -729,8 +729,8 @@ function AppContent() {
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333538; border-radius: 4px; border: 2px solid #131314; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #5f6368; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.2); }
       `}</style>
       <Toaster position="top-right" theme="dark" richColors closeButton />
       <SidebarHistory />

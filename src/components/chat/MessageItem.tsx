@@ -22,11 +22,11 @@ import { cn } from '../../lib/utils';
 export const MessageSkeleton = () => (
   <div className="space-y-4 w-full max-w-2xl mt-2 px-1">
     <div className="flex gap-3">
-      <div className="animate-pulse bg-white/5 rounded-lg h-7 w-7 shrink-0" />
+      <div className="animate-pulse bg-muted rounded-lg h-7 w-7 shrink-0" />
       <div className="space-y-2 flex-1">
-        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[90%]" />
-        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[85%]" />
-        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[60%]" />
+        <div className="animate-pulse bg-muted rounded-md h-4 w-[90%]" />
+        <div className="animate-pulse bg-muted rounded-md h-4 w-[85%]" />
+        <div className="animate-pulse bg-muted rounded-md h-4 w-[60%]" />
       </div>
     </div>
     <div className="flex gap-3 pl-10 pt-2 flex-wrap">
@@ -78,22 +78,22 @@ export const MessageItem = React.memo(({
         className={cn("flex w-full", message.role === 'user' ? "justify-end" : "justify-start")}
       >
         {message.role === 'user' ? (
-          <div className="bg-white/[0.03] text-[#f1f3f4]/90 px-3 py-1.5 rounded-lg rounded-tr-none max-w-[85%] text-[12px] font-medium leading-relaxed whitespace-pre-wrap border border-white/20 shadow-sm">
+          <div className="bg-white/[0.03] text-foreground/90 px-3 py-1.5 rounded-lg rounded-tr-none max-w-[85%] text-[12px] font-medium leading-relaxed whitespace-pre-wrap border border-border shadow-sm">
             {message.content}
           </div>
         ) : (
           <div className="flex flex-row gap-2.5 w-full max-w-none items-start group">
             <Avatar className={cn(
-              "w-6 h-6 rounded-lg shrink-0 mt-0.5 shadow-xl flex items-center justify-center border border-white/30 nexus-glow",
+              "w-6 h-6 rounded-lg shrink-0 mt-0.5 shadow-xl flex items-center justify-center border border-border shadow-sm",
               activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
             )}>
-               <AvatarFallback className="bg-transparent text-white">
+               <AvatarFallback className="bg-transparent text-foreground">
                  <AgentIcon iconName={activeAgent.iconName} size={12} />
                </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-[12px] leading-relaxed text-foreground pr-2 overflow-hidden">
               <div className="flex items-center gap-2 mb-1">
-                <div className={cn("text-[7px] font-black uppercase tracking-[.3em] text-white/80 leading-none italic", isLoading && isLastMessage && "animate-pulse text-blue-400")}>
+                <div className={cn("text-[7px] font-black uppercase tracking-[.3em] text-muted-foreground leading-none italic", isLoading && isLastMessage && "animate-pulse text-primary")}>
                   {activeAgent.name} // Núcleo de Inteligência
                 </div>
                 {isLoading && isLastMessage && (
@@ -103,7 +103,7 @@ export const MessageItem = React.memo(({
                           key={i}
                           animate={{ opacity: [0.2, 1, 0.2] }}
                           transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                          className="w-0.5 h-0.5 rounded-full bg-blue-500"
+                          className="w-0.5 h-0.5 rounded-full bg-primary"
                         />
                       ))}
                    </div>
@@ -111,7 +111,7 @@ export const MessageItem = React.memo(({
               </div>
               {message.steps && message.steps.length > 0 && (
                 <div className="mb-2 w-full max-w-[95%] md:max-w-lg">
-                  <details className="group/accordion border border-white/20 bg-white/[0.01] rounded border-white/20 overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
+                  <details className="group/accordion border border-border bg-white/[0.01] rounded border-border overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
                     <summary className="flex items-center gap-2 px-2 py-1.5 cursor-pointer list-none select-none hover:bg-white/[0.02] transition-colors">
                       <div className="relative shrink-0 flex items-center justify-center">
                         {message.steps.some((s: any) => s.status === 'running') ? (
@@ -119,23 +119,23 @@ export const MessageItem = React.memo(({
                             <motion.div 
                                animate={{ rotate: 360 }}
                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                               className="w-2.5 h-2.5 rounded-full border-b border-blue-400"
+                               className="w-2.5 h-2.5 rounded-full border-b border-primary"
                             />
                           </div>
                         ) : (
                           <div className="w-3 h-3 rounded-full bg-blue-400/10 flex items-center justify-center">
-                            <Check size={8} className="text-blue-400" strokeWidth={3} />
+                            <Check size={8} className="text-primary" strokeWidth={3} />
                           </div>
                         )}
                       </div>
-                      <span className="flex-1 tracking-tight text-white/90 uppercase text-[8px] font-black tracking-widest">
+                      <span className="flex-1 tracking-tight text-muted-foreground uppercase text-[8px] font-black tracking-widest">
                         {message.steps.some((s: any) => s.status === 'running') ? 'Sincronizando...' : 'Sequência de Tarefas'}
                       </span>
-                      <ChevronDown size={10} className="text-white/80 transition-transform group-open/accordion:rotate-180 shrink-0" />
+                      <ChevronDown size={10} className="text-muted-foreground transition-transform group-open/accordion:rotate-180 shrink-0" />
                     </summary>
                     
                     <div className="px-2 pb-2 pt-0.5 space-y-0 relative">
-                      <div className="absolute left-[13px] top-1 bottom-4 w-px bg-white/5 z-0" />
+                      <div className="absolute left-[13px] top-1 bottom-4 w-px bg-muted z-0" />
                       
                       {message.steps.map((step: any, i: number) => {
                         // Icon mapping for serialized steps
@@ -158,16 +158,16 @@ export const MessageItem = React.memo(({
                             <div className={cn(
                               "shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full border transition-all duration-300",
                               step.status === 'running' 
-                                ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
+                                ? "bg-primary/10 border-primary/30 text-primary" 
                                 : step.status === 'success' 
-                                  ? "bg-white/[0.02] border-white/30 text-white/80" 
-                                  : "bg-transparent border-white/20 text-white/80"
+                                  ? "bg-white/[0.02] border-border text-muted-foreground" 
+                                  : "bg-transparent border-border text-muted-foreground"
                             )}>
                               <StepIcon size={8} strokeWidth={2.5} />
                             </div>
                             <span className={cn(
                               "text-[10px] font-bold transition-colors truncate tracking-tight uppercase italic",
-                              step.status === 'running' ? "text-blue-400" : step.status === 'success' ? "text-white/90" : "text-white/90"
+                              step.status === 'running' ? "text-primary" : step.status === 'success' ? "text-muted-foreground" : "text-muted-foreground"
                             )}>
                               {step.label}
                             </span>
@@ -176,13 +176,13 @@ export const MessageItem = React.memo(({
                       })}
                       
                       {hasFiles && isLastMessage && generatedFiles.length > 0 && (
-                        <div className="pt-1.5 mt-1 border-t border-white/20">
+                        <div className="pt-1.5 mt-1 border-t border-border">
                           <div className="flex items-center gap-1.5 px-1 mb-1">
-                            <div className="w-3.5 h-3.5 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20">
-                              <Edit2 size={8} className="text-emerald-400" strokeWidth={2} />
+                            <div className="w-3.5 h-3.5 flex items-center justify-center rounded bg-primary/10 border border-primary/20">
+                              <Edit2 size={8} className="text-primary" strokeWidth={2} />
                             </div>
-                            <span className="text-[8px] font-black text-white/90 tracking-widest uppercase">
-                              Manifesto <span className="ml-1 text-white/80">[{generatedFiles.length}]</span>
+                            <span className="text-[8px] font-black text-muted-foreground tracking-widest uppercase">
+                              Manifesto <span className="ml-1 text-muted-foreground">[{generatedFiles.length}]</span>
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-1">
@@ -196,14 +196,14 @@ export const MessageItem = React.memo(({
                                 className={cn(
                                   "flex items-center gap-1.5 p-1 rounded border text-left transition-all hover:bg-white/[0.04]",
                                   activeFileIndex === idx 
-                                    ? "bg-white/[0.04] border-white/30" 
-                                    : "bg-white/[0.01] border-white/20"
+                                    ? "bg-white/[0.04] border-border" 
+                                    : "bg-white/[0.01] border-border"
                                 )}
                               >
-                                <FileCode size={10} className={activeFileIndex === idx ? "text-emerald-400" : "text-white/80"} />
+                                <FileCode size={10} className={activeFileIndex === idx ? "text-primary" : "text-muted-foreground"} />
                                 <span className={cn(
                                   "text-[9px] font-bold truncate flex-1 tracking-tight",
-                                  activeFileIndex === idx ? "text-white/90" : "text-white/80"
+                                  activeFileIndex === idx ? "text-muted-foreground" : "text-muted-foreground"
                                 )}>{f.name.split('/').pop()}</span>
                               </button>
                             ))}
@@ -232,7 +232,7 @@ export const MessageItem = React.memo(({
                             const isLongCode = codeVal.split('\n').length >= 1;
                             if (isLongCode && generatedFiles.length > 0) {
                               return (
-                                <div className="my-3 p-3 rounded-xl border border-white/20 bg-white/[0.02] flex items-center justify-between group/code-summary hover:bg-white/[0.04] transition-all cursor-pointer shadow-sm"
+                                <div className="my-3 p-3 rounded-xl border border-border bg-white/[0.02] flex items-center justify-between group/code-summary hover:bg-white/[0.04] transition-all cursor-pointer shadow-sm"
                                   onClick={() => {
                                     setActiveTab('code');
                                     const fileIndex = generatedFiles.findIndex(f => f.code.includes(codeVal.slice(0, 50)));
@@ -240,15 +240,15 @@ export const MessageItem = React.memo(({
                                   }}
                                 >
                                   <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/code-summary:scale-105 transition-transform border border-blue-400/20">
+                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/code-summary:scale-105 transition-transform border border-primary/20">
                                       <FileCode size={16} />
                                     </div>
                                     <div>
-                                      <div className="text-[10px] font-black uppercase tracking-widest text-white/90 mb-0.5">Ativo Manifestado</div>
-                                      <div className="text-[9px] text-white/80 font-bold uppercase tracking-tighter">Explorar no Editor • {match[1]}</div>
+                                      <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Ativo Manifestado</div>
+                                      <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Explorar no Editor • {match[1]}</div>
                                     </div>
                                   </div>
-                                  <Layout size={14} className="text-white/90" />
+                                  <Layout size={14} className="text-muted-foreground" />
                                 </div>
                               );
                             }
@@ -263,12 +263,12 @@ export const MessageItem = React.memo(({
                           }
                           
                           return (
-                            <code className={cn("bg-white/5 px-1 rounded text-blue-300 font-mono text-[12px] border border-white/20", className)} {...props}>
+                            <code className={cn("bg-muted px-1 rounded text-primary font-mono text-[12px] border border-border", className)} {...props}>
                               {children}
                             </code>
                           );
                         },
-                        p: ({ children }) => <p className="mb-3 last:mb-0 text-white/85 leading-relaxed font-medium">{children}</p>,
+                        p: ({ children }) => <p className="mb-3 last:mb-0 text-foreground/85 leading-relaxed font-medium">{children}</p>,
                         blockquote({ children }: any) {
                           let text = '';
                           try {
@@ -290,13 +290,13 @@ export const MessageItem = React.memo(({
                                   </div>
                                   <ChevronDown size={12} className="opacity-60 transition-transform group-open/thought:rotate-180" />
                                 </summary>
-                                <div className="px-4 pb-4 pt-1 text-white/90 text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
+                                <div className="px-4 pb-4 pt-1 text-muted-foreground text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
                                   {children}
                                 </div>
                               </details>
                             );
                           }
-                          return <blockquote className="border-l-2 border-white/30 pl-4 py-1 italic mb-3 text-white/80 font-medium bg-white/[0.01] rounded-r-lg">{children}</blockquote>;
+                          return <blockquote className="border-l-2 border-border pl-4 py-1 italic mb-3 text-muted-foreground font-medium bg-white/[0.01] rounded-r-lg">{children}</blockquote>;
                         }
                       }}
                     >
@@ -315,7 +315,7 @@ export const MessageItem = React.memo(({
                         toast.success('Copiado');
                       }
                     }}
-                    className="p-1 px-1.5 rounded bg-white/10 text-white/80 hover:text-white transition-colors border border-white/30"
+                    className="p-1 px-1.5 rounded bg-white/10 text-muted-foreground hover:text-foreground transition-colors border border-border"
                   >
                     <Copy size={11} />
                   </button>
@@ -323,7 +323,7 @@ export const MessageItem = React.memo(({
                     <div className="flex items-center gap-3">
                           <button
                              onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")?.catch((err: any) => console.error("Failed to explain better:", err))}
-                             className="text-[9px] uppercase font-black tracking-widest text-white/90 hover:text-white transition-colors"
+                             className="text-[9px] uppercase font-black tracking-widest text-muted-foreground hover:text-foreground transition-colors"
                           >
                             Explicar
                           </button>
@@ -331,7 +331,7 @@ export const MessageItem = React.memo(({
                          <button
                             onClick={handleRegenerate}
                             disabled={isLoading}
-                            className="text-[9px] uppercase font-black tracking-widest text-white/90 hover:text-white transition-colors flex items-center gap-1"
+                            className="text-[9px] uppercase font-black tracking-widest text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                          >
                            <RotateCcw size={9} />
                            Processar

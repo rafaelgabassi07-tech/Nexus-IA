@@ -20,32 +20,32 @@ export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) =>
 
   const getIcon = (fileName: string) => {
     const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext === 'tsx' || ext === 'jsx') return <Layout size={14} className="text-blue-400" />;
-    if (ext === 'ts' || ext === 'js') return <FileCode size={14} className="text-emerald-400" />;
+    if (ext === 'tsx' || ext === 'jsx') return <Layout size={14} className="text-primary" />;
+    if (ext === 'ts' || ext === 'js') return <FileCode size={14} className="text-primary" />;
     if (ext === 'css') return <Activity size={14} className="text-purple-400" />;
     if (ext === 'json') return <Box size={14} className="text-amber-400" />;
-    return <Terminal size={14} className="text-[#8e918f]" />;
+    return <Terminal size={14} className="text-muted-foreground" />;
   };
 
   return (
     <div className="w-full h-full flex flex-col bg-background/50 backdrop-blur-xl overflow-hidden py-2 md:min-w-[200px]">
       <div className="px-4 mb-3 mt-1 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-[9px] font-black text-[#4a4d51] uppercase tracking-[.3em] italic">Manifest Core</h3>
-          <div className="h-px w-4 bg-blue-500/20" />
+          <h3 className="text-[9px] font-black text-muted-foreground uppercase tracking-[.3em] italic">Manifest Core</h3>
+          <div className="h-px w-4 bg-primary/20" />
         </div>
         
         <div className="relative group">
-          <Search size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/80 group-focus-within:text-blue-400 transition-colors" />
+          <Search size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input 
             type="text" 
             placeholder="FILTER ASSETS..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-7 bg-white/[0.02] border border-white/20 rounded-md pl-8 pr-8 text-[10px] font-bold text-white/80 focus:outline-none focus:border-blue-500/30 placeholder:text-white/5 uppercase tracking-tighter transition-all"
+            className="w-full h-7 bg-white/[0.02] border border-border rounded-md pl-8 pr-8 text-[10px] font-bold text-muted-foreground focus:outline-none focus:border-primary/30 placeholder:text-foreground/5 uppercase tracking-tighter transition-all"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/80 hover:text-white">
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X size={10} />
             </button>
           )}
@@ -61,8 +61,8 @@ export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) =>
               className={cn(
                 "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-all duration-200 text-left group",
                 activeFileIndex === file.originalIndex 
-                  ? "bg-white/[0.04] text-white border border-white/20 active-file-shadow" 
-                  : "text-[#8e918f]/60 hover:bg-white/[0.02] border border-transparent"
+                  ? "bg-white/[0.04] text-foreground border border-border active-file-shadow" 
+                  : "text-muted-foreground/60 hover:bg-white/[0.02] border border-transparent"
               )}
             >
               <div className={cn(
@@ -74,7 +74,7 @@ export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) =>
               <div className="flex flex-col min-w-0 flex-1">
                 <span className={cn(
                   "text-[12px] font-bold truncate tracking-tight transition-colors",
-                  activeFileIndex === file.originalIndex ? "text-white/90" : "group-hover:text-white/70"
+                  activeFileIndex === file.originalIndex ? "text-muted-foreground" : "group-hover:text-muted-foreground"
                 )}>
                   {file.name.split('/').pop()}
                 </span>

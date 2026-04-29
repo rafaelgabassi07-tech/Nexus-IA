@@ -77,24 +77,24 @@ export const SidebarHistory = () => {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-[320px] bg-[#0d0d0e] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.3)] flex flex-col border-l border-white/20"
+            className="relative w-full max-w-[320px] bg-background h-full shadow-[-20px_0_50px_rgba(0,0,0,0.3)] flex flex-col border-l border-border"
           >
             {/* Header */}
-            <div className="p-4 flex items-center justify-between border-b border-white/20 bg-white/[0.02]">
+            <div className="p-4 flex items-center justify-between border-b border-border bg-white/[0.02]">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/10">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/10">
                   <Clock size={14} />
                 </div>
                 <div className="flex flex-col">
-                  <h2 className="text-[11px] font-black uppercase text-white tracking-widest leading-none">Projetos</h2>
-                  <span className="text-[8px] text-[#8e918f] font-bold uppercase tracking-[0.2em] mt-1 opacity-80">Histórico do Sistema</span>
+                  <h2 className="text-[11px] font-black uppercase text-foreground tracking-widest leading-none">Projetos</h2>
+                  <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-[0.2em] mt-1 opacity-80">Histórico do Sistema</span>
                 </div>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={() => setIsSidebarOpen(false)}
-                className="text-[#8e918f] hover:text-white rounded-lg hover:bg-white/5 w-7 h-7"
+                className="text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted w-7 h-7"
               >
                 <X size={14} />
               </Button>
@@ -103,13 +103,13 @@ export const SidebarHistory = () => {
             {/* Search */}
             <div className="px-4 py-3">
               <div className="relative group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4d51] group-focus-within:text-blue-400 transition-colors" size={12} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={12} />
                 <Input 
                   ref={searchInputRef}
                   placeholder="Filtrar contexto..." 
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
-                  className="pl-9 bg-[#111113] border-white/20 focus-visible:ring-1 focus-visible:ring-blue-500/20 h-8 text-[11px] rounded-lg placeholder:text-[#333538] shadow-inner"
+                  className="pl-9 bg-background border-border focus-visible:ring-1 focus-visible:ring-primary/20 h-8 text-[11px] rounded-lg placeholder:text-muted-foreground shadow-inner"
                 />
               </div>
             </div>
@@ -118,11 +118,11 @@ export const SidebarHistory = () => {
             <div className="flex-1 overflow-y-auto px-2 flex flex-col gap-0.5 custom-scrollbar pb-32">
               {safeSessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center pt-20 px-8 text-center space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/[0.01] border border-white/20 flex items-center justify-center text-[#222325]">
+                  <div className="w-12 h-12 rounded-xl bg-white/[0.01] border border-border flex items-center justify-center text-muted-foreground">
                     <Layers size={24} strokeWidth={1} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[12px] font-bold text-[#f1f3f4]/40 uppercase tracking-widest">Nenhuma Sessão Encontrada</p>
+                    <p className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest">Nenhuma Sessão Encontrada</p>
                   </div>
                 </div>
               ) : (
@@ -138,24 +138,24 @@ export const SidebarHistory = () => {
                     key={chat.id}
                     className={cn(
                       "group relative flex flex-col px-3 py-2.5 rounded-lg border border-transparent cursor-pointer transition-all duration-200",
-                      "hover:bg-white/[0.02] hover:border-white/20 active:scale-[0.99]"
+                      "hover:bg-white/[0.02] hover:border-border active:scale-[0.99]"
                     )}
                     onClick={() => handleSelectSession(chat)}
                   >
                     <div className="flex items-start gap-3 pr-6">
-                      <div className="w-8 h-8 rounded-lg bg-[#161618] border border-white/20 flex items-center justify-center text-[#8e918f] group-hover:text-blue-400 group-hover:border-blue-500/20 transition-all shadow-sm shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/20 transition-all shadow-sm shrink-0">
                         <MessageSquare size={14} />
                       </div>
                       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                        <span className="text-[12px] font-bold text-[#e3e3e3]/80 truncate group-hover:text-white transition-colors tracking-tight">
+                        <span className="text-[12px] font-bold text-foreground truncate group-hover:text-foreground transition-colors tracking-tight">
                           {chat.title || 'Sessão Sem Título'}
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] font-bold text-[#8e918f]/40 uppercase tracking-tighter italic">
+                          <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-tighter italic">
                             {formatDate(chat.timestamp || chat.updatedAt)}
                           </span>
-                          <span className="text-[9px] text-white/5">•</span>
-                          <span className="text-[9px] font-bold text-[#8e918f]/40 uppercase tracking-tighter">
+                          <span className="text-[9px] text-foreground/5">•</span>
+                          <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-tighter">
                             {formatTime(chat.timestamp || chat.updatedAt)}
                           </span>
                         </div>
@@ -167,7 +167,7 @@ export const SidebarHistory = () => {
                         e.stopPropagation();
                         if (chat.id) removeSession(chat.id);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 text-[#4a4d51] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all z-20"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all z-20"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -177,13 +177,13 @@ export const SidebarHistory = () => {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-white/20 bg-black/20">
+            <div className="p-4 border-t border-border bg-black/20">
               <button 
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('newChat'));
                   setIsSidebarOpen(false);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-600/10 mb-2 active:scale-95"
+                className="w-full flex items-center justify-center gap-2 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-all font-black uppercase text-[10px] tracking-widest shadow-lg shadow-primary/10 mb-2 active:scale-95"
               >
                 <Plus size={14} strokeWidth={3} />
                 Nova Matriz
@@ -197,7 +197,7 @@ export const SidebarHistory = () => {
                       setIsSidebarOpen(false);
                     }
                   }}
-                  className="w-full py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#4a4d51] hover:text-red-400/60 transition-colors"
+                  className="w-full py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-red-400/60 transition-colors"
                 >
                   Limpar Histórico
                 </button>

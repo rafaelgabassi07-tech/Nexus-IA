@@ -23,29 +23,29 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
   };
 
   return (
-    <header className="h-[48px] border-b border-white/20 bg-[#141517] flex items-center justify-between px-4 shrink-0 z-[100] relative">
+    <header className="h-[48px] border-b border-border bg-card flex items-center justify-between px-4 shrink-0 z-[100] relative">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 group cursor-pointer" onClick={handleNewChat}>
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-sm transition-all relative overflow-hidden">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-sm transition-all relative overflow-hidden">
              <Terminal size={14} className="relative z-10" />
           </div>
           <div className="flex flex-col">
-            <span className="text-[14px] font-bold text-white leading-none flex items-center gap-1">
+            <span className="text-[14px] font-bold text-foreground leading-none flex items-center gap-1">
               Nexus IA
             </span>
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-white/80">
+        <div className="hidden md:flex items-center gap-2 text-muted-foreground">
           <ChevronRight size={14} />
-          <div className="flex items-center gap-2 px-2 py-1 bg-white/[0.03] border border-white/20 rounded-lg transition-all hover:bg-white/[0.05]">
+          <div className="flex items-center gap-2 px-2 py-1 bg-white/[0.03] border border-border rounded-lg transition-all hover:bg-white/[0.05]">
             <div className={cn("w-4 h-4 rounded-md flex items-center justify-center shadow-sm", activeAgent.color)}>
-              <AgentIcon iconName={activeAgent.iconName} size={10} className="text-white" />
+              <AgentIcon iconName={activeAgent.iconName} size={10} className="text-foreground" />
             </div>
-            <span className="text-[12px] font-medium text-white/70 max-w-[150px] truncate">{currentChatTitle || activeAgent.name}</span>
+            <span className="text-[12px] font-medium text-muted-foreground max-w-[150px] truncate">{currentChatTitle || activeAgent.name}</span>
             {isSaving && (
               <div className="flex items-center gap-1 ml-1">
-                <div className="w-1 h-1 rounded-full bg-blue-400 animate-pulse" />
+                <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
               </div>
             )}
           </div>
@@ -62,7 +62,7 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
           variant="ghost" 
           size="icon" 
           onClick={handleNewChat}
-          className="text-[#8e918f] hover:text-white rounded-lg hover:bg-white/5 w-8 h-8 transition-all"
+          className="text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted w-8 h-8 transition-all"
         >
           <Plus size={16} />
         </Button>
@@ -70,11 +70,11 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
           variant="ghost" 
           size="icon" 
           onClick={() => setIsSidebarOpen(true)}
-          className="text-[#8e918f] hover:text-white rounded-lg hover:bg-white/5 w-8 h-8 transition-all relative"
+          className="text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted w-8 h-8 transition-all relative"
         >
           <History size={16} />
           {messages.length > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" />
           )}
         </Button>
       </div>

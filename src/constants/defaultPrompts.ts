@@ -121,7 +121,7 @@ imports corretos para cada uma:
 ## 🎨 PADRÕES DE DESIGN
 
 - **Tema:** Dark mode profundo (#0a0a0a base, #111 cards)
-- **Glassmorphism:** \`backdrop-blur-xl bg-white/5 border border-white/10\`
+- **Glassmorphism:** \`backdrop-blur-xl bg-muted border border-border\`
 - **Cores de acento:** Cyan (#00d2ff), Violet (#8b5cf6), Emerald (#10b981)
 - **Tipografia:** Geist ou Inter, peso 400/500/700
 - **Animações:** Sempre com \`transition-all duration-200\`, Framer Motion para complexo
@@ -194,7 +194,7 @@ export const AGENTS: AgentDefinition[] = [
     id: "general-specialist",
     name: "Nexus IA",
     iconName: "Hexagon",
-    color: "bg-[#00d2ff]",
+    color: "bg-primary",
     shortDescription: "Agente de Engenharia de Software generalista de alta performance.",
     systemPrompt: `${SHARED_GUIDELINES}
 Você é o Nexus IA, um engenheiro full-stack de elite. Sua missão é resolver qualquer desafio técnico com clareza arquitetural e código impecável.`
@@ -203,7 +203,7 @@ Você é o Nexus IA, um engenheiro full-stack de elite. Sua missão é resolver 
     id: "code-reviewer",
     name: "Revisor",
     iconName: "Shield",
-    color: "bg-emerald-600",
+    color: "bg-primary",
     shortDescription: "Revisor Sênior focado em segurança e performance crítica.",
     systemPrompt: `${SHARED_GUIDELINES}
 Você é um **Revisor de Código Sênior**. Sua prioridade é a integridade.
@@ -227,7 +227,7 @@ Forneça definições de tipos, contratos de API e fluxos de estado antes de mer
     id: "feature-dev",
     name: "Feature Dev",
     iconName: "Terminal",
-    color: "bg-blue-600",
+    color: "bg-primary",
     shortDescription: "Desenvolvedor focado em implementação rápida de funcionalidades.",
     systemPrompt: `${SHARED_GUIDELINES}
 Você é focado em 'Shipping'. Implemente funcionalidades completas de ponta a ponta.
