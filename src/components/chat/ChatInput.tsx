@@ -110,18 +110,21 @@ export const ChatInput = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex items-center h-6 bg-white/5 rounded border border-white/10 px-1.5 min-w-[100px] hover:border-white/20 transition-colors">
+              <div className="flex items-center h-8 bg-white/5 rounded-lg border border-white/10 px-2 min-w-[140px] hover:border-[#00d2ff]/40 transition-all shadow-sm">
                 <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
-                  <SelectTrigger className="border-none bg-transparent h-full text-[9px] font-black uppercase tracking-tight text-white/60 hover:text-[#00d2ff] focus:ring-0 px-2 transition-colors">
+                  <SelectTrigger className="border-none bg-transparent h-full text-[11px] font-black uppercase tracking-widest text-white/70 hover:text-[#00d2ff] focus:ring-0 px-2 transition-colors w-full">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#0b0c0e] border-white/10 text-white rounded-lg shadow-2xl">
+                  <SelectContent className="bg-[#0b0c0e] border-white/10 text-white rounded-xl shadow-2xl min-w-[180px]">
                     {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
                       <SelectGroup key={groupName}>
-                        <SelectLabel className="text-white/20 text-[8px] uppercase font-black tracking-widest pt-2 pb-0.5 px-2 italic">{groupName}</SelectLabel>
+                        <SelectLabel className="text-white/20 text-[9px] uppercase font-black tracking-[.3em] pt-3 pb-1 px-3 italic border-b border-white/5 mb-1">{groupName}</SelectLabel>
                         {models.map(m => (
-                          <SelectItem key={m.id} value={m.id} className="rounded-md m-0.5 py-1">
-                            <span className="font-bold text-[10px]">{m.name}</span>
+                          <SelectItem key={m.id} value={m.id} className="rounded-lg m-1 py-2 focus:bg-white/5 transition-colors cursor-pointer">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-black text-[12px] tracking-tight">{m.name}</span>
+                              <span className="text-[8px] text-white/30 uppercase tracking-widest">Nexus Core Synthesis</span>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -135,13 +138,13 @@ export const ChatInput = ({
                 disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
                 size="icon"
                 className={cn(
-                  "h-7 w-7 rounded-lg transition-all flex flex-shrink-0 items-center justify-center",
+                  "h-8 w-8 rounded-lg transition-all flex flex-shrink-0 items-center justify-center",
                   (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
-                    ? "bg-[#00d2ff] text-black shadow-[0_0_15px_rgba(0,210,255,0.3)]" 
+                    ? "bg-[#00d2ff] text-black shadow-[0_0_20px_rgba(0,210,255,0.4)] hover:scale-105 active:scale-95" 
                     : "bg-white/5 text-white/30"
                 )}
               >
-                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowUp size={14} strokeWidth={3} />}
+                {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={3} />}
               </Button>
             </div>
           </div>

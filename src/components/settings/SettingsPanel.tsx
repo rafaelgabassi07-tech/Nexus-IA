@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { 
   Key, Brain, Shield, Trash2, Edit2, Plus, 
   ExternalLink, ChevronRight, Info, Save, Undo,
@@ -16,6 +17,7 @@ import { Textarea } from '../ui/textarea';
 import { AgentIcon } from '../chat/AgentIcon';
 import { cn } from '../../lib/utils';
 import { APIPreset, AgentDefinition } from '../../types';
+import { NEXUS_MODELS } from '../../lib/models';
 
 interface SettingsPanelProps {
   settingsTab: 'overview' | 'general' | 'agent' | 'security';
@@ -51,6 +53,7 @@ interface SettingsPanelProps {
 export const SettingsPanel = ({
   settingsTab, setSettingsTab,
   draftApiKey, setDraftApiKey,
+  draftSelectedModel, setDraftSelectedModel,
   draftTemperature, setDraftTemperature,
   draftSystemPrompt, setDraftSystemPrompt,
   draftActiveAgentId, setDraftActiveAgentId,
@@ -125,8 +128,54 @@ export const SettingsPanel = ({
             )}
 
             {settingsTab === 'general' && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="space-y-4">
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-[18px] font-bold text-white tracking-tight">Motor de Inteligência</h3>
+                    <p className="text-[12px] text-[#8e918f] mt-1 uppercase tracking-widest font-medium opacity-60">Selecione a rede neural ativa para processamento.</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {NEXUS_MODELS.map(model => (
+                      <div 
+                        key={model.id}
+                        onClick={() => setDraftSelectedModel(model.id)}
+                        className={cn(
+                          "p-5 rounded-3xl border transition-all cursor-pointer group relative overflow-hidden",
+                          draftSelectedModel === model.id 
+                            ? "bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20" 
+                            : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
+                        )}
+                      >
+                        <div className="flex items-center gap-4 relative z-10">
+                          <div className={cn(
+                            "w-10 h-10 rounded-2xl flex items-center justify-center border transition-all",
+                            draftSelectedModel === model.id ? "bg-blue-500/20 border-blue-400/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]" : "bg-white/5 border-white/5 text-[#4a4d51]"
+                          )}>
+                             <Shield size={18} className={cn(draftSelectedModel === model.id && "animate-pulse")} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-black text-white uppercase tracking-tight">{model.name}</p>
+                            <p className="text-[9px] text-[#4a4d51] font-black uppercase tracking-widest mt-0.5 group-hover:text-blue-400/50 transition-colors">Core v3.1 Matrix</p>
+                          </div>
+                          {draftSelectedModel === model.id && (
+                            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                              <Check size={12} className="text-black" strokeWidth={4} />
+                            </div>
+                          )}
+                        </div>
+                        {draftSelectedModel === model.id && (
+                          <motion.div 
+                            layoutId="activeModelBg"
+                            className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <h3 className="text-[18px] font-bold text-white tracking-tight">Presets de API</h3>

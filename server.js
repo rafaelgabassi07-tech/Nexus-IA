@@ -44,15 +44,14 @@ const limiter = rateLimit({
   message: { error: "Muitas requisições. Aguarde um momento." },
   standardHeaders: true,
   legacyHeaders: false,
-});const VALID_MODELS = [
-  'gemini-3-flash-preview',
-  'gemini-3.1-flash-lite-preview',
-  'gemini-3.1-pro-preview',
-  'gemini-2.5-flash-preview',
-  'gemini-2.5-flash-lite-preview',
-  'gemini-flash-latest',
-  'gemini-pro-latest'
-];
+});const MODEL_MAPPING = {
+  'gemini-3.1-flash-lite': 'gemini-1.5-flash',
+  'gemini-3-flash': 'gemini-1.5-flash',
+  'gemini-2.5-flash': 'gemini-1.5-flash',
+  'gemini-2.5-flash-lite': 'gemini-1.5-flash'
+};
+
+const VALID_MODELS = Object.keys(MODEL_MAPPING);
 
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
@@ -87,7 +86,9 @@ app.post('/api/chat', limiter, async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
-    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-3-flash-preview';
+    const targetModelId = VALID_MODELS.includes(model) ? model : 'gemini-3.1-flash-lite';
+    const targetModel = MODEL_MAPPING[targetModelId] || 'gemini-1.5-flash';
+    
     const recentMessages = messages.slice(-30);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -107,6 +108,7 @@ app.post('/api/chat', limiter, async (req, res) => {
     } catch (e) {
       return res.status(500).json({ error: "Falha ao inicializar Nexus Intelligence Core." });
     }
+
     const modelInstance = genAI.getGenerativeModel({ 
       model: targetModel,
       systemInstruction: systemPrompt || undefined,
