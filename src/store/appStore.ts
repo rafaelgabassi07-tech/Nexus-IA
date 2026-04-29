@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_MODEL } from '../lib/models';
-import { APIPreset, ChatSession, SecurityRule } from '../types';
+import { APIPreset, ChatSession, SecurityRule, AgentDefinition } from '../types';
 
 export const defaultSecurityRules: SecurityRule[] = [
   { id: '1', name: 'Block eval()', pattern: 'eval\\(', action: 'warn', active: true },
@@ -17,6 +17,7 @@ interface SettingsState {
   activeAgentId: string;
   activePresetId: string | null;
   apiPresets: APIPreset[];
+  customAgents: AgentDefinition[];
   temperature: number;
   searchGrounding: boolean;
   autoSave: boolean;
@@ -27,6 +28,7 @@ interface SettingsState {
   setActiveAgentId: (id: string) => void;
   setActivePresetId: (id: string | null) => void;
   setApiPresets: (presets: APIPreset[]) => void;
+  setCustomAgents: (agents: AgentDefinition[]) => void;
   setTemperature: (temp: number) => void;
   setSearchGrounding: (active: boolean) => void;
   setAutoSave: (active: boolean) => void;
@@ -41,6 +43,7 @@ export const useSettingsStore = create<SettingsState>()(
       activeAgentId: 'general-specialist',
       activePresetId: null,
       apiPresets: [],
+      customAgents: [],
       temperature: 0.7,
       searchGrounding: false,
       autoSave: true,
@@ -51,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
       setActiveAgentId: (activeAgentId) => set({ activeAgentId }),
       setActivePresetId: (activePresetId) => set({ activePresetId }),
       setApiPresets: (apiPresets) => set({ apiPresets }),
+      setCustomAgents: (customAgents) => set({ customAgents }),
       setTemperature: (temperature) => set({ temperature }),
       setSearchGrounding: (searchGrounding) => set({ searchGrounding }),
       setAutoSave: (autoSave) => set({ autoSave }),

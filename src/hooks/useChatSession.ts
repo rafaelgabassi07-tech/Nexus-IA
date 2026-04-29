@@ -4,7 +4,6 @@ import {
 } from '../types';
 import { AgentDefinition } from '../agents';
 import { generateId, extractFilesFromMarkdown } from '../lib/utils';
-import { Terminal, Lightbulb, FileCode, Edit2, Code } from 'lucide-react';
 import { useSettingsStore } from '../store/appStore';
 import { toast } from 'sonner';
 
@@ -75,7 +74,7 @@ export function useChatSession({
             const base64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = () => resolve((reader.result as string).split(',')[1]);
-              reader.onerror = reject;
+              reader.onerror = () => reject(new Error('Falha ao ler arquivo de imagem'));
               reader.readAsDataURL(file);
             });
             imageAttachments.push({ mimeType: file.type, data: base64 });
@@ -111,7 +110,7 @@ export function useChatSession({
     // This allows the model to perform "edits" instead of just adding new code.
     const currentFiles = generatedFilesRef.current;
     const filesContext = currentFiles.length > 0 
-      ? `\n\nESTADO ATUAL DO PROJETO:\n${currentFiles.map(f => `Arquivo: ${f.name}\n\`\`\`${f.lang}\n${f.code}\n\`\`\``).join('\n\n')}`
+      ? `\n\n[CONTEXTO DO PROJETO NEXUS]\nAtivos atuais:\n${currentFiles.map(f => `## Arquivo: ${f.name}\n\`\`\`${f.name.split('.').pop()}\n${f.code}\n\`\`\``).join('\n\n')}`
       : '';
 
     setIsLoading(true);
@@ -120,7 +119,7 @@ export function useChatSession({
     const messageId = generateId();
     
     const initialSteps: TechnicalStep[] = [
-      { id: generateId(), label: 'Conectando...', status: 'running', icon: Terminal }
+      { id: generateId(), label: 'Conectando...', status: 'running', icon: 'Terminal' as any }
     ];
 
     setMessages(prev => [...prev, {
@@ -189,7 +188,7 @@ export function useChatSession({
             thoughtStepId = generateId();
             updateSteps([
               { ...steps[0], status: 'success' },
-              { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: Lightbulb }
+              { id: thoughtStepId, label: 'Pensando...', status: 'running', icon: 'Lightbulb' as any }
             ]);
           }
 
@@ -230,7 +229,7 @@ export function useChatSession({
                         id: generateId(), 
                         label: `Criando: ${newFile.name.split('/').pop()}`, 
                         status: 'success', 
-                        icon: FileCode 
+                        icon: 'FileCode' as any
                       });
                       updateSteps(currentSteps);
                       
@@ -270,9 +269,9 @@ export function useChatSession({
                       const last = currentSteps[currentSteps.length - 1];
                       if (last.status === 'running') {
                         last.label = writingLabel;
-                        last.icon = Edit2;
+                        last.icon = 'Edit2' as any;
                       } else {
-                        currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: Edit2 });
+                        currentSteps.push({ id: generateId(), label: writingLabel, status: 'running', icon: 'Edit2' as any });
                       }
                       updateSteps(currentSteps);
                     }
@@ -285,7 +284,7 @@ export function useChatSession({
                   const updatedSteps = steps.map(s => 
                     s.id === thoughtStepId ? { ...s, label: `Pensou por ${thoughtDuration}s`, status: 'success' as const } : s
                   );
-                  updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando ativos de código...', status: 'running', icon: Code }]);
+                  updateSteps([...updatedSteps, { id: generateId(), label: 'Gerando ativos de código...', status: 'running', icon: 'Code' as any }]);
                 }
 
                 setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: fullResponse } : m));
@@ -348,7 +347,8 @@ export function useChatSession({
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       console.error("Chat Error:", err);
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: m.content + `\n\n**Erro:** ${err.message}`, isError: true } : m));
+      const displayError = err instanceof Error ? err.message : (typeof err === 'string' ? err : JSON.stringify(err));
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: m.content + `\n\n**Erro:** ${displayError || 'Falha desconhecida no sistema.'}`, isError: true } : m));
       updateSteps(steps.map(s => s.status === 'running' ? { ...s, status: 'error' } : s));
     } finally {
       setIsLoading(false);

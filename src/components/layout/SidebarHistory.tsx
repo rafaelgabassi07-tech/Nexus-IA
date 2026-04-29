@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, X, Trash2, Layers, Plus, Clock, ChevronRight, MessageSquare
 } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { cn } from '../lib/utils';
-import { useChatHistoryStore, useUIStore } from '../store/appStore';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { cn } from '../../lib/utils';
+import { useChatHistoryStore, useUIStore } from '../../store/appStore';
 
 export const SidebarHistory = () => {
   const { 
@@ -34,6 +34,30 @@ export const SidebarHistory = () => {
   const handleSelectSession = (chat: any) => {
     window.dispatchEvent(new CustomEvent('loadSession', { detail: chat.id }));
     setIsSidebarOpen(false);
+  };
+
+  const safeSessions = Array.isArray(sessions) ? sessions.filter(c => c && typeof c === 'object' && c.id) : [];
+
+  const formatDate = (val: any) => {
+    if (!val) return '--/--';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '--/--';
+      return d.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' });
+    } catch {
+      return '--/--';
+    }
+  };
+
+  const formatTime = (val: any) => {
+    if (!val) return '--:--';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '--:--';
+      return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '--:--';
+    }
   };
 
   return (
@@ -92,7 +116,7 @@ export const SidebarHistory = () => {
 
             {/* List */}
             <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-1 custom-scrollbar pb-32">
-              {sessions.filter(Boolean).length === 0 ? (
+              {safeSessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center pt-32 px-10 text-center space-y-6">
                   <div className="w-16 h-16 rounded-3xl bg-white/[0.02] border border-white/5 flex items-center justify-center text-[#333538]">
                     <Layers size={32} strokeWidth={1} />
@@ -105,10 +129,13 @@ export const SidebarHistory = () => {
                   </div>
                 </div>
               ) : (
-                sessions
-                  .filter(c => c && typeof c === 'object')
+                safeSessions
                   .filter(c => (c.title || '').toLowerCase().includes(historySearch.toLowerCase()))
-                  .sort((a, b) => (Number(b?.timestamp || b?.updatedAt) || 0) - (Number(a?.timestamp || a?.updatedAt) || 0))
+                  .sort((a, b) => {
+                    const timeA = Number(a.timestamp || a.updatedAt || 0);
+                    const timeB = Number(b.timestamp || b.updatedAt || 0);
+                    return timeB - timeA;
+                  })
                   .map(chat => (
                   <div 
                     key={chat.id}
@@ -124,15 +151,15 @@ export const SidebarHistory = () => {
                       </div>
                       <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <span className="text-[14px] font-bold text-[#e3e3e3] truncate group-hover:text-white transition-colors tracking-tight">
-                          {chat.title}
+                          {chat.title || 'Sem título'}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-medium text-[#8e918f] uppercase tracking-wider">
-                            {new Date(chat.timestamp || chat.updatedAt || Date.now()).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
+                            {formatDate(chat.timestamp || chat.updatedAt)}
                           </span>
                           <span className="text-[10px] text-white/10">•</span>
                           <span className="text-[10px] font-medium text-[#8e918f] opacity-60">
-                            {new Date(chat.timestamp || chat.updatedAt || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            {formatTime(chat.timestamp || chat.updatedAt)}
                           </span>
                         </div>
                       </div>
@@ -142,7 +169,7 @@ export const SidebarHistory = () => {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeSession(chat.id);
+                        if (chat.id) removeSession(chat.id);
                       }}
                       className="absolute right-3 top-3 p-2 opacity-0 group-hover:opacity-100 text-[#4a4d51] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all z-20"
                       title="Excluir"
@@ -187,5 +214,3 @@ export const SidebarHistory = () => {
     </AnimatePresence>
   );
 };
-
-

@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
-import { OpenAI } from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
@@ -11,6 +10,15 @@ import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Global Error Handlers for Unhandled Rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
 
 const app = express();
 app.set('trust proxy', 1);
@@ -37,10 +45,11 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });const VALID_MODELS = [
-  'gemini-3-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite'
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3.1-pro-preview',
+  'gemini-flash-latest',
+  'gemini-pro-latest'
 ];
 
 const ChatRequestSchema = z.object({
@@ -76,7 +85,7 @@ app.post('/api/chat', limiter, async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
-    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-3-flash';
+    const targetModel = VALID_MODELS.includes(model) ? model : 'gemini-3-flash-preview';
     const recentMessages = messages.slice(-30);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -87,33 +96,42 @@ app.post('/api/chat', limiter, async (req, res) => {
     const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
     if (!apiKeyToUse) throw new Error("Chave GEMINI_API_KEY não configurada.");
     
-    const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
+    const genAI = new GoogleGenerativeAI(apiKeyToUse);
+    const modelInstance = genAI.getGenerativeModel({ 
+      model: targetModel,
+      systemInstruction: systemPrompt || undefined,
+    });
     
     const contents = recentMessages.map(msg => ({
       role: msg.role === 'model' ? 'model' : 'user',
-      parts: [
-        ...(msg.images || []).map(img => ({
+      parts: [{ text: msg.content }]
+    }));
+
+    // Add images to the last user message if present
+    if (contents.length > 0 && contents[contents.length-1].role === 'user' && messages[messages.length-1].images) {
+      const lastMsgImages = messages[messages.length-1].images || [];
+      contents[contents.length-1].parts = [
+        ...lastMsgImages.map(img => ({
           inlineData: { mimeType: img.mimeType, data: img.data }
         })),
-        { text: msg.content }
-      ]
-    }));
+        { text: messages[messages.length-1].content }
+      ];
+    }
 
     const tools = searchGrounding ? [{ googleSearch: {} }] : [];
     
-    const responseStream = await ai.models.generateContentStream({
-      model: targetModel,
+    const streamingResult = await modelInstance.generateContentStream({
       contents: contents,
-      config: {
-        systemInstruction: systemPrompt || undefined,
-        tools: tools,
+      tools: tools as any,
+      generationConfig: {
         temperature: temperature
       }
     }, { signal: controller.signal });
 
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+    for await (const chunk of streamingResult.stream) {
+      const text = chunk.text();
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
       }
     }
     
@@ -146,23 +164,34 @@ app.post('/api/chat', limiter, async (req, res) => {
   }
 });
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-  });
-} else {
-  const { createServer } = await import('vite');
-  const vite = await createServer({
-    server: { middlewareMode: true },
-    appType: 'spa'
-  });
-  app.use(vite.middlewares);
-}
+const startServer = async () => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      app.use(express.static(path.resolve(__dirname, 'dist')));
+      app.get('*', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      });
+    } else {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa'
+      });
+      app.use(vite.middlewares);
+    }
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+    const port = process.env.PORT || 3000;
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`Server listening on port ${port}`);
+    });
+  } catch (err) {
+    console.error('Critical server failure during startup:', err);
+    process.exit(1);
+  }
+};
+
+startServer().catch(err => {
+  console.error('Unexpected crash:', err);
 });
 
 export default app;

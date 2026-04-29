@@ -5,26 +5,33 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { toast } from 'sonner';
 import { 
-  Check, ChevronDown, FileCode, Edit2, Copy, Brain, Layout, Activity, RotateCcw
+  Check, ChevronDown, FileCode, Edit2, Copy, Brain, Layout, Activity, RotateCcw,
+  Terminal, Lightbulb, Code, Sparkles, Shield, Users, Hexagon
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from './ui/avatar';
-import { Button } from './ui/button';
+import { Avatar, AvatarFallback } from '../ui/avatar';
+import { Button } from '../ui/button';
 import { AgentIcon } from './AgentIcon';
-import { CodeBlock } from './CodeBlock';
-import { Message, GeneratedFile } from '../types';
-import { AgentDefinition } from '../agents';
-import { cn } from '../lib/utils';
+import { CodeBlock } from '../workbench/CodeBlock';
+import { Message, GeneratedFile } from '../../types';
+import { AgentDefinition } from '../../agents';
+import { cn } from '../../lib/utils';
 
 // Skeleton para quando a mensagem está carregando
 export const MessageSkeleton = () => (
-  <div className="space-y-3 w-full max-w-2xl mt-2 px-1">
-    <div className="animate-pulse bg-white/[0.05] rounded-md h-4 w-[90%]" />
-    <div className="animate-pulse bg-white/[0.05] rounded-md h-4 w-[85%]" />
-    <div className="animate-pulse bg-white/[0.05] rounded-md h-4 w-[60%]" />
-    <div className="flex gap-3 pt-3">
-      <div className="animate-pulse bg-white/[0.05] rounded-2xl h-24 flex-1" />
-      <div className="animate-pulse bg-white/[0.05] rounded-2xl h-24 flex-1" />
+  <div className="space-y-4 w-full max-w-2xl mt-2 px-1">
+    <div className="flex gap-3">
+      <div className="animate-pulse bg-white/5 rounded-lg h-7 w-7 shrink-0" />
+      <div className="space-y-2 flex-1">
+        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[90%]" />
+        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[85%]" />
+        <div className="animate-pulse bg-white/5 rounded-md h-4 w-[60%]" />
+      </div>
+    </div>
+    <div className="flex gap-3 pl-10 pt-2 flex-wrap">
+      <div className="animate-pulse bg-white/[0.03] rounded-2xl h-16 w-full sm:flex-1" />
+      <div className="animate-pulse bg-white/[0.03] rounded-2xl h-16 w-full sm:flex-1" />
     </div>
   </div>
 );
@@ -39,7 +46,7 @@ interface MessageItemProps {
   setActiveTab: (tab: any) => void;
   isLoading: boolean;
   isLastMessage: boolean;
-  handleSendMessage: (e?: any, content?: string) => void;
+  handleSendMessage: (e?: any, content?: string) => Promise<void> | any;
   handleRegenerate?: () => void;
   measureElement?: (el: HTMLElement | null) => void;
 }
@@ -71,20 +78,23 @@ export const MessageItem = React.memo(({
         className={cn("flex w-full", message.role === 'user' ? "justify-end" : "justify-start")}
       >
         {message.role === 'user' ? (
-          <div className="bg-[#1e1e20] text-[#f1f3f4] px-5 py-3.5 rounded-2xl rounded-tr-md max-w-[85%] text-[14px] font-medium leading-relaxed whitespace-pre-wrap border border-white/5 shadow-sm">
+          <div className="bg-white/[0.03] text-[#f1f3f4] px-4 py-2.5 rounded-2xl rounded-tr-md max-w-[92%] sm:max-w-[85%] text-[13px] font-medium leading-relaxed whitespace-pre-wrap border border-white/5 shadow-inner-white">
             {message.content}
           </div>
         ) : (
           <div className="flex flex-row gap-3 w-full max-w-none items-start group">
             <Avatar className={cn(
-              "w-7 h-7 rounded-lg shrink-0 mt-0.5 shadow-md flex items-center justify-center border border-white/5",
+              "w-7 h-7 rounded-xl shrink-0 mt-0.5 shadow-xl flex items-center justify-center border border-white/10 nexus-glow",
               activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
             )}>
                <AvatarFallback className="bg-transparent text-white">
-                 <AgentIcon iconName={activeAgent.iconName} size={18} />
+                 <AgentIcon iconName={activeAgent.iconName} size={16} />
                </AvatarFallback>
             </Avatar>
-                        <div className="flex-1 text-[14px] leading-[1.6] text-foreground pr-2 overflow-hidden">
+            <div className="flex-1 text-[12px] leading-relaxed text-foreground pr-2 overflow-hidden">
+              <div className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 mb-1 italic">
+                {activeAgent.name} <span className="mx-1 opacity-50">•</span> Intelligence
+              </div>
               {message.steps && message.steps.length > 0 && (
                 <div className="mb-3 w-full max-w-[90%] md:max-w-xl">
                   <details className="group/accordion border border-white/5 bg-white/[0.01] rounded-lg overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
@@ -113,26 +123,43 @@ export const MessageItem = React.memo(({
                     <div className="px-3 pb-2 pt-1 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-200 relative">
                       <div className="absolute left-[17px] top-1 bottom-4 w-px bg-white/5 z-0" />
                       
-                      {message.steps.map((step: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2.5 py-0.5 group/step relative z-10">
-                          <div className={cn(
-                            "shrink-0 w-4 h-4 flex items-center justify-center rounded-full border transition-all duration-300",
-                            step.status === 'running' 
-                              ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
-                              : step.status === 'success' 
-                                ? "bg-white/[0.03] border-white/10 text-muted-foreground" 
-                                : "bg-transparent border-white/5 text-muted-foreground/30"
-                          )}>
-                            <step.icon size={8} strokeWidth={2.5} />
+                      {message.steps.map((step: any, i: number) => {
+                        // Icon mapping for serialized steps
+                        const icons: Record<string, any> = {
+                          Terminal, Lightbulb, FileCode, Edit2, Code, 
+                          Brain, Layout, Activity, Sparkles, Shield, Users, Hexagon
+                        };
+
+                        let StepIcon = step.icon;
+                        if (typeof StepIcon === 'string' && icons[StepIcon]) {
+                          StepIcon = icons[StepIcon];
+                        }
+                        
+                        if (!StepIcon || typeof StepIcon !== 'function') {
+                          StepIcon = Terminal;
+                        }
+
+                        return (
+                          <div key={i} className="flex items-center gap-2.5 py-0.5 group/step relative z-10">
+                            <div className={cn(
+                              "shrink-0 w-4 h-4 flex items-center justify-center rounded-full border transition-all duration-300",
+                              step.status === 'running' 
+                                ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
+                                : step.status === 'success' 
+                                  ? "bg-white/[0.03] border-white/10 text-muted-foreground" 
+                                  : "bg-transparent border-white/5 text-muted-foreground/30"
+                            )}>
+                              <StepIcon size={8} strokeWidth={2.5} />
+                            </div>
+                            <span className={cn(
+                              "text-[10px] sm:text-[11px] font-medium transition-colors truncate",
+                              step.status === 'running' ? "text-foreground" : step.status === 'success' ? "text-muted-foreground" : "text-muted-foreground/40"
+                            )}>
+                              {step.label}
+                            </span>
                           </div>
-                          <span className={cn(
-                            "text-[10px] sm:text-[11px] font-medium transition-colors truncate",
-                            step.status === 'running' ? "text-foreground" : step.status === 'success' ? "text-muted-foreground" : "text-muted-foreground/40"
-                          )}>
-                            {step.label}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                       
                       {hasFiles && isLastMessage && generatedFiles.length > 0 && (
                         <div className="pt-2 mt-2 border-t border-white/5">
@@ -216,7 +243,6 @@ export const MessageItem = React.memo(({
                               <CodeBlock
                                 value={codeVal}
                                 language={match[1]}
-                                fastMode={isLoading && isLastMessage}
                                 {...props}
                               />
                             );
@@ -267,14 +293,15 @@ export const MessageItem = React.memo(({
               </div>
 
               {message.content && (
-                <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                <div className="flex items-center gap-2 mt-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-200">
                   <button
                     onClick={() => {
                       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(message.content).catch(e => console.error("Clipboard API failed", e));
+                        toast.success('Copiado');
                       }
                     }}
-                    className="p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 transition-colors"
+                    className="p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/5"
                     title="Copiar mensagem"
                   >
                     <Copy size={13} />
@@ -282,7 +309,7 @@ export const MessageItem = React.memo(({
                   {isLastMessage && message.role === 'model' && (
                     <div className="flex items-center gap-3">
                       <button
-                         onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")}
+                         onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")?.catch((err: any) => console.error("Failed to explain better:", err))}
                          className="text-[10px] uppercase font-black tracking-widest text-[#8e918f] hover:text-white transition-colors"
                       >
                         Explicar Melhor

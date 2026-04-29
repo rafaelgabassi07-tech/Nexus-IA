@@ -8,32 +8,32 @@ export interface NexusModel {
 
 export const NEXUS_MODELS: NexusModel[] = [
   {
-    id: 'gemini-3-flash',
+    id: 'gemini-3-flash-preview',
     name: 'Gemini 3 Flash',
     contextWindow: 1048576,
     group: 'Google Gemini'
   },
   {
-    id: 'gemini-3.1-flash-lite',
+    id: 'gemini-3.1-flash-lite-preview',
     name: 'Gemini 3.1 Flash Lite',
     contextWindow: 1048576,
     group: 'Google Gemini'
   },
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-3.1-pro-preview',
+    name: 'Gemini 3.1 Pro',
     contextWindow: 1048576,
     group: 'Google Gemini'
   },
   {
-    id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash Lite',
+    id: 'gemini-flash-latest',
+    name: 'Gemini Flash Latest',
     contextWindow: 1048576,
     group: 'Google Gemini'
   }
 ];
 
-export const DEFAULT_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export const getModelById = (id: string) => 
   NEXUS_MODELS.find(m => m.id === id) || NEXUS_MODELS.find(m => m.id === DEFAULT_MODEL)!;

@@ -1,33 +1,25 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { 
-  RotateCcw, Terminal, Layout,
-  Mic, MicOff, Paperclip, Image as ImageIcon,
-  Brain, Loader2, ArrowUp
-} from 'lucide-react';
 import { Toaster, toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
 
-import { FileTree } from './components/FileTree';
-import { CodeBlock } from './components/CodeBlock';
-import { Header } from './components/Header';
-import { ChatLog } from './components/ChatLog';
-import { FloatingNav } from './components/FloatingNav';
-import { SettingsPanel, SettingsDialogs } from './components/SettingsPanel';
-import { SecurityModal } from './components/SecurityModal';
+import { Workbench } from './components/workbench/Workbench';
+import { Header } from './components/layout/Header';
+import { ChatLog } from './components/chat/ChatLog';
+import { ChatInput } from './components/chat/ChatInput';
+import { Navbar as FloatingNav } from './components/layout/Navbar';
+import { SettingsPanel, SettingsDialogs } from './components/settings/SettingsPanel';
+import { SecurityModal } from './components/settings/SecurityModal';
 
 import { 
   APIPreset, AgentDefinition, Message
 } from './types';
 import { Button } from './components/ui/button';
-import { Textarea } from './components/ui/textarea';
-import { 
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  SelectGroup, SelectLabel
-} from './components/ui/select';
 import { 
   Dialog, DialogContent, DialogTitle 
 } from './components/ui/dialog';
 
 import { useChatSession } from './hooks/useChatSession';
+import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { AGENTS } from './agents';
 
 import { 
@@ -43,11 +35,20 @@ import {
   debounce,
   extractFilesFromMarkdown
 } from './lib/utils';
-import { NEXUS_MODELS, DEFAULT_MODEL, GROUPED_MODELS } from './lib/models';
-import { SidebarHistory } from './components/SidebarHistory';
-import { PreviewPane } from './components/PreviewPane';
+import { NEXUS_MODELS, DEFAULT_MODEL } from './lib/models';
+import { SidebarHistory } from './components/layout/SidebarHistory';
+
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const { 
     apiKey, setApiKey, 
     selectedModel, setSelectedModel, 
@@ -55,25 +56,18 @@ export default function App() {
     apiPresets, setApiPresets,
     activePresetId, setActivePresetId,
     temperature, setTemperature,
-    searchGrounding
+    searchGrounding,
+    customAgents, setCustomAgents
   } = useSettingsStore();
 
   const { 
     activeTab, setActiveTab,
     settingsTab, setSettingsTab,
-    setIsSidebarOpen,
+    isSidebarOpen, setIsSidebarOpen,
     setIsSaving
   } = useUIStore();
 
   const { sessions, addSession, clearHistory } = useChatHistoryStore();
-
-  const [customAgents, setCustomAgents] = useState<AgentDefinition[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nexus_custom_agents');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
 
   const allAgents = useMemo(() => [...AGENTS, ...customAgents], [customAgents]);
 
@@ -102,6 +96,10 @@ export default function App() {
     systemPrompt,
     temperature,
     searchGrounding
+  });
+
+  const { isListening, toggleListening } = useVoiceRecognition((transcript) => {
+    setInputMessage(prev => prev + (prev ? ' ' : '') + transcript);
   });
 
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
@@ -149,8 +147,6 @@ export default function App() {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [draftApiKey, setDraftApiKey] = useState(apiKey);
   const [draftSelectedModel, setDraftSelectedModel] = useState(selectedModel);
@@ -166,6 +162,14 @@ export default function App() {
       setDraftSelectedModel(DEFAULT_MODEL);
     }
   }, [selectedModel]);
+
+  useEffect(() => {
+    const agent = AGENTS.find(a => a.id === activeAgentId);
+    if (agent) {
+      setSystemPrompt(agent.systemPrompt);
+      setDraftSystemPrompt(agent.systemPrompt);
+    }
+  }, [activeAgentId]);
 
   const hasSettingsChanges = useMemo(() => {
     return draftApiKey !== apiKey || 
@@ -302,18 +306,19 @@ export default function App() {
   }, [hookResetChat]);
 
   useEffect(() => {
-    const handleLoadSession = (e: CustomEvent<string>) => {
+    const handleLoadSession = (e: any) => {
       const sessionId = e.detail;
-      const chat = sessions.find(c => c.id === sessionId);
-      if (chat) {
+      const sessArray = Array.isArray(sessions) ? sessions : [];
+      const chat = sessArray.find(c => c && c.id === sessionId);
+      if (chat && Array.isArray(chat.messages)) {
         setCurrentChatId(chat.id);
-        setMessages(chat.messages);
-        if (chat.fileHistory) {
-          setFileHistory(chat.fileHistory);
+        setMessages([...chat.messages]);
+        if (chat.fileHistory && Array.isArray(chat.fileHistory)) {
+          setFileHistory([...chat.fileHistory]);
           const latestFiles = chat.fileHistory.length > 0 ? chat.fileHistory[chat.fileHistory.length - 1].files : [];
-          setGeneratedFiles(latestFiles);
+          setGeneratedFiles(Array.isArray(latestFiles) ? [...latestFiles] : []);
         } else {
-          const fullContent = chat.messages.filter(m => m.role === 'model').map(m => m.content).join('\n');
+          const fullContent = chat.messages.filter(m => m && m.role === 'model').map(m => m.content).join('\n');
           const files = extractFilesFromMarkdown(fullContent);
           setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
           setGeneratedFiles(files);
@@ -410,6 +415,31 @@ export default function App() {
     document.title = currentChat ? `${currentChat.title} — Nexus IA` : 'Nexus IA';
   }, [currentChatId, sessions]);
 
+  useEffect(() => {
+    const handleGlobalError = (event: ErrorEvent) => {
+      console.error('Captured global error:', event.error);
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Log more details to help debugging
+      console.error('Unhandled promise rejection source:', event.promise);
+      console.error('Unhandled promise rejection reason:', event.reason);
+      
+      const reason = event.reason;
+      const message = (reason instanceof Error ? reason.message : 
+                       typeof reason === 'string' ? reason : 
+                       reason?.message || JSON.stringify(reason)) || 'Unknown async error';
+      
+      console.error('Rejection message extracted:', message);
+      toast.error(`Erro assíncrono detectado: ${message.slice(0, 50)}...`);
+    };
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -421,76 +451,10 @@ export default function App() {
     }
   }, []);
 
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current.abort();
-        recognitionRef.current = null;
-      }
     };
   }, []);
-
-  const toggleListening = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      toast.error('Reconhecimento de voz não suportado neste navegador.');
-      return;
-    }
-
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      if (!recognitionRef.current) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'pt-BR';
-
-        recognitionRef.current.onresult = (event: any) => {
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              const transcript = event.results[i][0].transcript;
-              setInputMessage(prev => prev + (prev ? ' ' : '') + transcript);
-            }
-          }
-        };
-
-        recognitionRef.current.onstart = () => {
-          setIsListening(true);
-        };
-
-        recognitionRef.current.onerror = (event: any) => {
-          console.error('Speech recognition error:', event.error);
-          if (event.error === 'not-allowed') {
-            toast.error('Permissão de microfone negada.');
-          } else {
-            toast.error(`Erro no microfone: ${event.error}`);
-          }
-          setIsListening(false);
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-        };
-      }
-
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error('Failed to start recognition:', error);
-      setIsListening(false);
-    }
-  };
 
   const handleSendMessage = useCallback(async (e?: React.FormEvent, overridePrompt?: string, messagesToUse?: Message[]) => {
     if (e) e.preventDefault();
@@ -537,7 +501,9 @@ export default function App() {
     const previousMessages = messages.slice(0, actualIndex);
     
     setMessages(previousMessages);
-    handleSendMessage(undefined, lastUserMessage.content, previousMessages);
+    handleSendMessage(undefined, lastUserMessage.content, previousMessages).catch(err => {
+      console.error("Failed to regenerate message:", err);
+    });
   }, [messages, isLoading, handleSendMessage, setMessages]);
 
   useEffect(() => {
@@ -574,7 +540,7 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
-    if (messages.length > 1 && currentChatId) {
+    if (messages.length > 1 && currentChatId && !isLoading) {
       const firstUserMsg = messages.find(m => m.role === 'user');
       const title = firstUserMsg ? deriveChatTitle(firstUserMsg.content) : 'Projeto Sincronizado';
       
@@ -583,20 +549,26 @@ export default function App() {
         title,
         timestamp: Date.now(),
         lastMessage: (messages[messages.length - 1]?.content || '').slice(0, 100),
-        messages,
+        messages: messages,
         fileHistory: fileHistory || []
       };
       
-      addSession(session as any);
+      // Delay saving slightly to ensure state is settled
+      const timeout = setTimeout(() => {
+        addSession(session as any);
+      }, 500);
+      return () => clearTimeout(timeout);
     }
-  }, [messages.length, currentChatId, addSession]);
+  }, [messages.length, currentChatId, addSession, isLoading]);
 
   const hasFiles = generatedFiles.length > 0;
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      handleSendMessage().catch(err => {
+        console.error("Failed to send message via Enter:", err);
+      });
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
       if (e.shiftKey) {
@@ -619,257 +591,122 @@ export default function App() {
       <Header 
         activeAgent={activeAgent}
         messages={messages}
-        currentChatTitle={sessions.find(s => s.id === currentChatId)?.title || ''}
+        currentChatTitle={(Array.isArray(sessions) ? sessions : []).find(s => s?.id === currentChatId)?.title || ''}
       />
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         <div className={cn(
-          "flex-1 flex flex-col bg-background border-r border-white/10 min-h-0",
+          "flex-1 flex flex-col bg-background border-r border-white/10 min-h-0 relative",
           (activeTab !== 'chat' && activeTab !== 'settings') && "hidden md:flex",
           ['settings', 'chat'].includes(activeTab) ? "flex" : "hidden md:flex"
         )}>
-          {activeTab === 'settings' ? (
-            <div className="flex-1 overflow-hidden h-full flex flex-col">
-              <SettingsPanel 
-                settingsTab={settingsTab} setSettingsTab={setSettingsTab}
-                draftApiKey={draftApiKey} setDraftApiKey={setDraftApiKey}
-                draftSelectedModel={draftSelectedModel} setDraftSelectedModel={setDraftSelectedModel}
-                draftTemperature={draftTemperature} setDraftTemperature={setDraftTemperature}
-                draftSystemPrompt={draftSystemPrompt} setDraftSystemPrompt={setDraftSystemPrompt}
-                draftActiveAgentId={draftActiveAgentId} setDraftActiveAgentId={setDraftActiveAgentId}
-                apiPresets={apiPresets} customAgents={customAgents}
-                hasSettingsChanges={hasSettingsChanges} saveSettings={saveSettings}
-                setIsPresetFormOpen={setIsPresetFormOpen} setEditingPreset={setEditingPreset} deletePreset={deletePreset} setPresetForm={setPresetForm}
-                setIsAgentFormOpen={setIsAgentFormOpen} setEditingAgent={setEditingAgent} deleteAgent={deleteAgent} setAgentForm={setAgentForm}
-                allAgents={allAgents}
-                isSystemPromptExpanded={isSystemPromptExpanded} setIsSystemPromptExpanded={setIsSystemPromptExpanded}
+          <AnimatePresence mode="wait">
+            {activeTab === 'settings' ? (
+              <motion.div 
+                key="settings"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="flex-1 overflow-hidden h-full flex flex-col"
+              >
+                <SettingsPanel 
+                  settingsTab={settingsTab} setSettingsTab={setSettingsTab}
+                  draftApiKey={draftApiKey} setDraftApiKey={setDraftApiKey}
+                  draftSelectedModel={draftSelectedModel} setDraftSelectedModel={setDraftSelectedModel}
+                  draftTemperature={draftTemperature} setDraftTemperature={setDraftTemperature}
+                  draftSystemPrompt={draftSystemPrompt} setDraftSystemPrompt={setDraftSystemPrompt}
+                  draftActiveAgentId={draftActiveAgentId} setDraftActiveAgentId={setDraftActiveAgentId}
+                  apiPresets={apiPresets} customAgents={customAgents}
+                  hasSettingsChanges={hasSettingsChanges} saveSettings={saveSettings}
+                  setIsPresetFormOpen={setIsPresetFormOpen} setEditingPreset={setEditingPreset} deletePreset={deletePreset} setPresetForm={setPresetForm}
+                  setIsAgentFormOpen={setIsAgentFormOpen} setEditingAgent={setEditingAgent} deleteAgent={deleteAgent} setAgentForm={setAgentForm}
+                  allAgents={allAgents}
+                  isSystemPromptExpanded={isSystemPromptExpanded} setIsSystemPromptExpanded={setIsSystemPromptExpanded}
+                  setActiveTab={setActiveTab}
+                />
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="chat"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="flex-1 flex flex-col min-h-0 h-full"
+              >
+                <ChatLog 
+                  messages={messages}
+                  isLoading={isLoading}
+                  activeAgent={activeAgent}
+                  generatedFiles={generatedFiles}
+                  activeFileIndex={activeFileIndex}
+                  setActiveFileIndex={setActiveFileIndex}
+                  setActiveTab={setActiveTab}
+                  scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
+                  showScrollButton={showScrollButton}
+                  scrollToBottom={scrollToBottom}
+                  handleSendMessage={handleSendMessage}
+                  handleRegenerate={handleRegenerate}
+                />
+
+                <ChatInput 
+                  inputMessage={inputMessage}
+                  setInputMessage={setInputMessage}
+                  attachedFiles={attachedFiles}
+                  setAttachedFiles={setAttachedFiles}
+                  isLoading={isLoading}
+                  handleSendMessage={handleSendMessage}
+                  onKeyDown={onKeyDown}
+                  isListening={isListening}
+                  toggleListening={toggleListening}
+                  pushToInputHistory={pushToInputHistory}
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {['preview', 'code', 'files'].includes(activeTab) || window.innerWidth >= 768 ? (
+            <motion.div
+              key="workbench"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className={cn(
+                "flex-1 flex flex-col md:flex",
+                !['preview', 'code', 'files'].includes(activeTab) && "hidden md:flex"
+              )}
+            >
+              <Workbench
+                activeTab={activeTab}
                 setActiveTab={setActiveTab}
-              />
-            </div>
-          ) : (
-            <>
-              <ChatLog 
-                messages={messages}
-                isLoading={isLoading}
-                activeAgent={activeAgent}
                 generatedFiles={generatedFiles}
+                setGeneratedFiles={setGeneratedFiles}
                 activeFileIndex={activeFileIndex}
                 setActiveFileIndex={setActiveFileIndex}
-                setActiveTab={setActiveTab}
-                scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
-                showScrollButton={showScrollButton}
-                scrollToBottom={scrollToBottom}
+                previewKey={previewKey}
+                setPreviewKey={setPreviewKey}
+                isLoading={isLoading}
                 handleSendMessage={handleSendMessage}
-                handleRegenerate={handleRegenerate}
+                fileHistory={fileHistory}
+                setFileHistory={setFileHistory}
               />
-
-              <div className="p-3 pb-[84px] md:pt-4 md:px-6 md:pb-5 bg-background shrink-0 border-t border-white/5">
-                <div className="max-w-3xl mx-auto flex flex-col px-1">
-              <div className="relative bg-white/[0.02] border border-white/5 focus-within:border-white/10 focus-within:ring-2 focus-within:ring-blue-500/20 rounded-2xl transition-all duration-300 shadow-xl flex flex-col">
-                {attachedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
-                    {attachedFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1 bg-white/5 text-[12px] text-white/80 px-2.5 py-1 rounded-md border border-white/10">
-                        <span className="truncate max-w-[150px]">{f.name}</span>
-                        <button onClick={() => setAttachedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-[#8e918f] hover:text-white ml-1">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                  <Textarea
-                    value={inputMessage}
-                    onChange={(e) => {
-                      setInputMessage(e.target.value);
-                      pushToInputHistory(e.target.value);
-                      e.target.style.height = 'auto';
-                      e.target.style.height = e.target.scrollHeight + 'px';
-                    }}
-                    onKeyDown={onKeyDown}
-                    placeholder="Descreva o que você quer construir..."
-                    className={cn("w-full bg-transparent border-none text-base text-[#f1f3f4] px-4 py-3 min-h-[50px] max-h-[300px] resize-none outline-none leading-relaxed custom-scrollbar placeholder:text-[#8e918f] focus-visible:ring-0 shadow-none overflow-y-auto", attachedFiles.length > 0 && "pt-2")}
-                    rows={1}
-                  />
-
-                  <div className="flex items-center justify-between px-3 pb-3 pt-0 gap-2">
-                    <div className="flex items-center gap-1 text-[#8e918f]">
-                      <button
-                        onClick={toggleListening}
-                        className={cn(
-                          "w-9 h-9 rounded-full transition-all flex items-center justify-center",
-                          isListening ? "text-red-400 bg-red-400/10" : "hover:text-blue-400 hover:bg-white/5"
-                        )}
-                        title={isListening ? "Parar gravação" : "Digitar por voz"}
-                      >
-                        {isListening ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
-                      </button>
-
-                      <input 
-                        type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
-                        onChange={(e) => {
-                          if (e.target.files) {
-                            const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
-                            setAttachedFiles(prev => [...prev, ...validFiles]);
-                          }
-                        }}
-                      />
-                      <label htmlFor="file-upload" className="w-9 h-9 cursor-pointer text-white/40 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex items-center justify-center" title="Arquivos">
-                        <Paperclip size={16} strokeWidth={2} />
-                      </label>
-
-                      <input 
-                        type="file" accept="image/*" multiple hidden ref={imageInputRef}
-                        onChange={(e) => {
-                          if (e.target.files) {
-                            const validFiles = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
-                            setAttachedFiles(prev => [...prev, ...validFiles]);
-                          }
-                        }}
-                      />
-                      <button onClick={() => imageInputRef.current?.click()} className="w-9 h-9 text-white/40 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all hidden sm:flex items-center justify-center" title="Imagens">
-                        <ImageIcon size={16} strokeWidth={2} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Select value={selectedModel} onValueChange={(val) => val && setSelectedModel(val)}>
-                        <SelectTrigger className="flex h-8 bg-white/5 border-none text-[10px] text-blue-400/80 hover:text-white font-black uppercase tracking-[0.2em] focus:ring-0 px-3 min-w-0 sm:min-w-[120px] rounded-full transition-all items-center">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Brain size={14} className="shrink-0" />
-                            <span className="truncate hidden sm:inline">{selectedModel.split('-')[0]}</span>
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#0d0d0e] border-white/5 text-[#f1f3f4] rounded-2xl shadow-2xl backdrop-blur-xl">
-                          {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
-                            <SelectGroup key={groupName}>
-                              <SelectLabel className="text-[#8e918f] text-[9px] uppercase font-black tracking-widest pt-3 pb-1 px-3 opacity-50">{groupName}</SelectLabel>
-                              {models.map(m => (
-                                <SelectItem key={m.id} value={m.id} className="rounded-lg m-1">
-                                  <span className="font-bold text-[11px]">{m.name}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Button
-                        onClick={handleSendMessage}
-                        disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isLoading}
-                        size="icon"
-                        className={cn(
-                          "h-9 w-9 rounded-full transition-all flex flex-shrink-0 items-center justify-center border-none shadow-lg",
-                          (inputMessage.trim() || attachedFiles.length > 0) && !isLoading 
-                            ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20" 
-                            : "bg-white/5 text-white/20 cursor-not-allowed"
-                        )}
-                      >
-                        {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={3} />}
-                      </Button>
-                    </div>
-                  </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-
-        <div className={cn(
-          "flex-1 flex flex-col bg-background min-h-0",
-          (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
-          (activeTab === 'settings') && "md:hidden"
-        )}>
-          {(() => {
-            const rightPaneTab = ['preview', 'code', 'files'].includes(activeTab) ? activeTab : 'preview';
-            
-            return (
-              <>
-                <div className="hidden md:flex h-[49px] border-b border-white/5 bg-white/[0.01] items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
-                  <div className="bg-white/5 p-1 rounded-lg flex items-center">
-                    <button onClick={() => setActiveTab('preview')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200", rightPaneTab === 'preview' ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Canvas</button>
-                    <button onClick={() => setActiveTab('code')} className={cn("px-5 py-1.5 rounded-md text-[13px] font-medium transition-all duration-200 flex items-center gap-1.5", (rightPaneTab === 'code' || rightPaneTab === 'files') ? "bg-white/10 text-white shadow-sm" : "text-white/60 hover:text-white")}>Código {hasFiles && <span className="flex h-2 w-2 rounded-full bg-blue-400" />}</button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setPreviewKey(k => k + 1)} className="p-1.5 text-white/50 hover:text-white rounded-lg transition-colors" title="Atualizar Preview"><RotateCcw size={16} /></button>
-                  </div>
-                </div>
-
-                <div className="flex-1 relative flex flex-col bg-background">
-                  {!hasFiles && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-background">
-                      <div className="w-20 h-20 rounded-3xl bg-secondary/10 border border-border shadow-2xl flex items-center justify-center mb-6">
-                        {(rightPaneTab === 'code' || rightPaneTab === 'files') ? <Terminal size={32} className="text-emerald-400/80" /> : <Layout size={32} className="text-blue-400/80" />}
-                      </div>
-                      <p className="text-[18px] font-semibold text-foreground">{(rightPaneTab === 'code' || rightPaneTab === 'files') ? 'Área de Código vazia' : 'O Canvas está vazio'}</p>
-                      <p className="text-[14px] mt-2 text-muted-foreground text-center max-w-[280px]">{(rightPaneTab === 'code' || rightPaneTab === 'files') ? 'Descreva o que deseja criar no chat.' : 'Inicie um projeto para ver o preview aqui.'}</p>
-                    </div>
-                  )}
-
-                  <PreviewPane 
-                    generatedFiles={generatedFiles}
-                    previewKey={previewKey}
-                    activeTab={rightPaneTab}
-                    isLoading={isLoading}
-                    handleSendMessage={handleSendMessage}
-                  />
-                  
-                  {hasFiles && (
-                    <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", (rightPaneTab !== 'code' && rightPaneTab !== 'files') && "hidden")}>
-                <div className="h-10 border-b border-border bg-muted/20 flex items-center px-4 justify-between text-[12px] font-medium flex-shrink-0">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span>Explorador de Arquivos</span>
-                  </div>
-                  <div>
-                    {fileHistory.length > 1 && (
-                      <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
-                        const idx = parseInt(val || '0', 10);
-                        const updatedHistory = fileHistory.slice(0, idx + 1);
-                        setFileHistory(updatedHistory);
-                        setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
-                        setActiveFileIndex(0);
-                      }}>
-                        <SelectTrigger className="h-6 w-[160px] text-[10px] bg-white/5 border-white/10 text-white focus:ring-0 shadow-none"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-popover border-border text-popover-foreground rounded-lg">
-                          {fileHistory.map((h, i) => <SelectItem key={i} value={i.toString()} className="text-[11px]">v{i+1} - {new Date(h.timestamp).toLocaleTimeString()}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                  <div className={cn("h-full border-r border-border w-full md:w-auto", rightPaneTab === 'files' ? "flex" : "hidden md:flex")}>
-                    <FileTree files={generatedFiles} activeFileIndex={activeFileIndex} onSelect={(index) => {
-                      setActiveFileIndex(index);
-                      if (window.innerWidth < 768) setActiveTab('code'); // Auto-switch to code after selecting file on mobile
-                    }} />
-                  </div>
-                  <div className={cn("flex-1 flex-col min-w-0 bg-[#121316]", rightPaneTab === 'files' ? "hidden md:flex" : "flex")}>
-                    {generatedFiles[activeFileIndex] && (
-                      <div className="h-9 border-b border-border bg-white/[0.02] flex items-center px-4 text-[12px] font-mono text-muted-foreground flex-shrink-0 select-none">
-                        <span className="opacity-50 mr-1">/</span>{generatedFiles[activeFileIndex].name}
-                      </div>
-                    )}
-                    <div className="flex-1 overflow-auto relative">
-                      <CodeBlock language={generatedFiles[activeFileIndex]?.lang} value={generatedFiles[activeFileIndex]?.code || ''} noMargin fastMode={isLoading} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      );
-    })()}
-  </div>
-</main>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </main>
 
       <FloatingNav 
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        setSettingsTab={setSettingsTab}
         hasFiles={hasFiles}
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
       />
 
       <SettingsDialogs 
