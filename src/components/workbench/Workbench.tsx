@@ -1,5 +1,5 @@
 import { 
-  RotateCcw, Layout, FolderOpen, ChevronLeft, Download, Terminal
+  RotateCcw, Layout, FolderOpen, ChevronLeft, Download, Terminal, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -140,22 +140,22 @@ export const Workbench = ({
       </div>
 
       {/* Desktop Header */}
-      <div className="hidden md:flex h-10 border-b border-border bg-card items-center px-3 justify-between gap-4 flex-shrink-0 z-[60] w-full">
-        <div className="flex items-center gap-1">
+      <div className="hidden md:flex h-12 border-b border-border bg-background items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] w-full">
+        <div className="flex items-center gap-1.5">
           <button 
             onClick={() => setActiveTab('preview')} 
             className={cn(
-              "px-3 h-[28px] rounded-md text-[12px] font-medium transition-all", 
-              rightPaneTab === 'preview' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-muted-foreground hover:bg-muted"
+              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
+              rightPaneTab === 'preview' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            Visualizar
+            Preview
           </button>
           <button 
             onClick={() => setActiveTab('code')} 
             className={cn(
-              "px-3 h-[28px] rounded-md text-[12px] font-medium transition-all", 
-              rightPaneTab === 'code' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-muted-foreground hover:bg-muted"
+              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
+              rightPaneTab === 'code' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
             Código
@@ -163,11 +163,11 @@ export const Workbench = ({
           <button 
             onClick={() => setActiveTab('files')} 
             className={cn(
-              "px-3 h-[28px] rounded-md text-[12px] font-medium transition-all", 
-              rightPaneTab === 'files' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-muted-foreground hover:bg-muted"
+              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
+              rightPaneTab === 'files' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            Arquivos
+            Estrutura
           </button>
         </div>
 
@@ -187,9 +187,9 @@ export const Workbench = ({
             </Select>
           )}
 
-          <div className="flex items-center h-[28px] px-3 bg-white/[0.03] border border-border rounded-md gap-3">
+          <div className="flex items-center h-[32px] px-3 bg-muted border border-border rounded-lg gap-3">
              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] font-medium text-muted-foreground">{generatedFiles.length} arquivos</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{generatedFiles.length} arquivos</span>
              </div>
           </div>
           
@@ -272,29 +272,34 @@ export const Workbench = ({
                 className="flex-1 h-full flex flex-col min-h-0 overflow-hidden"
               >
                 {generatedFiles[activeFileIndex] && (
-                  <div className="h-8 border-b border-border bg-background flex items-center px-3 justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest shrink-0 italic">Caminho Ativo //</span>
-                      <span className="text-[10px] font-mono text-muted-foreground truncate uppercase tracking-tighter italic">
+                  <div className="h-11 border-b border-border bg-background/50 backdrop-blur-sm flex items-center px-4 justify-between shrink-0">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="flex items-center gap-2 px-2 py-0.5 bg-primary/5 border border-primary/10 rounded text-[9px] font-bold text-primary uppercase tracking-tight">
+                        {generatedFiles[activeFileIndex].name.split('.').pop()}
+                      </div>
+                      <span className="text-[11px] font-bold text-muted-foreground truncate tracking-tight">
                         {generatedFiles[activeFileIndex].name}
                       </span>
                     </div>
-                    <button 
-                      onClick={() => {
-                        const code = generatedFiles[activeFileIndex].code;
-                        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-                           navigator.clipboard.writeText(code).then(() => {
-                             toast.success("Binário Armazenado");
-                           }).catch(err => {
-                             console.error("Clipboard Error:", err);
-                             toast.error("Erro ao copiar arquivo");
-                           });
-                        }
-                      }}
-                      className="text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-muted-foreground transition-colors"
-                    >
-                      Copiar Fonte
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => {
+                          const code = generatedFiles[activeFileIndex].code;
+                          if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+                             navigator.clipboard.writeText(code).then(() => {
+                               toast.success("Fonte Capturada");
+                             }).catch(err => {
+                               console.error("Clipboard Error:", err);
+                               toast.error("Erro na Captura");
+                             });
+                          }
+                        }}
+                        className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground/60 hover:text-primary transition-all flex items-center gap-1.5"
+                      >
+                        <Shield size={10} />
+                        Copiar
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="flex-1 overflow-hidden">

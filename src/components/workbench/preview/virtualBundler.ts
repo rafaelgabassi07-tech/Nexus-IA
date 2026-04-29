@@ -1,4 +1,4 @@
-import { GeneratedFile } from '../../../../types';
+import { GeneratedFile } from '../../../types';
 import { libraryGlobals, cdns } from '../../../constants/cdnLibraries';
 
 export const consoleCaptureScript = `

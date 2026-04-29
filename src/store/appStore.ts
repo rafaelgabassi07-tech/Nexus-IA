@@ -6,9 +6,72 @@ import { DEFAULT_MODEL } from '../lib/models';
 import { APIPreset, ChatSession, SecurityRule, AgentDefinition } from '../types';
 
 export const defaultSecurityRules: SecurityRule[] = [
-  { id: '1', name: 'Block eval()', pattern: 'eval\\(', action: 'warn', active: true },
-  { id: '2', name: 'Warn innerHTML', pattern: '\\.innerHTML\\s*=', action: 'warn', active: true },
-  { id: '3', name: 'Hardcoded Secrets', pattern: '(API_KEY|SECRET|PASSWORD)\\s*=', action: 'warn', active: true },
+  {
+    id: 'sr-001',
+    name: 'eval() detectado',
+    enabled: true,
+    conditions: [{ field: 'code', operator: 'matches', pattern: '\\beval\\s*\\(' }],
+    action: 'block',
+    severity: 'critical',
+    message: 'eval() bloqueado — risco de injeção de código arbitrário',
+    suggestion: 'Use JSON.parse() para dados JSON. Para lógica dinâmica, prefira Function() com escopo controlado.',
+  },
+  {
+    id: 'sr-002',
+    name: 'Chave de API hardcoded',
+    enabled: true,
+    conditions: [{
+      field: 'code',
+      operator: 'matches',
+      pattern: '(api[_-]?key|apikey|secret|password|token|auth)\\s*[:=]\\s*[\'"][a-zA-Z0-9_\\-]{20,}[\'"]',
+    }],
+    action: 'block',
+    severity: 'critical',
+    message: 'Possível chave/senha hardcoded detectada no código',
+    suggestion: 'Use variáveis de ambiente: process.env.API_KEY ou import.meta.env.VITE_API_KEY',
+  },
+  {
+    id: 'sr-003',
+    name: 'innerHTML não sanitizado',
+    enabled: true,
+    conditions: [{ field: 'code', operator: 'matches', pattern: '\\.innerHTML\\s*=' }],
+    action: 'warn',
+    severity: 'high',
+    message: 'innerHTML detectado — risco de XSS se o conteúdo vier do usuário',
+    suggestion: 'Use textContent para texto simples, ou sanitize com DOMPurify antes de usar innerHTML.',
+  },
+  {
+    id: 'sr-004',
+    name: 'console.log em produção',
+    enabled: true,
+    conditions: [{ field: 'code', operator: 'matches', pattern: 'console\\.log\\(' }],
+    action: 'warn',
+    severity: 'low',
+    message: 'console.log detectado — remova antes de publicar em produção',
+  },
+  {
+    id: 'sr-005',
+    name: 'Tipo any no TypeScript',
+    enabled: true,
+    conditions: [
+      { field: 'lang', operator: 'contains', pattern: 'ts' },
+      { field: 'code', operator: 'matches', pattern: ':\\s*any\\b' },
+    ],
+    action: 'warn',
+    severity: 'medium',
+    message: 'Tipo "any" detectado — viola TypeScript estrito',
+    suggestion: 'Use "unknown" com type narrowing, ou defina um tipo específico.',
+  },
+  {
+    id: 'sr-006',
+    name: 'fetch sem tratamento de erro',
+    enabled: true,
+    conditions: [{ field: 'code', operator: 'matches', pattern: 'fetch\\([^)]+\\)\\.then\\(' }],
+    action: 'warn',
+    severity: 'high',
+    message: 'fetch() encadeado com .then() sem .catch() detectado',
+    suggestion: 'Adicione .catch() ou use async/await com try/catch e verifique res.ok.',
+  },
 ];
 
 interface SettingsState {

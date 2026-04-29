@@ -27,8 +27,8 @@ export const Navbar = ({
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[64px] pb-[env(safe-area-inset-bottom)] bg-card border-t border-border flex items-center justify-center sm:px-4 z-[150] md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[360px] md:h-[50px] md:rounded-xl md:border md:border-border select-none shadow-2xl">
-      <div className="flex w-full md:w-auto items-center justify-around md:gap-1 px-2 md:px-2">
+    <div className="bg-card border-t border-border flex items-center justify-center pb-[env(safe-area-inset-bottom)] z-[150] md:fixed md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[360px] md:h-[50px] md:rounded-xl md:border md:shadow-2xl select-none">
+      <div className="flex w-full md:w-auto items-center justify-around h-14 md:h-full md:gap-1 px-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}

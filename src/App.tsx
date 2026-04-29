@@ -715,17 +715,6 @@ function AppContent() {
         </DialogContent>
       </Dialog>
       
-      <footer className="px-4 py-1.5 flex items-center justify-end border-t border-border bg-card relative z-50">
-        <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">
-          <span className="hidden sm:inline">Motor: {selectedModel}</span>
-          <div className="flex gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-border" />
-            <div className="w-1 h-1 rounded-full bg-border" />
-            <div className="w-1 h-1 rounded-full bg-border" />
-          </div>
-        </div>
-      </footer>
-      
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

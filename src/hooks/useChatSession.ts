@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { 
-  Message, TechnicalStep, GeneratedFile 
+  Message, TechnicalStep, GeneratedFile, AgentDefinition 
 } from '../types';
-import { AgentDefinition } from '../agents';
 import { generateId, extractFilesFromMarkdown } from '../lib/utils';
 import { useSettingsStore } from '../store/appStore';
 import { toast } from 'sonner';
@@ -312,27 +311,44 @@ export function useChatSession({
           
           // Security Scanner
           const { securityRules } = useSettingsStore.getState();
-          const activeRules = securityRules.filter(r => r.active);
+          const activeRules = securityRules.filter(r => r.enabled);
           if (activeRules.length > 0) {
             merged.forEach(file => {
               activeRules.forEach(rule => {
-                try {
-                  const regex = new RegExp(rule.pattern, 'i');
-                  if (regex.test(file.code)) {
-                    if (rule.action === 'warn') {
-                      toast.warning(`Alerta de Segurança em ${file.name}`, { 
-                        description: `Regra violada: ${rule.name}`
-                      });
-                    } else if (rule.action === 'block') {
-                      toast.error(`Bloqueio de Segurança em ${file.name}`, { 
-                        description: `O código violou a regra: ${rule.name}`
-                      });
-                      // Replace file code to block
-                      file.code = `// O código gerado foi bloqueado pelo scanner de segurança.\n// Regra violada: ${rule.name}`;
-                    }
+                let ruleViolated = false;
+                
+                if (rule.pattern) {
+                  try {
+                    const regex = new RegExp(rule.pattern, 'i');
+                    if (regex.test(file.code)) ruleViolated = true;
+                  } catch (e) {}
+                } else if (rule.conditions && rule.conditions.length > 0) {
+                  ruleViolated = rule.conditions.every(condition => {
+                    const target = condition.field === 'code' ? file.code : 
+                                   condition.field === 'filename' ? file.name : 
+                                   (file.name.split('.').pop() || '');
+                                   
+                    try {
+                      if (condition.operator === 'matches') return new RegExp(condition.pattern, 'i').test(target);
+                      if (condition.operator === 'contains') return target.includes(condition.pattern);
+                      if (condition.operator === 'not_contains') return !target.includes(condition.pattern);
+                      if (condition.operator === 'starts_with') return target.startsWith(condition.pattern);
+                    } catch(e) { return false; }
+                    return false;
+                  });
+                }
+
+                if (ruleViolated) {
+                  if (rule.action === 'warn' || rule.action === 'suggest') {
+                    toast.warning(`Alerta de Segurança em ${file.name}`, { 
+                      description: rule.message || `Regra violada: ${rule.name}`
+                    });
+                  } else if (rule.action === 'block') {
+                    toast.error(`Bloqueio de Segurança em ${file.name}`, { 
+                      description: rule.message || `O código violou a regra: ${rule.name}`
+                    });
+                    file.code = `// O código gerado foi bloqueado pelo scanner de segurança.\\n// Regra violada: ${rule.name}\\n// Detalhe: ${rule.message}\\n// Sugestão: ${rule.suggestion || ''}`;
                   }
-                } catch(e) {
-                  console.error('Invalid regex rule', rule.pattern);
                 }
               });
             });

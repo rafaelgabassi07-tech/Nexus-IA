@@ -94,38 +94,38 @@ export const PreviewPane = ({
   return (
     <div className="flex-1 flex flex-col bg-background relative overflow-hidden min-h-0 h-full w-full">
       {/* Top Controls */}
-      <div className="h-12 md:h-10 border-b border-border bg-card flex items-center justify-between px-4 shrink-0 z-20">
-        <div className="flex items-center gap-1 bg-white/[0.03] p-1 rounded-lg border border-border shadow-sm">
+      <div className="h-11 border-b border-border bg-background/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0 z-20">
+        <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/50">
           <button 
             onClick={() => setViewport('desktop')}
-            className={cn("p-1.5 rounded-md transition-all", viewport === 'desktop' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("p-1.5 rounded-lg transition-all", viewport === 'desktop' ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:text-foreground")}
           >
-            <Monitor size={14} />
+            <Monitor size={13} />
           </button>
           <button 
             onClick={() => setViewport('tablet')}
-            className={cn("p-1.5 rounded-md transition-all", viewport === 'tablet' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("p-1.5 rounded-lg transition-all", viewport === 'tablet' ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:text-foreground")}
           >
-            <Tablet size={14} />
+            <Tablet size={13} />
           </button>
           <button 
             onClick={() => setViewport('mobile')}
-            className={cn("p-1.5 rounded-md transition-all", viewport === 'mobile' ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("p-1.5 rounded-lg transition-all", viewport === 'mobile' ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:text-foreground")}
           >
-            <Smartphone size={14} />
+            <Smartphone size={13} />
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
            <button 
              onClick={() => setShowConsole(!showConsole)}
              className={cn(
-               "px-3 h-7 rounded-md flex items-center gap-2 transition-all border text-[11px] font-medium",
-               showConsole ? "bg-white/10 text-foreground border-border" : "bg-white/[0.03] text-muted-foreground border-border hover:text-foreground hover:bg-muted"
+               "px-3 h-7 rounded-lg flex items-center gap-2 transition-all text-[10px] font-black uppercase tracking-widest",
+               showConsole ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground hover:text-foreground"
              )}
            >
-             <div className={cn("w-2 h-2 rounded-full", logs.some(l => l.type === 'error') ? "bg-red-500 animate-pulse" : logs.length > 0 ? "bg-primary" : "bg-white/20")} />
-             Terminal
+             <div className={cn("w-1.5 h-1.5 rounded-full", logs.some(l => l.type === 'error') ? "bg-red-500 animate-pulse" : logs.length > 0 ? "bg-emerald-500" : "bg-white/10")} />
+             Logs
            </button>
 
            <button 
@@ -137,57 +137,63 @@ export const PreviewPane = ({
                 window.open(url, '_blank');
               }
              }}
-             className="w-8 h-8 md:w-6 md:h-6 flex items-center justify-center rounded-lg bg-white/[0.03] border border-border text-muted-foreground hover:text-foreground hover:border-border transition-all"
+             className="w-7 h-7 flex items-center justify-center rounded-lg bg-muted border border-border text-muted-foreground hover:text-primary transition-all shadow-sm"
            >
             <ExternalLink size={12} />
            </button>
         </div>
       </div>
 
-      <div ref={containerRef} className="flex-1 relative bg-background overflow-hidden flex justify-center items-center p-4">
-        <motion.div 
-          layout
-          initial={false}
-          animate={{
-            width: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 768 : 375,
-            height: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 1024 : 667,
-            scale: scale,
-          }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className={cn(
-            "bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden transition-shadow relative",
-            viewport === 'desktop' ? "w-full h-full" : "rounded-[2.5rem] border-[12px] border-muted ring-1 ring-white/10"
-          )}
-        >
-          {/* Device Hardware Decorations */}
-          {viewport !== 'desktop' && (
-            <>
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-7 bg-card rounded-b-3xl z-30 flex items-center justify-center gap-2">
-                 <div className="w-8 h-1 bg-muted rounded-full" />
-                 <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
-              </div>
-              <div className="absolute top-1/2 -left-[12px] w-[3px] h-10 bg-muted rounded-r-lg" />
-              <div className="absolute top-[45%] -right-[12px] w-[3px] h-16 bg-muted rounded-l-lg" />
-            </>
-          )}
+      <div ref={containerRef} className="flex-1 relative bg-[#0d0d0e] overflow-hidden flex items-center justify-center p-4 md:p-12">
+        <div className="relative flex items-center justify-center w-full h-full pointer-events-none">
+          <motion.div 
+            layout
+            initial={false}
+            animate={{
+              width: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 768 : 375,
+              height: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? 1024 : 667,
+              scale: scale,
+            }}
+            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+            style={{ originX: 0.5, originY: 0.5 }}
+            className={cn(
+              "bg-white shadow-[0_50px_150px_rgba(0,0,0,0.9)] overflow-hidden relative flex-shrink-0 pointer-events-auto",
+              viewport === 'desktop' ? "w-full h-full rounded-md" : "rounded-[3.5rem] border-[14px] border-[#18181b] ring-1 ring-white/10"
+            )}
+          >
+            {/* Device Hardware Decorations */}
+            {viewport !== 'desktop' && (
+              <>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-[#18181b] rounded-b-2xl z-30 flex items-center justify-center gap-1.5">
+                   <div className="w-10 h-1 bg-white/5 rounded-full" />
+                   <div className="w-1 h-1 rounded-full bg-white/5" />
+                </div>
+                {/* Volume buttons */}
+                <div className="absolute top-24 -left-[14px] w-[3px] h-10 bg-muted rounded-r-lg" />
+                <div className="absolute top-36 -left-[14px] w-[3px] h-10 bg-muted rounded-r-lg" />
+                {/* Power button */}
+                <div className="absolute top-28 -right-[14px] w-[3px] h-14 bg-muted rounded-l-lg" />
+              </>
+            )}
 
-          {generatedFiles.length === 0 ? (
-            <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground font-medium bg-card">
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4 border border-border">
-                <Layout size={20} className="opacity-80" />
+            {generatedFiles.length === 0 ? (
+              <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground font-medium bg-card">
+                <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4 border border-border">
+                  <Layout size={20} className="opacity-80" />
+                </div>
+                <span className="text-[12px] font-medium">Nexus Engine // Aguardando</span>
               </div>
-              <span className="text-[12px] font-medium">Aguardando geração...</span>
-            </div>
-          ) : (
-            <iframe 
-              ref={iframeRef}
-              key={previewKey}
-              className="w-full h-full border-none bg-white"
-              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-presentation allow-same-origin"
-              title="Preview"
-            />
-          )}
-        </motion.div>
+            ) : (
+              <iframe 
+                ref={iframeRef}
+                key={previewKey}
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-forms allow-modals allow-popups allow-presentation allow-same-origin"
+                title="Preview"
+              />
+            )}
+          </motion.div>
+        </div>
 
         {/* Console Overlay */}
         <AnimatePresence>

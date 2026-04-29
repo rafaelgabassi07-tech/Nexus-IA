@@ -59,9 +59,9 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="p-1.5 pb-14 md:px-3 md:pb-3 bg-background shrink-0 border-t border-border">
+    <div className="p-3 bg-background shrink-0 border-t border-border z-20">
       <div className="max-w-4xl mx-auto flex flex-col">
-        <div className="relative bg-white/[0.01] border border-border focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/5 rounded-xl transition-all duration-300 shadow-xl flex flex-col group/input overflow-hidden">
+        <div className="relative bg-card border border-border focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/5 rounded-xl transition-all duration-300 shadow-sm flex flex-col group/input overflow-hidden">
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1 px-3 pt-2 pb-0.5">
               {attachedFiles.map((f, i) => (
@@ -118,18 +118,19 @@ export const ChatInput = ({
 
             <div className="flex items-center gap-2">
               <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                <PopoverTrigger className="flex items-center h-7 bg-card rounded-md border border-border px-2 hover:border-primary/40 transition-all shadow-sm text-[10px] font-medium text-muted-foreground hover:text-foreground gap-2">
-                  <span className="truncate max-w-[100px]">{allAgents.find(a => a.id === activeAgentId)?.name || 'Persona'} / {Object.values(GROUPED_MODELS).flat().find(m => m.id === selectedModel)?.name || 'Modelo'}</span>
+                <PopoverTrigger className="flex items-center h-7 bg-[#1a1a1a] rounded-lg border border-border px-2 hover:border-primary/40 transition-all shadow-md text-[9px] font-bold text-muted-foreground hover:text-foreground gap-1.5 uppercase tracking-wider">
+                  <span className="truncate max-w-[80px]">{allAgents.find(a => a.id === activeAgentId)?.name || 'Persona'} / {Object.values(GROUPED_MODELS).flat().find(m => m.id === selectedModel)?.name || 'Modelo'}</span>
                 </PopoverTrigger>
                 <PopoverContent 
                   side="top" 
                   align="end" 
-                  className="bg-card border-border text-foreground rounded-lg shadow-2xl min-w-[220px] max-h-[400px] overflow-y-auto custom-scrollbar p-0"
+                  className="bg-[#0f0f0f] border-border text-foreground rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] min-w-[220px] max-h-[350px] overflow-y-auto custom-scrollbar p-0 z-[110] border-opacity-50"
                 >
-                  <div className="p-1">
+                  <div className="p-2 space-y-2">
                     {/* Agent/Persona Section */}
-                    <div className="text-primary/60 text-[9px] uppercase font-bold tracking-wider pt-2 pb-1 px-3 mb-1">Persona (Isa)</div>
-                    <div className="grid grid-cols-1 gap-0.5 px-1 mb-2">
+                    <div>
+                      <div className="text-primary text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-1 opacity-80">Persona</div>
+                      <div className="grid grid-cols-1 gap-1 px-1">
                       {allAgents.map(agent => (
                         <button
                           key={agent.id}
@@ -139,27 +140,27 @@ export const ChatInput = ({
                           }}
                           className={cn(
                             "flex items-center gap-2 p-1.5 rounded-md transition-all text-left w-full",
-                            activeAgentId === agent.id ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            activeAgentId === agent.id ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                           )}
                         >
-                          <div className={cn("w-6 h-6 rounded flex items-center justify-center shrink-0", agent.color)}>
-                            <User size={12} className="text-foreground" />
+                          <div className={cn("w-5 h-5 rounded flex items-center justify-center shrink-0", agent.color)}>
+                            <User size={10} className="text-foreground" />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[11px] font-bold truncate leading-none">{agent.name}</span>
-                            <span className="text-[8px] opacity-60 truncate leading-tight">{agent.shortDescription}</span>
+                            <span className="text-[10px] font-bold truncate leading-none">{agent.name}</span>
                           </div>
                         </button>
                       ))}
                     </div>
+                  </div>
 
-                    <div className="h-px bg-muted my-1 mx-2" />
+                  <div className="h-px bg-white/5 my-1.5 mx-2" />
 
                     {/* Model Section */}
                     {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
                       <div key={groupName}>
-                        <div className="text-muted-foreground text-[9px] uppercase font-black tracking-widest pt-2 pb-1 px-3 mb-1">{groupName}</div>
-                        <div className="grid grid-cols-1 gap-0.5 px-1 mb-2">
+                        <div className="text-muted-foreground text-[8px] uppercase font-black tracking-widest pt-1 pb-1 px-2 mb-0.5">{groupName}</div>
+                        <div className="grid grid-cols-1 gap-1 px-1 mb-1">
                           {models.map(m => (
                             <button
                               key={m.id}
@@ -168,12 +169,12 @@ export const ChatInput = ({
                                 setIsPopoverOpen(false);
                               }}
                               className={cn(
-                                "flex flex-col p-1.5 rounded-md transition-all text-left w-full",
-                                selectedModel === m.id ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                "flex flex-col p-2 rounded-md transition-all text-left w-full border border-transparent",
+                                selectedModel === m.id ? "bg-white/10 text-foreground border-white/10" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                               )}
                             >
-                              <span className="font-medium text-[11px] leading-tight">{m.name}</span>
-                              <span className="text-[8px] opacity-60 truncate">Nexus Intelligence Engine</span>
+                              <span className="font-bold text-[10px] leading-tight">{m.name}</span>
+                              <span className="text-[8px] opacity-40 truncate leading-none mt-1 uppercase tracking-tight">Nexus Engine {m.tier}</span>
                             </button>
                           ))}
                         </div>
@@ -200,9 +201,6 @@ export const ChatInput = ({
           </div>
         </div>
         
-        <div className="flex items-center justify-center gap-4 mt-2">
-           <span className="text-[10px] text-muted-foreground">Nexus Web Client</span>
-        </div>
       </div>
     </div>
   );

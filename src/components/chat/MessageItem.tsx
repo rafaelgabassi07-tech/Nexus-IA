@@ -14,8 +14,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { AgentIcon } from './AgentIcon';
 import { CodeBlock } from '../workbench/CodeBlock';
-import { Message, GeneratedFile } from '../../types';
-import { AgentDefinition } from '../../agents';
+import { Message, GeneratedFile, AgentDefinition } from '../../types';
 import { cn } from '../../lib/utils';
 
 // Skeleton para quando a mensagem está carregando
