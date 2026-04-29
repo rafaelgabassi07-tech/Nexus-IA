@@ -30,9 +30,28 @@ export const CodeBlock = React.memo(({ value, language = 'typescript', noMargin 
     }
   };
 
+  const lineCount = value.split('\n').length;
+  const fileSize = (new Blob([value]).size / 1024).toFixed(1);
+
   return (
     <div className={cn("relative group h-full flex flex-col bg-[#0b0c0e]", !noMargin && "my-4 rounded-xl overflow-hidden border border-white/5 shadow-2xl")}>
-      <div className="absolute right-4 top-4 z-30 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-300">
+      <div className="h-6 bg-black/40 border-b border-white/5 px-4 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500/20" />
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500/20" />
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/20" />
+          </div>
+          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 italic">Nexus Source View // {language}</span>
+        </div>
+        <div className="flex items-center gap-4 text-[8px] font-bold text-white/10 uppercase tracking-tighter italic">
+          <span className="text-blue-500/30">Binary Logic</span>
+          <span>{lineCount} lines</span>
+          <span>{fileSize} KB</span>
+        </div>
+      </div>
+
+      <div className="absolute right-4 top-10 z-30 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-300">
         <button
           onClick={copyToClipboard}
           className="p-2.5 bg-black/40 backdrop-blur-md hover:bg-black/60 text-white/50 hover:text-white rounded-xl border border-white/10 transition-all shadow-xl active:scale-95"
@@ -46,6 +65,8 @@ export const CodeBlock = React.memo(({ value, language = 'typescript', noMargin 
           language={language}
           style={lucario}
           PreTag="pre"
+          showLineNumbers={true}
+          lineNumberStyle={{ minWidth: '3em', paddingRight: '1em', color: 'rgba(255,255,255,0.1)', textAlign: 'right', fontSize: '11px', userSelect: 'none' }}
           ref={preRef as any}
           customStyle={{
             margin: 0,

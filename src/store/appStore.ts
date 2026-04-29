@@ -71,11 +71,13 @@ interface UIState {
   settingsTab: 'overview' | 'general' | 'agent' | 'security';
   isSidebarOpen: boolean;
   isSaving: boolean;
+  isCommandPaletteOpen: boolean;
   
   setActiveTab: (tab: 'chat' | 'code' | 'preview' | 'settings' | 'files') => void;
   setSettingsTab: (tab: 'overview' | 'general' | 'agent' | 'security') => void;
   setIsSidebarOpen: (isOpen: boolean) => void;
   setIsSaving: (isSaving: boolean) => void;
+  setIsCommandPaletteOpen: (isOpen: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -83,11 +85,13 @@ export const useUIStore = create<UIState>((set) => ({
   settingsTab: 'overview',
   isSidebarOpen: false,
   isSaving: false,
+  isCommandPaletteOpen: false,
   
   setActiveTab: (activeTab) => set({ activeTab }),
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setIsSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
   setIsSaving: (isSaving) => set({ isSaving }),
+  setIsCommandPaletteOpen: (isCommandPaletteOpen) => set({ isCommandPaletteOpen }),
 }));
 
 interface ChatHistoryState {

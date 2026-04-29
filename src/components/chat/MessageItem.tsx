@@ -78,50 +78,64 @@ export const MessageItem = React.memo(({
         className={cn("flex w-full", message.role === 'user' ? "justify-end" : "justify-start")}
       >
         {message.role === 'user' ? (
-          <div className="bg-white/[0.03] text-[#f1f3f4] px-4 py-2.5 rounded-2xl rounded-tr-md max-w-[92%] sm:max-w-[85%] text-[13px] font-medium leading-relaxed whitespace-pre-wrap border border-white/5 shadow-inner-white">
+          <div className="bg-white/[0.03] text-[#f1f3f4]/90 px-3 py-1.5 rounded-lg rounded-tr-none max-w-[85%] text-[12px] font-medium leading-relaxed whitespace-pre-wrap border border-white/5 shadow-sm">
             {message.content}
           </div>
         ) : (
-          <div className="flex flex-row gap-3 w-full max-w-none items-start group">
+          <div className="flex flex-row gap-2.5 w-full max-w-none items-start group">
             <Avatar className={cn(
-              "w-7 h-7 rounded-xl shrink-0 mt-0.5 shadow-xl flex items-center justify-center border border-white/10 nexus-glow",
+              "w-6 h-6 rounded-lg shrink-0 mt-0.5 shadow-xl flex items-center justify-center border border-white/10 nexus-glow",
               activeAgent.color || "bg-gradient-to-tr from-[#00d2ff] to-[#3a7bd5]"
             )}>
                <AvatarFallback className="bg-transparent text-white">
-                 <AgentIcon iconName={activeAgent.iconName} size={16} />
+                 <AgentIcon iconName={activeAgent.iconName} size={12} />
                </AvatarFallback>
             </Avatar>
-            <div className="flex-1 text-[12px] leading-relaxed text-foreground pr-2 overflow-hidden">
-              <div className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 mb-1 italic">
-                {activeAgent.name} <span className="mx-1 opacity-50">•</span> Intelligence
+            <div className="flex-1 text-[12px] leading-relaxed text-foreground/80 pr-2 overflow-hidden">
+              <div className="flex items-center gap-2 mb-1">
+                <div className={cn("text-[7px] font-black uppercase tracking-[.3em] text-white/20 leading-none italic", isLoading && isLastMessage && "animate-pulse text-blue-400/50")}>
+                  {activeAgent.name} // Intelligence Core
+                </div>
+                {isLoading && isLastMessage && (
+                   <div className="flex gap-0.5">
+                      {[1,2,3].map(i => (
+                        <motion.div 
+                          key={i}
+                          animate={{ opacity: [0.2, 1, 0.2] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                          className="w-0.5 h-0.5 rounded-full bg-blue-500"
+                        />
+                      ))}
+                   </div>
+                )}
               </div>
               {message.steps && message.steps.length > 0 && (
-                <div className="mb-3 w-full max-w-[90%] md:max-w-xl">
-                  <details className="group/accordion border border-white/5 bg-white/[0.01] rounded-lg overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
-                    <summary className="flex items-center gap-3 px-3 py-2 cursor-pointer list-none select-none hover:bg-white/[0.02] transition-colors">
+                <div className="mb-2 w-full max-w-[95%] md:max-w-lg">
+                  <details className="group/accordion border border-white/5 bg-white/[0.01] rounded border-white/5 overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
+                    <summary className="flex items-center gap-2 px-2 py-1.5 cursor-pointer list-none select-none hover:bg-white/[0.02] transition-colors">
                       <div className="relative shrink-0 flex items-center justify-center">
                         {message.steps.some((s: any) => s.status === 'running') ? (
                           <div className="relative">
                             <motion.div 
                                animate={{ rotate: 360 }}
-                               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                               className="w-3 h-3 rounded-full border-b-2 border-blue-400"
+                               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                               className="w-2.5 h-2.5 rounded-full border-b border-blue-400"
                             />
                           </div>
                         ) : (
-                          <div className="w-3.5 h-3.5 rounded-full bg-blue-400/10 flex items-center justify-center">
+                          <div className="w-3 h-3 rounded-full bg-blue-400/10 flex items-center justify-center">
                             <Check size={8} className="text-blue-400" strokeWidth={3} />
                           </div>
                         )}
                       </div>
-                      <span className="flex-1 tracking-tight text-foreground/70 uppercase text-[9px] font-bold tracking-wider">
-                        {message.steps.some((s: any) => s.status === 'running') ? 'Processando...' : 'Fluxo de Ações'}
+                      <span className="flex-1 tracking-tight text-white/30 uppercase text-[8px] font-black tracking-widest">
+                        {message.steps.some((s: any) => s.status === 'running') ? 'Syncing...' : 'Task Sequence'}
                       </span>
-                      <ChevronDown size={12} className="text-muted-foreground/40 transition-transform group-open/accordion:rotate-180 shrink-0" />
+                      <ChevronDown size={10} className="text-white/10 transition-transform group-open/accordion:rotate-180 shrink-0" />
                     </summary>
                     
-                    <div className="px-3 pb-2 pt-1 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-200 relative">
-                      <div className="absolute left-[17px] top-1 bottom-4 w-px bg-white/5 z-0" />
+                    <div className="px-2 pb-2 pt-0.5 space-y-0 relative">
+                      <div className="absolute left-[13px] top-1 bottom-4 w-px bg-white/5 z-0" />
                       
                       {message.steps.map((step: any, i: number) => {
                         // Icon mapping for serialized steps
@@ -140,20 +154,20 @@ export const MessageItem = React.memo(({
                         }
 
                         return (
-                          <div key={i} className="flex items-center gap-2.5 py-0.5 group/step relative z-10">
+                          <div key={i} className="flex items-center gap-2 py-0.5 group/step relative z-10 pl-1">
                             <div className={cn(
-                              "shrink-0 w-4 h-4 flex items-center justify-center rounded-full border transition-all duration-300",
+                              "shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full border transition-all duration-300",
                               step.status === 'running' 
                                 ? "bg-blue-500/10 border-blue-500/30 text-blue-400" 
                                 : step.status === 'success' 
-                                  ? "bg-white/[0.03] border-white/10 text-muted-foreground" 
-                                  : "bg-transparent border-white/5 text-muted-foreground/30"
+                                  ? "bg-white/[0.02] border-white/5 text-white/20" 
+                                  : "bg-transparent border-white/5 text-white/10"
                             )}>
                               <StepIcon size={8} strokeWidth={2.5} />
                             </div>
                             <span className={cn(
-                              "text-[10px] sm:text-[11px] font-medium transition-colors truncate",
-                              step.status === 'running' ? "text-foreground" : step.status === 'success' ? "text-muted-foreground" : "text-muted-foreground/40"
+                              "text-[10px] font-bold transition-colors truncate tracking-tight uppercase italic",
+                              step.status === 'running' ? "text-blue-400" : step.status === 'success' ? "text-white/30" : "text-white/10"
                             )}>
                               {step.label}
                             </span>
@@ -162,16 +176,16 @@ export const MessageItem = React.memo(({
                       })}
                       
                       {hasFiles && isLastMessage && generatedFiles.length > 0 && (
-                        <div className="pt-2 mt-2 border-t border-white/5">
-                          <div className="flex items-center gap-2 px-1 mb-1.5">
-                            <div className="w-4 h-4 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="pt-1.5 mt-1 border-t border-white/5">
+                          <div className="flex items-center gap-1.5 px-1 mb-1">
+                            <div className="w-3.5 h-3.5 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20">
                               <Edit2 size={8} className="text-emerald-400" strokeWidth={2} />
                             </div>
-                            <span className="text-[9px] font-bold text-foreground tracking-wider uppercase">
-                              Workdir <span className="ml-1 text-muted-foreground font-medium">({generatedFiles.length})</span>
+                            <span className="text-[8px] font-black text-white/30 tracking-widest uppercase">
+                              Manifest <span className="ml-1 text-white/10">[{generatedFiles.length}]</span>
                             </span>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-1">
                             {generatedFiles.map((f: any, idx: number) => (
                               <button 
                                 key={f.name}
@@ -180,16 +194,16 @@ export const MessageItem = React.memo(({
                                    setActiveTab('code');
                                 }}
                                 className={cn(
-                                  "flex items-center gap-2 p-1.5 rounded-md border text-left transition-all hover:bg-white/[0.04]",
+                                  "flex items-center gap-1.5 p-1 rounded border text-left transition-all hover:bg-white/[0.04]",
                                   activeFileIndex === idx 
-                                    ? "bg-white/[0.06] border-white/10" 
+                                    ? "bg-white/[0.04] border-white/10" 
                                     : "bg-white/[0.01] border-white/5"
                                 )}
                               >
-                                <FileCode size={12} className={activeFileIndex === idx ? "text-emerald-400" : "text-muted-foreground/70"} />
+                                <FileCode size={10} className={activeFileIndex === idx ? "text-emerald-400" : "text-white/20"} />
                                 <span className={cn(
-                                  "text-[10px] font-medium truncate flex-1",
-                                  activeFileIndex === idx ? "text-white" : "text-muted-foreground/70"
+                                  "text-[9px] font-bold truncate flex-1 tracking-tight",
+                                  activeFileIndex === idx ? "text-white/80" : "text-white/20"
                                 )}>{f.name.split('/').pop()}</span>
                               </button>
                             ))}
@@ -218,23 +232,23 @@ export const MessageItem = React.memo(({
                             const isLongCode = codeVal.split('\n').length >= 1;
                             if (isLongCode && generatedFiles.length > 0) {
                               return (
-                                <div className="my-4 p-4 rounded-2xl border border-border bg-white/[0.03] flex items-center justify-between group/code-summary hover:bg-white/[0.06] transition-all cursor-pointer shadow-sm"
+                                <div className="my-3 p-3 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between group/code-summary hover:bg-white/[0.04] transition-all cursor-pointer shadow-sm"
                                   onClick={() => {
                                     setActiveTab('code');
                                     const fileIndex = generatedFiles.findIndex(f => f.code.includes(codeVal.slice(0, 50)));
                                     if (fileIndex !== -1) setActiveFileIndex(fileIndex);
                                   }}
                                 >
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/code-summary:scale-105 transition-transform border border-blue-400/20">
-                                      <FileCode size={20} />
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/code-summary:scale-105 transition-transform border border-blue-400/20">
+                                      <FileCode size={16} />
                                     </div>
                                     <div>
-                                      <div className="text-[11px] font-black uppercase tracking-widest text-foreground mb-0.5">Módulo Gerado</div>
-                                      <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">Explorar no Workspace • {match[1]}</div>
+                                      <div className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-0.5">Asset Manifested</div>
+                                      <div className="text-[9px] text-white/20 font-bold uppercase tracking-tighter">Explore in Editor • {match[1]}</div>
                                     </div>
                                   </div>
-                                  <Layout size={16} className="text-muted-foreground opacity-40" />
+                                  <Layout size={14} className="text-white/10" />
                                 </div>
                               );
                             }
@@ -249,12 +263,12 @@ export const MessageItem = React.memo(({
                           }
                           
                           return (
-                            <code className={cn("bg-muted px-1.5 py-0.5 rounded-md text-blue-300 font-mono text-[13px] border border-border", className)} {...props}>
+                            <code className={cn("bg-white/5 px-1 rounded text-blue-300 font-mono text-[12px] border border-white/5", className)} {...props}>
                               {children}
                             </code>
                           );
                         },
-                        p: ({ children }) => <p className="mb-4 last:mb-0 text-foreground leading-relaxed">{children}</p>,
+                        p: ({ children }) => <p className="mb-3 last:mb-0 text-white/70 leading-relaxed font-medium">{children}</p>,
                         blockquote({ children }: any) {
                           let text = '';
                           try {
@@ -268,21 +282,21 @@ export const MessageItem = React.memo(({
                           
                           if (isThought) {
                             return (
-                              <details className="group/thought my-5 border border-purple-500/20 rounded-2xl overflow-hidden bg-purple-500/[0.02]">
-                                <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none select-none text-[12px] font-black uppercase tracking-widest text-purple-300 hover:bg-purple-500/5 transition-colors">
+                              <details className="group/thought my-4 border border-purple-500/10 rounded overflow-hidden bg-purple-500/[0.01]">
+                                <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none select-none text-[10px] font-black uppercase tracking-[.2em] text-purple-300/60 hover:bg-purple-500/5 transition-colors">
                                   <div className="flex items-center gap-2">
-                                    <Brain size={16} className="text-purple-400" />
-                                    <span>Pensamento Estratégico</span>
+                                    <Brain size={12} className="text-purple-400/60" />
+                                    <span>Strategic Logic</span>
                                   </div>
-                                  <ChevronDown size={18} className="opacity-50 transition-transform group-open/thought:rotate-180" />
+                                  <ChevronDown size={12} className="opacity-30 transition-transform group-open/thought:rotate-180" />
                                 </summary>
-                                <div className="px-5 pb-5 pt-1 text-muted-foreground/80 text-[13px] leading-relaxed italic border-t border-purple-500/10">
+                                <div className="px-4 pb-4 pt-1 text-white/40 text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
                                   {children}
                                 </div>
                               </details>
                             );
                           }
-                          return <blockquote className="border-l-4 border-border pl-5 py-1 italic mb-4 text-muted-foreground bg-white/[0.01] rounded-r-2xl">{children}</blockquote>;
+                          return <blockquote className="border-l-2 border-white/10 pl-4 py-1 italic mb-3 text-white/40 font-medium bg-white/[0.01] rounded-r-lg">{children}</blockquote>;
                         }
                       }}
                     >
@@ -293,35 +307,34 @@ export const MessageItem = React.memo(({
               </div>
 
               {message.content && (
-                <div className="flex items-center gap-2 mt-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-200">
+                <div className="flex items-center gap-2 mt-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-200">
                   <button
                     onClick={() => {
                       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(message.content).catch(e => console.error("Clipboard API failed", e));
-                        toast.success('Copiado');
+                        toast.success('Stored');
                       }
                     }}
-                    className="p-1.5 rounded-lg text-[#8e918f] hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/5"
-                    title="Copiar mensagem"
+                    className="p-1 px-1.5 rounded bg-white/5 text-[#8e918f]/40 hover:text-white transition-colors border border-white/5"
                   >
-                    <Copy size={13} />
+                    <Copy size={11} />
                   </button>
                   {isLastMessage && message.role === 'model' && (
                     <div className="flex items-center gap-3">
                       <button
                          onClick={() => handleSendMessage(undefined, "Reforce ou explique melhor o ponto anterior.")?.catch((err: any) => console.error("Failed to explain better:", err))}
-                         className="text-[10px] uppercase font-black tracking-widest text-[#8e918f] hover:text-white transition-colors"
+                         className="text-[9px] uppercase font-black tracking-widest text-[#8e918f]/40 hover:text-white/60 transition-colors"
                       >
-                        Explicar Melhor
+                        Deconstruct
                       </button>
                       {handleRegenerate && (
                          <button
                             onClick={handleRegenerate}
                             disabled={isLoading}
-                            className="text-[10px] uppercase font-black tracking-widest text-[#8e918f] hover:text-white transition-colors flex items-center gap-1"
+                            className="text-[9px] uppercase font-black tracking-widest text-[#8e918f]/40 hover:text-white/60 transition-colors flex items-center gap-1"
                          >
-                           <RotateCcw size={10} />
-                           Regenerar
+                           <RotateCcw size={9} />
+                           Re-Process
                          </button>
                       )}
                     </div>

@@ -9,6 +9,7 @@ import { ChatInput } from './components/chat/ChatInput';
 import { Navbar as FloatingNav } from './components/layout/Navbar';
 import { SettingsPanel, SettingsDialogs } from './components/settings/SettingsPanel';
 import { SecurityModal } from './components/settings/SecurityModal';
+import { CommandPalette } from './components/CommandPalette';
 
 import { 
   APIPreset, AgentDefinition, Message
@@ -692,7 +693,6 @@ function AppContent() {
                 previewKey={previewKey}
                 setPreviewKey={setPreviewKey}
                 isLoading={isLoading}
-                handleSendMessage={handleSendMessage}
                 fileHistory={fileHistory}
                 setFileHistory={setFileHistory}
               />
@@ -756,6 +756,7 @@ function AppContent() {
       `}</style>
       <Toaster position="top-right" theme="dark" richColors closeButton />
       <SidebarHistory />
+      <CommandPalette />
     </div>
   );
 }

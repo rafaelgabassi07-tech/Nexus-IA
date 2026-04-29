@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
-  Loader2, 
-  Monitor, Smartphone, Tablet, ExternalLink,
-  ShieldCheck, RefreshCw
+  Monitor, Smartphone, Tablet, ExternalLink, Layout
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { GeneratedFile } from '../../types';
@@ -10,26 +8,14 @@ import { GeneratedFile } from '../../types';
 interface PreviewPaneProps {
   generatedFiles: GeneratedFile[];
   previewKey: number;
-  activeTab: string;
-  isLoading: boolean;
-  handleSendMessage: (e?: React.FormEvent, overridePrompt?: string, messagesToUse?: any[]) => Promise<void> | any;
 }
 
 export const PreviewPane = ({ 
   generatedFiles, 
   previewKey, 
-  activeTab, 
-  isLoading,
-  handleSendMessage 
 }: PreviewPaneProps) => {
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [iframeLoaded, setIframeLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  // Auto-reload on scale changes or new files
-  useEffect(() => {
-    setIframeLoaded(false);
-  }, [previewKey, generatedFiles.length]);
 
   const viewportWidths = {
     desktop: '100%',
@@ -37,142 +23,280 @@ export const PreviewPane = ({
     mobile: '375px'
   };
 
-  const hasFiles = generatedFiles.length > 0;
-  const isPreview = activeTab === 'preview';
+  const [logs, setLogs] = useState<{ type: string, args: any[] }[]>([]);
 
-  if (!isPreview) return null;
+  // Use a blob URL for the preview to avoid recursion and allow multi-file support
+  useEffect(() => {
+    if (!iframeRef.current || generatedFiles.length === 0) return;
+
+    const generatePreviewUrl = () => {
+      const indexFile = generatedFiles.find(f => f.name === 'index.html' || f.name.endsWith('/index.html'));
+      const scriptFiles = generatedFiles.filter(f => /\.(tsx|ts|js|jsx)$/.test(f.name));
+      
+      let htmlContent = indexFile?.code || '';
+
+      const consoleCaptureScript = `
+        <script>
+          (function() {
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            
+            const sendLog = (type, args) => {
+              window.parent.postMessage({ type: 'PREVIEW_LOG', logType: type, content: Array.from(args).map(a => {
+                try {
+                  return typeof a === 'object' ? JSON.stringify(a) : String(a);
+                } catch(e) { return "[Object]"; }
+              })}, '*');
+            };
+
+            console.log = (...args) => { originalLog(...args); sendLog('log', args); };
+            console.error = (...args) => { originalError(...args); sendLog('error', args); };
+            console.warn = (...args) => { originalWarn(...args); sendLog('warn', args); };
+            
+            window.onerror = (msg, url, line, col, error) => {
+              sendLog('error', [msg + ' (line ' + line + ')']);
+            };
+          })();
+        </script>
+      `;
+
+      // Virtual Bundler: Concatenate and clean scripts for Babel-Standalone
+      const bundledScripts = scriptFiles.map(f => {
+        let code = f.code;
+        // Comment out imports/exports that break in single-file Babel context
+        code = code.replace(/^import\s+.*\s+from\s+['"].*['"];?/gm, '// $&');
+        code = code.replace(/^export\s+(default\s+)?/gm, '');
+        return `// File: ${f.name}\n${code}`;
+      }).join('\n\n');
+
+      const cdns = `
+        <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+        <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/lucide@latest"></script>
+        <script src="https://unpkg.com/motion@11.11.13/dist/motion.js"></script>
+      `;
+
+      const setupScript = `
+        <script type="text/babel" data-presets="react,typescript">
+          // Globalize React for Babel components
+          window.React = React;
+          window.ReactDOM = ReactDOM;
+          
+          try {
+            ${bundledScripts}
+            
+            // Auto-mount if there's an App component and a root div
+            if (typeof App !== 'undefined' && document.getElementById('root')) {
+              const root = ReactDOM.createRoot(document.getElementById('root'));
+              root.render(<App />);
+            }
+          } catch (err) {
+            console.error("Nexus Bundle Error:", err.message);
+          }
+        </script>
+      `;
+
+      if (!htmlContent) {
+        // Full auto-generated environment for React-only snippets
+        htmlContent = `
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            ${consoleCaptureScript}
+            ${cdns}
+            <style>
+              body { background-color: #0d0d0e; color: white; margin: 0; font-family: sans-serif; }
+              #root { height: 100vh; }
+              .nexus-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; opacity: 0.5; }
+            </style>
+          </head>
+          <body>
+            <div id="root">
+              <div class="nexus-loading">
+                <h1 style="font-size: 14px; font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase;">Nexus Core Synthesis</h1>
+                <p style="font-size: 10px; opacity: 0.5;">Compilando matriz de renderização...</p>
+              </div>
+            </div>
+            ${setupScript}
+          </body>
+          </html>
+        `;
+      } else {
+        // Inject dependencies into user-provided HTML
+        if (htmlContent.includes('</head>')) {
+          htmlContent = htmlContent.replace('</head>', `${consoleCaptureScript}${cdns}</head>`);
+        } else {
+          htmlContent = consoleCaptureScript + cdns + htmlContent;
+        }
+        
+        if (htmlContent.includes('</body>')) {
+          htmlContent = htmlContent.replace('</body>', `${setupScript}</body>`);
+        } else {
+          htmlContent += setupScript;
+        }
+        
+        // Fix relative paths
+        htmlContent = htmlContent.replace(/src="\//g, 'src="');
+        htmlContent = htmlContent.replace(/href="\//g, 'href="');
+      }
+
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      return URL.createObjectURL(blob);
+    };
+
+    setLogs([]); // Reset logs on reload
+    const url = generatePreviewUrl();
+    if (iframeRef.current) {
+      iframeRef.current.src = url;
+    }
+
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [generatedFiles, previewKey]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'PREVIEW_LOG') {
+        setLogs(prev => [...prev, { type: e.data.logType, args: e.data.content }].slice(-50));
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const [showConsole, setShowConsole] = useState(false);
 
   return (
     <div className="flex-1 flex flex-col bg-[#121316] relative overflow-hidden">
       {/* Top Controls */}
-      <div className="h-10 border-b border-white/5 bg-black/20 backdrop-blur-2xl flex items-center justify-between px-3 shrink-0 z-20">
-        <div className="flex items-center gap-1 bg-white/[0.02] p-0.5 rounded-lg border border-white/5">
+      <div className="h-8 border-b border-white/5 bg-black/20 backdrop-blur-2xl flex items-center justify-between px-2 shrink-0 z-20">
+        <div className="flex items-center gap-0.5 bg-white/[0.02] p-0.5 rounded border border-white/5">
           <button 
             onClick={() => setViewport('desktop')}
-            className={cn("p-1 rounded-md transition-all", viewport === 'desktop' ? "bg-blue-600 text-white shadow-lg" : "text-[#8e918f] hover:text-white")}
-            title="Desktop"
+            className={cn("p-1 rounded transition-all", viewport === 'desktop' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
           >
-            <Monitor size={12} />
+            <Monitor size={10} />
           </button>
           <button 
             onClick={() => setViewport('tablet')}
-            className={cn("p-1 rounded-md transition-all", viewport === 'tablet' ? "bg-blue-600 text-white shadow-lg" : "text-[#8e918f] hover:text-white")}
-            title="Tablet"
+            className={cn("p-1 rounded transition-all", viewport === 'tablet' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
           >
-            <Tablet size={12} />
+            <Tablet size={10} />
           </button>
           <button 
             onClick={() => setViewport('mobile')}
-            className={cn("p-1 rounded-md transition-all", viewport === 'mobile' ? "bg-blue-600 text-white shadow-lg" : "text-[#8e918f] hover:text-white")}
-            title="Mobile"
+            className={cn("p-1 rounded transition-all", viewport === 'mobile' ? "bg-blue-600 text-white" : "text-[#8e918f] hover:text-white")}
           >
-            <Smartphone size={12} />
+            <Smartphone size={10} />
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-           <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/10 rounded-full text-[8px] font-black uppercase tracking-widest text-emerald-400">
-            <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="hidden xs:inline">Live Sync</span>
-           </div>
+        <div className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest">
            <button 
-             onClick={() => window.open(window.location.origin, '_blank')}
-             className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 text-[#8e918f] hover:text-white transition-all"
+             onClick={() => setShowConsole(!showConsole)}
+             className={cn(
+               "px-2 h-5 rounded flex items-center gap-1.5 transition-all border",
+               showConsole ? "bg-white/10 text-white border-white/10" : "text-white/20 border-transparent hover:text-white/40"
+             )}
            >
-            <ExternalLink size={14} />
+             <div className={cn("w-1 h-1 rounded-full", logs.some(l => l.type === 'error') ? "bg-red-500 animate-pulse" : logs.length > 0 ? "bg-blue-500" : "bg-white/20")} />
+             Terminal {logs.length > 0 && `(${logs.length})`}
+           </button>
+
+           <button 
+             onClick={() => {
+              const url = iframeRef.current?.src;
+              if (url) window.open(url, '_blank');
+             }}
+             className="w-6 h-6 flex items-center justify-center rounded bg-white/5 text-[#8e918f] hover:text-white transition-all"
+           >
+            <ExternalLink size={12} />
            </button>
         </div>
       </div>
 
-      {/* Main Preview Containter */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/[0.02] to-transparent">
+      <div className="flex-1 relative bg-white/5 overflow-hidden flex justify-center items-start scrollbar-hide">
         <div 
-          className="bg-white shadow-2xl rounded-2xl overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] relative border border-white/10"
-          style={{ width: viewportWidths[viewport], height: '100%', maxHeight: '100%' }}
-        >
-          {isLoading && !iframeLoaded && (
-             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md">
-               <div className="relative">
-                 <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-                 <div className="absolute inset-0 blur-xl bg-blue-500/20 animate-pulse" />
-               </div>
-               <p className="mt-4 text-[12px] font-black uppercase tracking-[0.3em] text-[#8e918f]">Orquestrando preview...</p>
-             </div>
+          className={cn(
+            "bg-white shadow-2xl transition-all duration-500 ease-nexus ring-1 ring-black/5 origin-top",
+            viewport === 'desktop' ? "w-full h-full" : 
+            viewport === 'tablet' ? "w-[768px] h-[1024px] rounded-2xl my-4 scale-[0.6] md:scale-[0.8]" : 
+            "w-[375px] h-[667px] rounded-2xl my-4 scale-[0.7] md:scale-[0.9]"
           )}
-
-          {!hasFiles ? (
-            <div className="h-full flex flex-col items-center justify-center bg-[#0d0d0e] p-8 text-center space-y-8">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-[2.5rem] bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-white/5 flex items-center justify-center shadow-2xl relative z-10 group overflow-hidden">
-                  <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <Monitor size={40} className="text-blue-400 transition-transform duration-500 group-hover:scale-110" />
-                </div>
-                <div className="absolute -inset-4 bg-blue-500/5 blur-3xl rounded-full animate-pulse" />
+        >
+          {generatedFiles.length === 0 ? (
+            <div className="w-full h-full flex flex-col items-center justify-center text-[#8e918f] font-medium bg-[#0b0c0e]">
+              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-4 border border-white/5">
+                <Layout size={20} className="opacity-20" />
               </div>
-              <div className="space-y-4 max-w-sm">
-                <h2 className="text-[24px] font-black text-white uppercase tracking-tighter leading-none italic">Sistema de Visualização</h2>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-start gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/[0.04] transition-colors group">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 group-hover:scale-110 transition-transform">
-                      <ShieldCheck size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-bold text-white/90">Sandbox Integrada</p>
-                      <p className="text-[10px] text-[#8e918f] font-medium leading-relaxed mt-1">Ambiente isolado para testes seguros de componentes e layouts.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/[0.04] transition-colors group">
-                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0 group-hover:scale-110 transition-transform">
-                      <RefreshCw size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-bold text-white/90">Hot Reload</p>
-                      <p className="text-[10px] text-[#8e918f] font-medium leading-relaxed mt-1">Atualizações em tempo real assim que o código é manifestado.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleSendMessage(undefined, "Crie um componente de exemplo incrível para testarmos o canvas.")?.catch((err: any) => console.error("Failed to start preview example:", err))}
-                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-blue-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
-              >
-                Ativar Matriz Visual
-              </button>
+              <span className="text-[10px] uppercase tracking-[0.3em] font-black opacity-30">Nexus Canvas Ready</span>
             </div>
           ) : (
             <iframe 
               ref={iframeRef}
               key={previewKey}
-              srcDoc={
-                generatedFiles.find(f => f.name === 'index.html')?.code || 
-                `<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="flex items-center justify-center h-screen bg-gray-50"><div class="text-center"><h1 class="text-2xl font-bold text-gray-800">Preview Nexus</h1><p class="text-gray-500">O código gerado aparecerá aqui.</p></div></body></html>`
-              }
               className="w-full h-full border-none bg-white"
-              onLoad={() => setIframeLoaded(true)}
               sandbox="allow-scripts allow-forms allow-modals allow-popups allow-presentation allow-same-origin"
               title="Preview"
             />
           )}
         </div>
+
+        {/* Console Overlay */}
+        {showConsole && (
+          <div className="absolute bottom-0 left-0 right-0 h-48 bg-[#0d0d0e]/95 backdrop-blur-3xl border-t border-white/10 z-[40] flex flex-col font-mono animate-in slide-in-from-bottom duration-300">
+            <div className="h-8 border-b border-white/5 flex items-center justify-between px-4 shrink-0 overflow-hidden">
+              <span className="text-[8px] font-black uppercase text-white/20 tracking-[.25em]">Output Matrix Logs</span>
+              <button onClick={() => setLogs([])} className="text-[8px] font-black uppercase text-white/10 hover:text-white/40">Clear</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-1.5 custom-scrollbar">
+              {logs.length === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <span className="text-[10px] uppercase font-bold text-white/5 tracking-widest italic">Aguardando sinais...</span>
+                </div>
+              ) : (
+                logs.map((log, i) => (
+                  <div key={i} className={cn(
+                    "text-[11px] flex gap-3 border-l-2 pl-3 py-0.5",
+                    log.type === 'error' ? "text-red-400 border-red-500/50 bg-red-500/5" :
+                    log.type === 'warn' ? "text-amber-400 border-amber-500/50 bg-amber-500/5" :
+                    "text-white/60 border-white/5"
+                  )}>
+                    <span className="opacity-20 shrink-0 select-none">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                    <span className="break-all">{log.args.join(' ')}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Viewport Info Overlay */}
-      <div className="absolute bottom-6 right-6 z-30 hidden sm:flex pointer-events-none">
-        <div className="bg-[#0d0d0e]/80 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-4">
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">Resolution</span>
-            <span className="text-[12px] font-bold text-white tracking-tighter">{viewportWidths[viewport]} &times; Default</span>
-          </div>
-          <div className="w-px h-6 bg-white/10" />
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">State</span>
-            <span className="text-[12px] font-bold text-emerald-400 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Sincronizado
-            </span>
+      {/* Viewport Info Overlay - Hidden when console is open to avoid clutter */}
+      {!showConsole && (
+        <div className="absolute bottom-6 right-6 z-30 hidden sm:flex pointer-events-none">
+          <div className="bg-[#0d0d0e]/80 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-4">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">Resolution</span>
+              <span className="text-[12px] font-bold text-white tracking-tighter">{viewportWidths[viewport]} &times; Default</span>
+            </div>
+            <div className="w-px h-6 bg-white/10" />
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#8e918f]">State</span>
+              <span className="text-[12px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Sincronizado
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

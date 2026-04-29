@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
-export function useVoiceRecognition(onResult: (transcript: string) => void) {
+export function useVoiceRecognition(onResult: (transcript: string) => void, language: string = 'pt-BR') {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -36,7 +36,7 @@ export function useVoiceRecognition(onResult: (transcript: string) => void) {
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.continuous = true;
         recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'pt-BR';
+        recognitionRef.current.lang = language;
 
         recognitionRef.current.onresult = (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; ++i) {

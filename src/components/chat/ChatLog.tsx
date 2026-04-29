@@ -48,19 +48,36 @@ export const ChatLog = ({
             {messages.length === 0 && (
               <motion.div 
                 key="empty"
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex flex-col items-center justify-center pt-20"
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center pt-24"
               >
-                <div className="w-24 h-24 rounded-[2.5rem] bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-white/5 flex items-center justify-center shadow-2xl mb-8 relative group overflow-hidden">
-                  <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity" />
-                  <AgentIcon iconName={activeAgent.iconName} size={40} className="text-white relative z-10" />
+                <div className="w-16 h-16 rounded-xl bg-white/[0.01] border border-white/5 flex items-center justify-center mb-8 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-blue-500/10 blur-xl rounded-full opacity-30" />
+                  <AgentIcon iconName={activeAgent.iconName} size={28} className="text-white/40 group-hover:text-white transition-all" />
                 </div>
-                <h1 className="text-[28px] font-black text-white uppercase tracking-tighter mb-4 italic">Nexus IA</h1>
-                <p className="text-[14px] text-[#8e918f] text-center max-w-[320px] font-medium leading-relaxed opacity-60 px-6">
-                  Manifeste sua visão através do código. Como posso orquestrar seu próximo projeto hoje?
+                <h1 className="text-[14px] font-black text-white/80 uppercase tracking-[.6em] mb-4 italic leading-none">Nexus Protocol</h1>
+                <p className="text-[10px] text-white/20 text-center max-w-[280px] font-bold uppercase tracking-[0.2em] px-6 leading-loose">
+                  Stabilizing neural link. Awaiting tactical directives for system orchestration.
                 </p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-12 w-full max-w-lg px-4">
+                  {[
+                    "Construct futuristic landing page",
+                    "Architect real-time data visualizer",
+                    "Initialize secure auth microservice",
+                    "Orchestrate component library"
+                  ].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handleSendMessage(undefined, p)}
+                      className="px-4 py-2 bg-white/[0.01] border border-white/5 rounded-lg text-[9px] font-black uppercase tracking-widest text-[#8e918f]/40 hover:text-white hover:bg-white/[0.03] hover:border-white/10 transition-all text-left truncate italic"
+                    >
+                      {`> ${p}`}
+                    </button>
+                  ))}
+                </div>
               </motion.div>
             )}
 
