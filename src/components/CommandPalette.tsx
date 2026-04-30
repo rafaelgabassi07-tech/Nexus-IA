@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, MessageSquare, Code, Layout, Settings, 
   Download, Trash2, Zap, Files, RotateCcw

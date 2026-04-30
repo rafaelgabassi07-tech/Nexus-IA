@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   ExternalLink, Layout, Maximize2, Trash2, Terminal as TerminalIcon, Copy, Smartphone, RotateCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { GeneratedFile } from '../../types';

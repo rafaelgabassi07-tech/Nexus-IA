@@ -1,7 +1,7 @@
 import { 
   Layout, ChevronLeft, Download, Terminal, Shield
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useEffect, useCallback, memo } from 'react';
 import { cn } from '../../lib/utils';

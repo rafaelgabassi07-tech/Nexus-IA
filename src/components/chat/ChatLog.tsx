@@ -6,7 +6,7 @@ import {
   Shield,
   Layout
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../lib/utils';
 import { MessageItem } from './MessageItem';
 import { AgentIcon } from './AgentIcon';

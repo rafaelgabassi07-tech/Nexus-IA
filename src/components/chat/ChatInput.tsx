@@ -131,7 +131,10 @@ export const ChatInput = ({
           <button
             key={i}
             className="flex-shrink-0 animate-in fade-in slide-in-from-bottom-2 px-3 py-1.5 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50 rounded-full transition-all flex items-center gap-1.5"
-            onClick={() => handleSendMessage(undefined, suggestion).catch(console.error)}
+            onClick={() => {
+              setInputMessage(suggestion);
+              setRandomSuggestions([]); // Clear suggestions after selection
+            }}
           >
             {suggestion}
           </button>

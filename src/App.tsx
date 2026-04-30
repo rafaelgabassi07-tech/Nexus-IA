@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Toaster, toast } from 'sonner';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { Workbench } from './components/workbench/Workbench';
 import { Header } from './components/layout/Header';

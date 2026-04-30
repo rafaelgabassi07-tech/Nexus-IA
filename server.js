@@ -143,11 +143,49 @@ app.post('/api/chat', limiter, async (req, res) => {
     res.end();
 
   } catch (error) {
-    console.error('[Nexus API] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido no processamento da IA";
+    console.error('[Nexus API] Error Trace:', error);
     
+    let rawError = error instanceof Error ? error.message : String(error);
+    let errorMessage = "Erro desconhecido no Nexus Core.";
+    let statusCode = 500;
+
+    // Deep parsing for @google/genai internal JSON errors
+    try {
+      const jsonMatch = rawError.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        let parsed = JSON.parse(jsonMatch[0]);
+        // Handle nested error structures
+        if (parsed.error) {
+          if (typeof parsed.error === 'string') {
+            try {
+              const inner = JSON.parse(parsed.error);
+              if (inner.error) parsed = inner;
+            } catch(e) {}
+          }
+          
+          const code = parsed.error.code;
+          const status = parsed.error.status;
+          const message = parsed.error.message || "";
+
+          if (code === 429 || status === "RESOURCE_EXHAUSTED") {
+            errorMessage = "Cota de API excedida. Por favor, aguarde alguns instantes ou use sua própria chave nas configurações.";
+            statusCode = 429;
+          } else if (code === 503 || status === "UNAVAILABLE") {
+            errorMessage = "O modelo está com alta demanda ou sobrecarregado no momento. Tente novamente em alguns segundos.";
+            statusCode = 503;
+          } else if (message) {
+            errorMessage = message;
+          }
+        }
+      } else {
+        errorMessage = rawError;
+      }
+    } catch (e) {
+      errorMessage = rawError;
+    }
+
     if (!res.headersSent) {
-      res.status(500).json({ error: errorMessage });
+      res.status(statusCode).json({ error: errorMessage });
     } else {
       res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       res.end();

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, X, Trash2, Layers, Plus, Clock, MessageSquare
 } from 'lucide-react';
