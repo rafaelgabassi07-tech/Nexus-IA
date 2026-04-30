@@ -132,9 +132,9 @@ ${consoleCaptureScript}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const React = window.React;
+const React = window.React || { useState: () => [null, () => {}], useEffect: () => {}, useRef: () => ({}), useCallback: (f) => f, useMemo: (f) => f() };
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const ReactDOM = window.ReactDOM;
+const ReactDOM = window.ReactDOM || { createRoot: () => ({ render: () => {} }) };
 
 // Safe mock
 window.lucideFallback = new Proxy({}, { 

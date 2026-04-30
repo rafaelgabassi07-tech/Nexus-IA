@@ -27,20 +27,28 @@ export const cdns = `
   <script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Global Safety Shim
-    window.Motion = window.Motion || window.FramerMotion || {};
-    window.FramerMotion = window.FramerMotion || window.Motion || {};
-    window.LucideReact = window.LucideReact || {};
-    
-    // Proxy fallback to prevent "Cannot read properties of undefined"
-    const createSafeProxy = (name) => new Proxy({}, {
-      get: (target, prop) => {
-        if (prop === 'motion' || prop === 'AnimatePresence' || prop === 'LayoutGroup') return () => null;
-        return target[prop];
-      }
-    });
+    // Global Safety Shim - Prevents "Cannot read properties of undefined"
+    (function() {
+      const createSafeProxy = (name) => new Proxy({}, {
+        get: (target, prop) => {
+          if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {
+            const Mock = (props) => null;
+            Mock.displayName = "Mock(" + name + "." + prop + ")";
+            return Mock;
+          }
+          if (prop === 'motion') return (props) => null;
+          return undefined;
+        }
+      });
 
-    if (Object.keys(window.Motion).length === 0) window.Motion = createSafeProxy('Motion');
+      // Pre-initialize globals with proxies to handle race conditions
+      window.Recharts = window.Recharts || createSafeProxy('Recharts');
+      window.Motion = window.Motion || createSafeProxy('Motion');
+      window.FramerMotion = window.FramerMotion || window.Motion;
+      window.LucideReact = window.LucideReact || createSafeProxy('LucideReact');
+      window.React = window.React || createSafeProxy('React');
+      window.ReactDOM = window.ReactDOM || createSafeProxy('ReactDOM');
+    })();
   </script>
   <script crossorigin="anonymous" src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/framer-motion@12/dist/framer-motion.js"></script>
