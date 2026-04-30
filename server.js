@@ -46,6 +46,27 @@ const VALID_MODELS = [
   'gemini-3.1-flash-lite-preview',
 ];
 
+// Nexus AI Model Mapping & Config
+const MODEL_CONFIGS: Record<string, any> = {
+  'gemini-3-flash-preview': {
+    actualModel: 'gemini-1.5-flash',
+    temperature: 0.2, // Precision focus
+    topP: 0.8,
+    topK: 20
+  },
+  'gemini-3.1-flash-lite-preview': {
+    actualModel: 'gemini-1.5-flash',
+    temperature: 0.1, // Lite logic focus
+    topP: 0.7,
+    topK: 16
+  }
+};
+
+const getDefaultConfig = (model: string) => {
+  if (model.includes('flash')) return { actualModel: 'gemini-1.5-flash', temperature: 0.4 };
+  return { actualModel: 'gemini-1.5-pro', temperature: 0.7 };
+};
+
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'model']),
@@ -79,8 +100,7 @@ app.post('/api/chat', limiter, async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 180000);
 
   try {
-    let targetModel = model;
-
+    const config = MODEL_CONFIGS[model] || getDefaultConfig(model);
     const recentMessages = messages.slice(-30);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -90,97 +110,45 @@ app.post('/api/chat', limiter, async (req, res) => {
 
     const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
     if (!apiKeyToUse) {
-      console.error("CRITICAL: GEMINI_API_KEY is not defined in the environment.");
-      return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada no servidor." });
+      return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada." });
     }
     
-    let ai;
-    try {
-      ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-    } catch (e) {
-      return res.status(500).json({ error: "Falha ao inicializar Nexus Intelligence Core." });
-    }
-
+    const ai = new GoogleGenAI(apiKeyToUse);
     const contents = recentMessages.map(msg => ({
       role: msg.role === 'model' ? 'model' : 'user',
-      parts: [{ text: msg.content ? msg.content.trim() || ' ' : ' ' }]
+      parts: [{ text: msg.content.trim() || ' ' }]
     }));
 
-    if (contents.length === 0) {
-      contents.push({ role: 'user', parts: [{ text: ' ' }] });
-    }
-
-    // Add images to the last user message if present
-    if (contents.length > 0 && contents[contents.length-1].role === 'user' && messages[messages.length-1].images) {
-      const lastMsgImages = messages[messages.length-1].images || [];
-      contents[contents.length-1].parts = [
-        ...lastMsgImages.map(img => ({
-          inlineData: { mimeType: img.mimeType, data: img.data }
-        })),
-        { text: messages[messages.length-1].content }
-      ];
-    }
-
-    const tools = searchGrounding ? [{ googleSearch: {} }] : [];
-    let modelConfig: any = {
-      temperature: temperature,
-      systemInstruction: systemPrompt || undefined,
-      tools: tools,
-      topP: 0.95,
-      topK: 40,
-      maxOutputTokens: 8192
-    };
-
-    if (targetModel.includes('gemini-3-flash')) {
-      modelConfig.temperature = 0.2; // Optimized for high-precision coding
-      modelConfig.topP = 0.8;
-      modelConfig.topK = 20;
-      modelConfig.maxOutputTokens = 8192;
-    } else if (targetModel.includes('gemini-2.5-flash') && !targetModel.includes('lite')) {
-      modelConfig.temperature = 0.4;
-      modelConfig.topP = 0.9;
-      modelConfig.topK = 32;
-      modelConfig.maxOutputTokens = 8192;
-    } else if (targetModel.includes('lite')) {
-      modelConfig.temperature = 0.1; // Lite models need very low temperature for logic
-      modelConfig.topP = 0.7;
-      modelConfig.topK = 16;
-      modelConfig.maxOutputTokens = 4096;
-    }
-    
-    // Map Nexus models to real Gemini models
-    let actualModel = targetModel;
-    if (targetModel.includes('lite') || targetModel.includes('flash')) {
-      actualModel = 'gemini-1.5-flash';
-    } else {
-      actualModel = 'gemini-1.5-pro';
+    // Add images to last message
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === 'user' && lastMsg.images?.length) {
+      const parts = lastMsg.images.map(img => ({
+        inlineData: { mimeType: img.mimeType, data: img.data }
+      }));
+      contents[contents.length - 1].parts = [...parts, { text: lastMsg.content }];
     }
 
     const genModel = ai.getGenerativeModel({ 
-      model: actualModel,
+      model: config.actualModel,
       systemInstruction: systemPrompt || undefined,
     });
 
     const streamingResult = await genModel.generateContentStream({
       contents: contents,
       generationConfig: {
-        temperature: modelConfig.temperature,
-        topP: modelConfig.topP,
-        topK: modelConfig.topK,
-        maxOutputTokens: modelConfig.maxOutputTokens,
+        temperature: temperature ?? config.temperature,
+        topP: config.topP || 0.95,
+        topK: config.topK || 40,
+        maxOutputTokens: 8192,
       },
-      tools: tools
+      tools: searchGrounding ? [{ googleSearch: {} }] : []
     });
 
     for await (const chunk of streamingResult.stream) {
       try {
         const text = chunk.text();
-        if (text) {
-          res.write(`data: ${JSON.stringify({ text })}\n\n`);
-        }
-      } catch (e) {
-        console.warn('Empty or blocked chunk detected:', e);
-      }
+        if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      } catch (e) {}
     }
     
     res.write('data: [DONE]\n\n');
