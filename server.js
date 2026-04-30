@@ -102,6 +102,26 @@ app.post('/api/chat', limiter, async (req, res) => {
     
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
 
+    // OPTIMIZED GENERATION CONFIG BASED ON GOOGLE DOCUMENTATION
+    const isPro = actualModel.includes('pro');
+    const isLite = actualModel.includes('lite');
+
+    const generationConfig = {
+      temperature: temperature ?? (isLite ? 0.4 : (isPro ? 0.6 : 0.7)),
+      topP: isPro ? 0.98 : 0.95,
+      topK: isPro ? 64 : 40,
+      maxOutputTokens: isPro ? 16384 : 8192, // Pro models usually support higher outputs
+      responseMimeType: "text/plain",
+    };
+
+    // SAFETY SETTINGS: Permissive for coding tasks
+    const safetySettings = [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ];
+
     // Format contents for @google/genai
     const contents = recentMessages.map((msg, idx) => {
       const parts = [];
@@ -125,12 +145,11 @@ app.post('/api/chat', limiter, async (req, res) => {
       model: actualModel,
       contents,
       config: {
+        ...generationConfig,
         systemInstruction: systemPrompt || undefined,
-        temperature: temperature ?? 0.7,
-        topP: 0.95,
-        topK: 40,
         tools: searchGrounding ? [{ googleSearch: {} }] : []
-      }
+      },
+      safetySettings
     });
 
     for await (const chunk of responseStream) {

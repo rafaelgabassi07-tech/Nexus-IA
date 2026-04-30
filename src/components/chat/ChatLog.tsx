@@ -12,14 +12,15 @@ import { MessageItem } from './MessageItem';
 import { AgentIcon } from './AgentIcon';
 import { AgentDefinition } from '../../types';
 import { Message, GeneratedFile } from '../../types';
+import { useSettingsStore } from '../../store/appStore';
 
 interface ChatLogProps {
   messages: Message[];
   isLoading: boolean;
   activeAgent: AgentDefinition;
   generatedFiles: GeneratedFile[];
-  activeFileIndex: number;
-  setActiveFileIndex: (index: number) => void;
+  activeFilePath: string | null;
+  setActiveFilePath: (path: string | null) => void;
   setActiveTab: (tab: any) => void;
   handleSendMessage: (e?: any, content?: string, messagesToUse?: Message[]) => void;
   handleRegenerate: () => void;
@@ -30,8 +31,8 @@ export const ChatLog = memo(({
   isLoading,
   activeAgent,
   generatedFiles,
-  activeFileIndex,
-  setActiveFileIndex,
+  activeFilePath,
+  setActiveFilePath,
   setActiveTab,
   handleSendMessage,
   handleRegenerate
@@ -110,6 +111,15 @@ export const ChatLog = memo(({
           "max-w-3xl mx-auto space-y-6 w-full",
           messages.length === 0 ? "h-full flex flex-col items-center justify-center" : ""
         )}>
+          {/* Intelligence Badge */}
+          {messages.length > 0 && useSettingsStore.getState().collectiveIntelligence.lessonsLearned.length > 0 && (
+             <div className="flex justify-center mb-4 mt-2">
+                <div className="px-3 py-1.5 bg-black border border-emerald-500 rounded-full flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-700 shadow-lg shadow-emerald-500/20">
+                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500 italic">Collective Intelligence Active ({useSettingsStore.getState().collectiveIntelligence.lessonsLearned.length} Protocolos)</span>
+                </div>
+             </div>
+          )}
           <AnimatePresence initial={false}>
             {messages.length === 0 && (
               <motion.div 
@@ -119,11 +129,10 @@ export const ChatLog = memo(({
                 exit={{ opacity: 0 }}
                 className="flex flex-col items-center justify-center w-full"
               >
-                <div className="w-14 h-14 rounded-xl bg-white/[0.01] border border-border flex items-center justify-center mb-4 relative group overflow-hidden">
-                  <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full opacity-80" />
+                <div className="w-14 h-14 rounded-xl bg-muted border border-border flex items-center justify-center mb-4 relative group">
                   <AgentIcon iconName={activeAgent.iconName} size={24} className="text-muted-foreground group-hover:text-foreground transition-all" />
                 </div>
-                <h1 className="text-[10px] md:text-[12px] font-black text-muted-foreground uppercase tracking-[.6em] mb-4 italic box-border opacity-50">Protocolo Nexus</h1>
+                <h1 className="text-[10px] md:text-[12px] font-black text-muted-foreground uppercase tracking-[.6em] mb-4 italic box-border">Protocolo Nexus</h1>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4 w-full max-w-lg px-4">
                   {[
@@ -135,7 +144,7 @@ export const ChatLog = memo(({
                     <button
                       key={p.text}
                       onClick={() => handleSendMessage(undefined, p.text)}
-                      className="px-3 py-2 bg-white/[0.01] border border-border rounded-lg text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-white/[0.03] hover:border-primary/20 transition-all text-left truncate italic flex items-center gap-2 group"
+                      className="px-3 py-2 bg-muted border border-border rounded-lg text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted/80 hover:border-primary transition-all text-left truncate italic flex items-center gap-2 group"
                     >
                       <span className="text-primary/40 group-hover:text-primary transition-colors">{p.icon}</span>
                       {p.text}
@@ -152,8 +161,8 @@ export const ChatLog = memo(({
                 index={i}
                 activeAgent={activeAgent}
                 generatedFiles={generatedFiles}
-                activeFileIndex={activeFileIndex}
-                setActiveFileIndex={setActiveFileIndex}
+                activeFilePath={activeFilePath}
+                setActiveFilePath={setActiveFilePath}
                 setActiveTab={setActiveTab}
                 isLoading={isLoading}
                 isLastMessage={i === messages.length - 1}
@@ -170,7 +179,7 @@ export const ChatLog = memo(({
       {showScrollButton && (
         <button
           onClick={() => scrollToBottom()}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground p-3 rounded-full shadow-2xl shadow-primary/40 hover:bg-primary transition-all animate-bounce z-[60] border border-primary/20"
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground p-3 rounded-full shadow-2xl shadow-primary hover:bg-primary transition-all animate-bounce z-[60] border border-primary"
         >
           <ArrowDown size={20} strokeWidth={3} />
         </button>

@@ -1,9 +1,9 @@
 import { 
-  Layout, ChevronLeft, Download, Terminal, Shield
+  Layout, Download, Terminal, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { useEffect, useCallback, memo } from 'react';
+import { useEffect, useCallback, memo, useMemo } from 'react';
 import { cn } from '../../lib/utils';
 import { 
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem
@@ -34,8 +34,8 @@ export const Workbench = memo(({
   activeTab,
   setActiveTab,
   generatedFiles,
-  activeFileIndex,
-  setActiveFileIndex,
+  activeFilePath,
+  setActiveFilePath,
   fileHistory,
   setFileHistory,
   setGeneratedFiles,
@@ -43,9 +43,18 @@ export const Workbench = memo(({
   previewKey,
   setPreviewKey,
   vfs
-}: WorkbenchProps) => {
+}: any) => {
   const hasFiles = generatedFiles.length > 0;
-  const rightPaneTab = ['preview', 'code'].includes(activeTab) ? activeTab : 'preview';
+  const rightPaneTab = ['preview', 'code', 'files'].includes(activeTab) ? activeTab : 'preview';
+
+  // Memoize current file to prevent re-renders of Monaco editor
+  const activeFileIndex = useMemo(() => {
+    if (!activeFilePath) return 0;
+    const idx = generatedFiles.findIndex((f: GeneratedFile) => f.name === activeFilePath);
+    return idx === -1 ? 0 : idx;
+  }, [generatedFiles, activeFilePath]);
+
+  const currentFile = useMemo(() => generatedFiles[activeFileIndex], [generatedFiles, activeFileIndex]);
 
   const handleDownload = useCallback(async () => {
     if (!hasFiles) {
@@ -57,7 +66,7 @@ export const Workbench = memo(({
       toast.info("Iniciando compressão quàntica...");
       const zip = new JSZip();
       
-      generatedFiles.forEach(file => {
+      generatedFiles.forEach((file: GeneratedFile) => {
         let path = file.name;
         if (path.startsWith('/')) path = path.slice(1);
         zip.file(path, file.code);
@@ -97,7 +106,7 @@ export const Workbench = memo(({
       // Alt + R = Reload Preview
       if (e.altKey && e.key.toLowerCase() === 'r') {
         e.preventDefault();
-        setPreviewKey(k => k + 1);
+        setPreviewKey((k: number) => k + 1);
         toast.info("Matrix Reiniciada.");
       }
     };
@@ -112,87 +121,11 @@ export const Workbench = memo(({
       (activeTab === 'chat' || activeTab === 'settings') && "hidden md:flex",
       (activeTab === 'settings') && "md:hidden"
     )}>
-      {/* Mobile Top Bar */}
-      <div className="flex md:hidden h-12 border-b border-border bg-card items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] shadow-sm w-full">
-        <button 
-          onClick={() => setActiveTab('chat')} 
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <div className="flex bg-muted p-1 rounded-lg">
-          <button 
-             onClick={() => setActiveTab('preview')} 
-             className={cn("px-4 h-[28px] rounded-md text-[11px] font-bold uppercase transition-all", rightPaneTab === 'preview' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
-          >Preview</button>
-          <button 
-             onClick={() => setActiveTab('code')} 
-             className={cn("px-4 h-[28px] rounded-md text-[11px] font-bold uppercase transition-all", rightPaneTab === 'code' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
-          >Código</button>
-        </div>
-      </div>
-
-      {/* Desktop Header */}
-      <div className="hidden md:flex h-12 border-b border-border bg-background items-center px-4 justify-between gap-4 flex-shrink-0 z-[60] w-full">
-        <div className="flex items-center gap-1.5">
-          <button 
-            onClick={() => setActiveTab('preview')} 
-            className={cn(
-              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
-              rightPaneTab === 'preview' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            Preview
-          </button>
-          <button 
-            onClick={() => setActiveTab('code')} 
-            className={cn(
-              "px-4 h-[32px] rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all", 
-              rightPaneTab === 'code' ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            Código e Estrutura
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {fileHistory.length > 1 && (
-            <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
-              const idx = parseInt(val || '0', 10);
-              const updatedHistory = fileHistory.slice(0, idx + 1);
-              setFileHistory(updatedHistory);
-              setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
-              setActiveFileIndex(0);
-            }}>
-              <SelectTrigger className="h-[28px] w-24 text-[11px] font-medium bg-muted border-none text-muted-foreground focus:ring-0 shadow-none rounded-md hover:bg-white/10 transition-colors"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border text-foreground rounded-md shadow-2xl">
-                {fileHistory.map((_, i) => <SelectItem key={i} value={i.toString()} className="text-[11px]">Versão {i+1}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          <div className="flex items-center h-[32px] px-3 bg-muted border border-border rounded-lg gap-3">
-             <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{generatedFiles.length} arquivos</span>
-             </div>
-          </div>
-          
-          <button 
-            id="nexus-export-trigger"
-            onClick={handleDownload}
-            className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-all"
-            title="Exportar Pacote"
-          >
-            <Download size={14} />
-          </button>
-        </div>
-      </div>
-
       {/* Content Area */}
       <div className="flex-1 overflow-hidden relative flex flex-col md:flex-row bg-background">
         {!hasFiles && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-background">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-border flex items-center justify-center mb-6 relative group overflow-hidden">
+            <div className="w-16 h-16 rounded-2xl bg-muted border border-border flex items-center justify-center mb-6 relative group">
                {rightPaneTab === 'code' ? <Terminal size={24} className="text-muted-foreground" /> : 
                 <Layout size={24} className="text-muted-foreground" />}
             </div>
@@ -204,18 +137,73 @@ export const Workbench = memo(({
         )}
 
         {rightPaneTab === 'code' && hasFiles && (
-          <div className="w-full h-[250px] md:h-full md:w-[220px] flex-shrink-0 border-b md:border-b-0 md:border-r border-border z-40 bg-black/20 overflow-y-auto">
+          <div className="w-full h-[250px] md:h-full md:w-[220px] flex-shrink-0 border-b md:border-b-0 md:border-r border-border z-40 bg-muted overflow-y-auto">
             <FileTree 
               files={generatedFiles} 
-              activeFileIndex={activeFileIndex} 
-              onSelect={(idx) => {
-                setActiveFileIndex(idx);
-              }} 
+              activeFilePath={activeFilePath} 
+              onSelect={setActiveFilePath} 
             />
           </div>
         )}
 
         <div className="flex-1 min-w-0 flex flex-col h-full bg-background overflow-hidden relative">
+          {/* BREADCRUMBS PROTOCOL */}
+          {hasFiles && (
+            <div className="h-10 border-b border-border bg-muted flex items-center px-4 gap-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground shrink-0 z-20">
+               <div className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-default">
+                  <Shield size={10} className="text-primary" />
+                  <span>VFS-ROOT</span>
+               </div>
+               <span className="text-muted-foreground text-[14px] font-light">/</span>
+               
+               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2">
+                 {currentFile && currentFile.name.split('/').filter(Boolean).map((part: string, i: number, arr: string[]) => (
+                   <div key={i} className="flex items-center gap-2">
+                      <span className={cn(i === arr.length - 1 ? "text-primary font-black" : "hover:text-foreground transition-colors cursor-default")}>
+                        {part}
+                      </span>
+                      {i < arr.length - 1 && <span className="text-muted-foreground text-[14px] font-light">/</span>}
+                   </div>
+                 ))}
+               </div>
+
+               {/* Integrated Tools */}
+               <div className="ml-auto flex items-center gap-3 pl-4">
+                  {fileHistory.length > 1 && (
+                    <Select value={(fileHistory.length - 1).toString()} onValueChange={(val) => {
+                      const idx = parseInt(val || '0', 10);
+                      const updatedHistory = fileHistory.slice(0, idx + 1);
+                      setFileHistory(updatedHistory);
+                      setGeneratedFiles(updatedHistory[updatedHistory.length - 1].files);
+                      setActiveFilePath(null);
+                    }}>
+                      <SelectTrigger className="h-[22px] w-20 text-[8px] font-black uppercase bg-background border-border text-muted-foreground focus:ring-0 shadow-none rounded hover:bg-muted transition-colors"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-card border-border text-foreground rounded-md shadow-2xl">
+                        {fileHistory.map((_: any, i: number) => <SelectItem key={i} value={i.toString()} className="text-[9px]">V-{i+1}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  
+                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-background border border-border rounded text-[8px] font-black opacity-60">
+                    {generatedFiles.length} FIL
+                  </div>
+
+                  <button 
+                    onClick={handleDownload}
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-background rounded transition-all"
+                    title="Exportar"
+                  >
+                    <Download size={12} />
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                    <span className="hidden lg:inline text-[8px] text-emerald-500 italic">Core Active</span>
+                  </div>
+               </div>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {rightPaneTab === 'preview' ? (
               <motion.div 
@@ -241,30 +229,30 @@ export const Workbench = memo(({
                 exit={{ opacity: 0 }}
                 className="flex-1 h-full flex flex-col min-h-0 overflow-hidden"
               >
-                {generatedFiles[activeFileIndex] && (
-                  <div className="h-11 border-b border-border bg-background/50 backdrop-blur-sm flex items-center px-4 justify-between shrink-0">
+                {currentFile && (
+                  <div className="h-11 border-b border-border bg-background flex items-center px-4 justify-between shrink-0">
                     <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="flex items-center gap-2 px-2 py-0.5 bg-primary/5 border border-primary/10 rounded text-[9px] font-bold text-primary uppercase tracking-tight">
-                        {generatedFiles[activeFileIndex].name.split('.').pop()}
+                      <div className="flex items-center gap-2 px-2 py-0.5 bg-primary border border-primary rounded text-[9px] font-bold text-primary-foreground uppercase tracking-tight">
+                        {currentFile.name.split('.').pop()}
                       </div>
                       <span className="text-[11px] font-bold text-muted-foreground truncate tracking-tight">
-                        {generatedFiles[activeFileIndex].name}
+                        {currentFile.name}
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
                       <button 
                         onClick={() => {
-                          const code = generatedFiles[activeFileIndex].code;
+                          const code = currentFile.code;
                           if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
                              navigator.clipboard.writeText(code).then(() => {
-                               toast.success("Fonte Capturada");
+                                toast.success("Fonte Capturada");
                              }).catch(err => {
                                console.error("Clipboard Error:", err);
                                toast.error("Erro na Captura");
                              });
                           }
                         }}
-                        className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground/60 hover:text-primary transition-all flex items-center gap-1.5"
+                        className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground hover:text-primary transition-all flex items-center gap-1.5"
                       >
                         <Shield size={10} />
                         Copiar
@@ -274,8 +262,8 @@ export const Workbench = memo(({
                 )}
                 <div className="flex-1 min-h-0">
                   <CodeBlock 
-                    value={generatedFiles[activeFileIndex]?.code || "// Nenhum ativo selecionado"}
-                    language={generatedFiles[activeFileIndex]?.name.split('.').pop() || 'typescript'}
+                    value={currentFile?.code || "// Nenhum ativo selecionado"}
+                    language={currentFile?.name.split('.').pop() || 'typescript'}
                     noMargin={true}
                   />
                 </div>

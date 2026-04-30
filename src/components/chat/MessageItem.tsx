@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { AgentIcon } from './AgentIcon';
 import { CodeBlock } from '../workbench/CodeBlock';
+import { VisualDiff } from './VisualDiff';
 import { Message, GeneratedFile, AgentDefinition } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -29,8 +30,8 @@ export const MessageSkeleton = () => (
       </div>
     </div>
     <div className="flex gap-3 pl-10 pt-2 flex-wrap">
-      <div className="animate-pulse bg-white/[0.03] rounded-2xl h-16 w-full sm:flex-1" />
-      <div className="animate-pulse bg-white/[0.03] rounded-2xl h-16 w-full sm:flex-1" />
+      <div className="animate-pulse bg-muted rounded-2xl h-16 w-full sm:flex-1" />
+      <div className="animate-pulse bg-muted rounded-2xl h-16 w-full sm:flex-1" />
     </div>
   </div>
 );
@@ -40,8 +41,8 @@ interface MessageItemProps {
   index: number;
   activeAgent: AgentDefinition;
   generatedFiles: GeneratedFile[];
-  activeFileIndex: number;
-  setActiveFileIndex: (index: number) => void;
+  activeFilePath: string | null;
+  setActiveFilePath: (path: string | null) => void;
   setActiveTab: (tab: any) => void;
   isLoading: boolean;
   isLastMessage: boolean;
@@ -54,8 +55,8 @@ export const MessageItem = React.memo(({
   message,
   activeAgent,
   generatedFiles,
-  activeFileIndex,
-  setActiveFileIndex,
+  activeFilePath,
+  setActiveFilePath,
   setActiveTab,
   isLoading,
   isLastMessage,
@@ -77,7 +78,7 @@ export const MessageItem = React.memo(({
         className={cn("flex w-full", message.role === 'user' ? "justify-end" : "justify-start")}
       >
         {message.role === 'user' ? (
-          <div className="bg-white/[0.03] text-foreground/90 px-3 py-1.5 rounded-lg rounded-tr-none max-w-[85%] text-[12px] font-medium leading-relaxed whitespace-pre-wrap border border-border shadow-sm">
+          <div className="bg-muted text-foreground/90 px-3 py-1.5 rounded-lg rounded-tr-none max-w-[85%] text-[12px] font-medium leading-relaxed whitespace-pre-wrap border border-border shadow-sm">
             {message.content}
           </div>
         ) : (
@@ -110,8 +111,8 @@ export const MessageItem = React.memo(({
               </div>
               {message.steps && message.steps.length > 0 && (
                 <div className="mb-2 w-full max-w-[95%] md:max-w-lg">
-                  <details className="group/accordion border border-border bg-white/[0.01] rounded border-border overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
-                    <summary className="flex items-center gap-2 px-2 py-1.5 cursor-pointer list-none select-none hover:bg-white/[0.02] transition-colors">
+                  <details className="group/accordion border border-border bg-muted rounded border-border overflow-hidden" open={message.steps.some((s: any) => s.status === 'running')}>
+                    <summary className="flex items-center gap-2 px-2 py-1.5 cursor-pointer list-none select-none hover:bg-muted/80 transition-colors">
                       <div className="relative shrink-0 flex items-center justify-center">
                         {message.steps.some((s: any) => s.status === 'running') ? (
                           <div className="relative">
@@ -122,7 +123,7 @@ export const MessageItem = React.memo(({
                             />
                           </div>
                         ) : (
-                          <div className="w-3 h-3 rounded-full bg-blue-400/10 flex items-center justify-center">
+                          <div className="w-3 h-3 rounded-full bg-primary/10 flex items-center justify-center">
                             <Check size={8} className="text-primary" strokeWidth={3} />
                           </div>
                         )}
@@ -157,10 +158,10 @@ export const MessageItem = React.memo(({
                             <div className={cn(
                               "shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full border transition-all duration-300",
                               step.status === 'running' 
-                                ? "bg-primary/10 border-primary/30 text-primary" 
+                                ? "bg-primary text-primary-foreground border-primary" 
                                 : step.status === 'success' 
-                                  ? "bg-white/[0.02] border-border text-muted-foreground" 
-                                  : "bg-transparent border-border text-muted-foreground"
+                                  ? "bg-muted border-border text-muted-foreground" 
+                                  : "bg-background border-border text-muted-foreground"
                             )}>
                               <StepIcon size={8} strokeWidth={2.5} />
                             </div>
@@ -185,24 +186,24 @@ export const MessageItem = React.memo(({
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-1">
-                            {generatedFiles.map((f: any, idx: number) => (
+                            {generatedFiles.map((f: any) => (
                               <button 
                                 key={f.name}
                                 onClick={() => {
-                                   setActiveFileIndex(idx);
+                                   setActiveFilePath(f.name);
                                    setActiveTab('code');
                                 }}
                                 className={cn(
-                                  "flex items-center gap-1.5 p-1 rounded border text-left transition-all hover:bg-white/[0.04]",
-                                  activeFileIndex === idx 
-                                    ? "bg-white/[0.04] border-border" 
-                                    : "bg-white/[0.01] border-border"
+                                  "flex items-center gap-1.5 p-1 rounded border text-left transition-all hover:bg-muted font-bold",
+                                  activeFilePath === f.name 
+                                    ? "bg-primary text-primary-foreground border-primary" 
+                                    : "bg-muted border-border"
                                 )}
                               >
-                                <FileCode size={10} className={activeFileIndex === idx ? "text-primary" : "text-muted-foreground"} />
+                                <FileCode size={10} className={activeFilePath === f.name ? "text-primary-foreground" : "text-muted-foreground"} />
                                 <span className={cn(
                                   "text-[9px] font-bold truncate flex-1 tracking-tight",
-                                  activeFileIndex === idx ? "text-muted-foreground" : "text-muted-foreground"
+                                  activeFilePath === f.name ? "text-primary-foreground" : "text-muted-foreground"
                                 )}>{f.name.split('/').pop()}</span>
                               </button>
                             ))}
@@ -219,88 +220,104 @@ export const MessageItem = React.memo(({
                   <MessageSkeleton />
                 ) : (
                   <div className="markdown-prose">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm, remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                      components={{
-                        code({ inline, className, children, ...props }: any) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          const codeVal = String(children).replace(/\n$/, '');
-                          
-                          if (!inline && match) {
-                            const isLongCode = codeVal.split('\n').length >= 1;
-                            if (isLongCode && generatedFiles.length > 0) {
-                              return (
-                                <div className="my-3 p-3 rounded-xl border border-border bg-white/[0.02] flex items-center justify-between group/code-summary hover:bg-white/[0.04] transition-all cursor-pointer shadow-sm"
-                                  onClick={() => {
-                                    setActiveTab('code');
-                                    const fileIndex = generatedFiles.findIndex(f => f.code.includes(codeVal.slice(0, 50)));
-                                    if (fileIndex !== -1) setActiveFileIndex(fileIndex);
-                                  }}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/code-summary:scale-105 transition-transform border border-primary/20">
-                                      <FileCode size={16} />
-                                    </div>
-                                    <div>
-                                      <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Ativo Manifestado</div>
-                                      <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Explorar no Editor • {match[1]}</div>
-                                    </div>
-                                  </div>
-                                  <Layout size={14} className="text-muted-foreground" />
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <CodeBlock
-                                value={codeVal}
-                                language={match[1]}
-                                {...props}
-                              />
-                            );
-                          }
-                          
-                          return (
-                            <code className={cn("bg-muted px-1 rounded text-primary font-mono text-[12px] border border-border", className)} {...props}>
-                              {children}
-                            </code>
-                          );
-                        },
-                        p: ({ children }) => <p className="mb-3 last:mb-0 text-foreground/85 leading-relaxed font-medium">{children}</p>,
-                        blockquote({ children }: any) {
-                          let text = '';
-                          try {
-                            if (Array.isArray(children)) {
-                              text = children.map((c: any) => c?.props?.children?.[0] || '').join(' ');
-                            } else {
-                              text = String(children?.props?.children?.[0] || '');
-                            }
-                          } catch (e) {}
-                          const isThought = text.includes('💭') || text.toLowerCase().includes('pensamento estratégico');
-                          
-                          if (isThought) {
-                            return (
-                              <details className="group/thought my-4 border border-purple-500/10 rounded overflow-hidden bg-purple-500/[0.01]">
-                                <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none select-none text-[10px] font-black uppercase tracking-[.2em] text-purple-300/60 hover:bg-purple-500/5 transition-colors">
-                                  <div className="flex items-center gap-2">
-                                    <Brain size={12} className="text-purple-400/60" />
-                                    <span>Lógica Estratégica</span>
-                                  </div>
-                                  <ChevronDown size={12} className="opacity-60 transition-transform group-open/thought:rotate-180" />
-                                </summary>
-                                <div className="px-4 pb-4 pt-1 text-muted-foreground text-[11px] leading-relaxed italic border-t border-purple-500/10 font-medium">
-                                  {children}
-                                </div>
-                              </details>
-                            );
-                          }
-                          return <blockquote className="border-l-2 border-border pl-4 py-1 italic mb-3 text-muted-foreground font-medium bg-white/[0.01] rounded-r-lg">{children}</blockquote>;
+                    {message.content.split(/(:::visual-diff\n[\s\S]*?\n:::)/).map((part, partIdx) => {
+                      if (part.startsWith(':::visual-diff')) {
+                        const jsonStr = part.replace(':::visual-diff', '').replace(':::', '').trim();
+                        try {
+                          const data = JSON.parse(jsonStr);
+                          return <VisualDiff key={partIdx} {...data} />;
+                        } catch (e) {
+                          console.error("Failed to parse visual diff data", e);
+                          return null;
                         }
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                      }
+                      
+                      return (
+                        <ReactMarkdown 
+                          key={partIdx}
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            code({ inline, className, children, ...props }: any) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              const codeVal = String(children).replace(/\n$/, '');
+                              
+                              if (!inline && match) {
+                                const isLongCode = codeVal.split('\n').length >= 1;
+                                if (isLongCode && generatedFiles.length > 0) {
+                                  return (
+                                    <div className="my-3 p-3 rounded-xl border border-border bg-muted flex items-center justify-between group/code-summary hover:bg-muted/80 transition-all cursor-pointer shadow-sm"
+                                      onClick={() => {
+                                        setActiveTab('code');
+                                        const file = generatedFiles.find(f => f.code.includes(codeVal.slice(0, 50)));
+                                        if (file) setActiveFilePath(file.name);
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/code-summary:scale-105 transition-transform border border-primary/20">
+                                          <FileCode size={16} />
+                                        </div>
+                                        <div>
+                                          <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Ativo Manifestado</div>
+                                          <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Explorar no Editor • {match[1]}</div>
+                                        </div>
+                                      </div>
+                                      <Layout size={14} className="text-muted-foreground" />
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <CodeBlock
+                                    value={codeVal}
+                                    language={match[1]}
+                                    {...props}
+                                  />
+                                );
+                              }
+                              
+                              return (
+                                <code className={cn("bg-muted px-1 rounded text-primary font-mono text-[12px] border border-border", className)} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            p: ({ children }) => <p className="mb-3 last:mb-0 text-foreground/85 leading-relaxed font-medium">{children}</p>,
+                            blockquote({ children }: any) {
+                              let text = '';
+                              try {
+                                if (Array.isArray(children)) {
+                                  text = children.map((c: any) => c?.props?.children?.[0] || '').join(' ');
+                                } else {
+                                  text = String(children?.props?.children?.[0] || '');
+                                }
+                              } catch (e) {}
+                              const isThought = text.includes('💭') || text.toLowerCase().includes('pensamento estratégico');
+                              
+                              if (isThought) {
+                                return (
+                                  <details className="group/thought my-4 border border-purple-500 rounded overflow-hidden bg-purple-950">
+                                    <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none select-none text-[10px] font-black uppercase tracking-[.2em] text-purple-300 hover:bg-purple-900 transition-colors">
+                                      <div className="flex items-center gap-2">
+                                        <Brain size={12} className="text-purple-400" />
+                                        <span>Lógica Estratégica</span>
+                                      </div>
+                                      <ChevronDown size={12} className="opacity-60 transition-transform group-open/thought:rotate-180" />
+                                    </summary>
+                                    <div className="px-4 pb-4 pt-1 text-purple-100 text-[11px] leading-relaxed italic border-t border-purple-500 font-medium">
+                                      {children}
+                                    </div>
+                                  </details>
+                                );
+                              }
+                              return <blockquote className="border-l-2 border-border pl-4 py-1 italic mb-3 text-muted-foreground font-medium bg-muted rounded-r-lg">{children}</blockquote>;
+                            }
+                          }}
+                        >
+                          {part}
+                        </ReactMarkdown>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -314,7 +331,7 @@ export const MessageItem = React.memo(({
                         toast.success('Copiado');
                       }
                     }}
-                    className="p-1 px-1.5 rounded bg-white/10 text-muted-foreground hover:text-foreground transition-colors border border-border"
+                    className="p-1 px-1.5 rounded bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border"
                   >
                     <Copy size={11} />
                   </button>
@@ -346,7 +363,7 @@ export const MessageItem = React.memo(({
                   variant="outline" 
                   size="sm" 
                   onClick={() => handleRegenerate?.()} 
-                  className="mt-6 border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 gap-2 h-10 rounded-xl text-[12px] font-black uppercase tracking-widest px-6"
+                  className="mt-6 border-red-500 bg-red-950 text-red-100 hover:bg-red-900 hover:text-red-50 gap-2 h-10 rounded-xl text-[12px] font-black uppercase tracking-widest px-6 animate-in slide-in-from-top-1"
                 >
                    <Activity size={16} />
                    Tentar Novamente
@@ -365,7 +382,7 @@ export const MessageItem = React.memo(({
   return prev.message.content === next.message.content &&
          prev.isLoading === next.isLoading &&
          prev.isLastMessage === next.isLastMessage &&
-         prev.activeFileIndex === next.activeFileIndex &&
+         prev.activeFilePath === next.activeFilePath &&
          prev.message.isError === next.message.isError &&
          stepsSame;
 });

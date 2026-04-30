@@ -20,11 +20,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--muted-foreground);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--foreground);
 }
 
 @theme inline {
@@ -104,48 +104,51 @@
 }
 
 .dark {
-  --background: 0 0% 4%;
+  --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: 0 0% 6%;
+  --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: 0 0% 6%;
+  --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.985 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(1 0 0 / 6%);
+  --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(1 0 0 / 6%);
-  --muted-foreground: oklch(1 0 0 / 60%);
-  --accent: oklch(1 0 0 / 6%);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 10%);
+  --border: oklch(0.371 0 0);
+  --input: oklch(0.371 0 0);
   --ring: oklch(0.985 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: 0 0% 4%;
+  --sidebar: oklch(0.145 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.985 0 0);
   --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(1 0 0 / 6%);
+  --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(0.371 0 0);
   --sidebar-ring: oklch(0.985 0 0);
+
+  /* Accessibility Contrast Fixes */
+  --success: oklch(0.7 0.2 150);
 }
 
 @layer utilities {
   .glass {
-    @apply bg-card/60 backdrop-blur-xl border border-border;
+    @apply bg-card border border-border;
   }
   .glass-lighter {
-    @apply bg-muted/40 backdrop-blur-xl border border-border;
+    @apply bg-muted border border-border;
   }
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-tr from-white to-white/50;
+    @apply bg-clip-text text-foreground bg-white text-white;
   }
   .shadow-inner-white {
     box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);

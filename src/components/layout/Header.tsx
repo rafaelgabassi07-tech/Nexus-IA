@@ -18,7 +18,9 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
   const { setIsSidebarOpen, isSaving } = useUIStore();
 
   const handleNewChat = () => {
-    window.dispatchEvent(new CustomEvent('newChat'));
+    if (window.confirm('Deseja iniciar um novo projeto? Todo o progresso não salvo no projeto atual poderá ser perdido.')) {
+      window.dispatchEvent(new CustomEvent('newChat'));
+    }
   };
 
   return (
@@ -39,7 +41,7 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
 
           <div className="hidden md:flex items-center gap-2 text-muted-foreground">
             <ChevronRight size={14} />
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 border border-border rounded-lg transition-all hover:bg-muted">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted border border-border rounded-lg transition-all hover:bg-muted/80">
               <div className={cn("w-4 h-4 rounded-md flex items-center justify-center shadow-sm", activeAgent.color)}>
                 <AgentIcon iconName={activeAgent.iconName} size={10} className="text-foreground" />
               </div>
@@ -55,9 +57,9 @@ export const Header = ({ activeAgent, messages, currentChatTitle }: HeaderProps)
       </div>
 
       <div className="flex-1 flex items-center justify-end gap-2 z-10">
-        <div className="hidden sm:flex items-center mr-1 px-2 py-1 bg-primary/10 border border-primary/20 rounded-full gap-1.5 flex-shrink-0">
-             <Sparkles size={10} className="text-primary" />
-             <span className="text-[8px] font-black text-primary uppercase tracking-widest leading-none">Premium</span>
+        <div className="hidden sm:flex items-center mr-1 px-2 py-1 bg-primary border border-primary rounded-full gap-1.5 flex-shrink-0">
+             <Sparkles size={10} className="text-primary-foreground" />
+             <span className="text-[8px] font-black text-primary-foreground uppercase tracking-widest leading-none">Premium</span>
         </div>
         
         <Button 

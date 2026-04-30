@@ -130,7 +130,7 @@ export const ChatInput = ({
         {!inputMessage && randomSuggestions.map((suggestion, i) => (
           <button
             key={i}
-            className="flex-shrink-0 animate-in fade-in slide-in-from-bottom-2 px-3 py-1.5 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50 rounded-full transition-all flex items-center gap-1.5"
+            className="flex-shrink-0 animate-in fade-in slide-in-from-bottom-2 px-3 py-1.5 text-[11px] font-medium bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border rounded-full transition-all flex items-center gap-1.5"
             onClick={() => {
               setInputMessage(suggestion);
               setRandomSuggestions([]); // Clear suggestions after selection
@@ -141,7 +141,7 @@ export const ChatInput = ({
         ))}
       </div>
       <div className="max-w-4xl mx-auto flex flex-col w-full">
-        <div className="relative bg-card border border-border focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/5 rounded-xl transition-all duration-300 shadow-sm flex flex-col group/input overflow-hidden">
+        <div className="relative bg-card border border-border focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 rounded-xl transition-all duration-300 shadow-sm flex flex-col group/input overflow-hidden">
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1 px-3 pt-2 pb-0.5">
               {attachedFiles.map((f, i) => (
@@ -173,7 +173,7 @@ export const ChatInput = ({
                 onClick={toggleListening}
                 className={cn(
                   "w-6 h-6 rounded-md transition-all flex items-center justify-center",
-                  isListening ? "text-red-400 bg-red-400/10 shadow-lg" : "text-muted-foreground hover:text-primary hover:bg-white/10"
+                  isListening ? "text-white bg-red-600 shadow-lg" : "text-muted-foreground hover:text-primary hover:bg-muted"
                 )}
               >
                 {isListening ? <MicOff size={14} /> : <Mic size={14} />}
@@ -183,11 +183,11 @@ export const ChatInput = ({
                 type="file" multiple className="hidden" id="file-upload" ref={fileInputRef}
                 onChange={onFileChange}
               />
-              <label htmlFor="file-upload" className="w-6 h-6 cursor-pointer text-muted-foreground hover:text-primary hover:bg-white/10 rounded-md transition-all flex items-center justify-center">
+              <label htmlFor="file-upload" className="w-6 h-6 cursor-pointer text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-all flex items-center justify-center">
                 <Paperclip size={14} />
               </label>
 
-              <button onClick={() => imageInputRef.current?.click()} className="w-6 h-6 text-muted-foreground hover:text-primary hover:bg-white/10 rounded-md transition-all flex items-center justify-center">
+              <button onClick={() => imageInputRef.current?.click()} className="w-6 h-6 text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-all flex items-center justify-center">
                 <ImageIcon size={14} />
               </button>
               <input 
@@ -198,18 +198,18 @@ export const ChatInput = ({
 
             <div className="flex items-center gap-2">
               <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                <PopoverTrigger className="flex items-center h-5 bg-[#1a1a1a] rounded px-1.5 hover:border-primary/40 transition-all shadow-sm text-[8px] font-bold text-muted-foreground hover:text-foreground gap-1 uppercase tracking-widest border border-border/50">
+                <PopoverTrigger className="flex items-center h-5 bg-muted rounded px-1.5 hover:border-primary transition-all shadow-sm text-[8px] font-bold text-muted-foreground hover:text-foreground gap-1 uppercase tracking-widest border border-border">
                   <span className="truncate max-w-[80px]">{allAgents.find(a => a.id === activeAgentId)?.name || 'Persona'} / {Object.values(GROUPED_MODELS).flat().find(m => m.id === selectedModel)?.name || 'Modelo'}</span>
                 </PopoverTrigger>
                 <PopoverContent 
                   side="top" 
                   align="end" 
-                  className="bg-[#0f0f0f] border-border text-foreground rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] min-w-[220px] max-h-[350px] overflow-y-auto custom-scrollbar p-0 z-[110] border-opacity-50"
+                  className="bg-card border-border text-foreground rounded-xl shadow-2xl min-w-[220px] max-h-[350px] overflow-y-auto custom-scrollbar p-0 z-[110]"
                 >
                   <div className="p-2 space-y-2">
                     {/* Agent/Persona Section */}
                     <div>
-                      <div className="text-primary text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-1 opacity-80">Persona</div>
+                      <div className="text-primary text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-1">Persona</div>
                       <div className="grid grid-cols-1 gap-1 px-1">
                       {allAgents.map(agent => (
                         <button
@@ -220,7 +220,7 @@ export const ChatInput = ({
                           }}
                           className={cn(
                             "flex items-center gap-2 p-1.5 rounded-md transition-all text-left w-full",
-                            activeAgentId === agent.id ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            activeAgentId === agent.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                           )}
                         >
                           <div className={cn("w-5 h-5 rounded flex items-center justify-center shrink-0", agent.color)}>
@@ -234,7 +234,7 @@ export const ChatInput = ({
                     </div>
                   </div>
 
-                  <div className="h-px bg-white/5 my-1.5 mx-2" />
+                  <div className="h-px bg-border my-1.5 mx-2" />
 
                     {/* Model Section */}
                     {Object.entries(GROUPED_MODELS).map(([groupName, models]) => (
@@ -250,7 +250,7 @@ export const ChatInput = ({
                               }}
                               className={cn(
                                 "flex flex-col p-2 rounded-md transition-all text-left w-full border border-transparent",
-                                selectedModel === m.id ? "bg-white/10 text-foreground border-white/10" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                selectedModel === m.id ? "bg-muted text-foreground border-border" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                               )}
                             >
                               <span className="font-bold text-[11px] leading-tight">{m.name}</span>

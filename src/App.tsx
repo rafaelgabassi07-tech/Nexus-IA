@@ -57,7 +57,8 @@ function AppContent() {
     apiPresets, setApiPresets,
     activePresetId, setActivePresetId,
     temperature, setTemperature,
-    searchGrounding,
+    searchGrounding, autoRefine, setAutoRefine,
+    showDiff, setShowDiff,
     customAgents, setCustomAgents
   } = useSettingsStore();
 
@@ -84,8 +85,8 @@ function AppContent() {
     isLoading,
     generatedFiles,
     setGeneratedFiles,
-    activeFileIndex,
-    setActiveFileIndex,
+    activeFilePath,
+    setActiveFilePath,
     fileHistory,
     setFileHistory,
     resetChat: hookResetChat,
@@ -160,6 +161,8 @@ function AppContent() {
   const [draftSelectedModel, setDraftSelectedModel] = useState(selectedModel);
   const [draftTemperature, setDraftTemperature] = useState(temperature);
   const [draftSystemPrompt, setDraftSystemPrompt] = useState(systemPrompt);
+  const [draftAutoRefine, setDraftAutoRefine] = useState(autoRefine);
+  const [draftShowDiff, setDraftShowDiff] = useState(showDiff);
   const [draftActiveAgentId, setDraftActiveAgentId] = useState(activeAgentId);
   const [draftActivePresetId, setDraftActivePresetId] = useState(activePresetId);
 
@@ -184,9 +187,11 @@ function AppContent() {
            draftSelectedModel !== selectedModel || 
            draftTemperature !== temperature || 
            draftSystemPrompt !== systemPrompt ||
+           draftAutoRefine !== autoRefine ||
+           draftShowDiff !== showDiff ||
            draftActiveAgentId !== activeAgentId ||
            draftActivePresetId !== activePresetId;
-  }, [apiKey, selectedModel, temperature, systemPrompt, activeAgentId, activePresetId, draftApiKey, draftSelectedModel, draftTemperature, draftSystemPrompt, draftActiveAgentId, draftActivePresetId]);
+  }, [apiKey, selectedModel, temperature, systemPrompt, autoRefine, showDiff, activeAgentId, activePresetId, draftApiKey, draftSelectedModel, draftTemperature, draftSystemPrompt, draftAutoRefine, draftShowDiff, draftActiveAgentId, draftActivePresetId]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -194,6 +199,8 @@ function AppContent() {
       setDraftSelectedModel(selectedModel);
       setDraftTemperature(temperature);
       setDraftSystemPrompt(systemPrompt);
+      setDraftAutoRefine(autoRefine);
+      setDraftShowDiff(showDiff);
       setDraftActiveAgentId(activeAgentId);
       setDraftActivePresetId(activePresetId);
     } else {
@@ -203,6 +210,8 @@ function AppContent() {
         draftSelectedModel !== selectedModel || 
         draftTemperature !== temperature || 
         draftSystemPrompt !== systemPrompt || 
+        draftAutoRefine !== autoRefine ||
+        draftShowDiff !== showDiff ||
         draftActiveAgentId !== activeAgentId || 
         draftActivePresetId !== activePresetId
       ) {
@@ -210,6 +219,8 @@ function AppContent() {
         setSelectedModel(draftSelectedModel);
         setTemperature(draftTemperature);
         setSystemPrompt(draftSystemPrompt);
+        setAutoRefine(draftAutoRefine);
+        setShowDiff(draftShowDiff);
         setActiveAgentId(draftActiveAgentId);
         setActivePresetId(draftActivePresetId);
       }
@@ -221,6 +232,8 @@ function AppContent() {
     setSelectedModel(draftSelectedModel);
     setTemperature(draftTemperature);
     setSystemPrompt(draftSystemPrompt);
+    setAutoRefine(draftAutoRefine);
+    setShowDiff(draftShowDiff);
     setActiveAgentId(draftActiveAgentId);
     setActivePresetId(draftActivePresetId);
     
@@ -258,7 +271,7 @@ function AppContent() {
 
   const deletePreset = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Deseja excluir este preset?')) {
+    if (window.confirm('Deseja EXCLUIR este preset de API? Esta ação não pode ser desfeita.')) {
       const updated = apiPresets.filter(p => p.id !== id);
       saveApiPresets(updated);
       if (activePresetId === id) {
@@ -297,7 +310,7 @@ function AppContent() {
   };
 
   const deleteAgent = (id: string) => {
-    if (confirm('Deseja excluir este agente?')) {
+    if (window.confirm('Deseja EXCLUIR este agente customizado? O prompt de sistema associado será perdido.')) {
       const updated = customAgents.filter(a => a.id !== id);
       saveCustomAgents(updated);
       if (draftActiveAgentId === id) setDraftActiveAgentId(AGENTS[0].id);
@@ -331,7 +344,7 @@ function AppContent() {
           setFileHistory(files.length > 0 ? [{ timestamp: Date.now(), files }] : []);
           setGeneratedFiles(files);
         }
-        setActiveFileIndex(0);
+        setActiveFilePath(null);
         setIsSidebarOpen(false);
         setActiveTab('chat');
       }
@@ -346,7 +359,7 @@ function AppContent() {
       window.removeEventListener('loadSession', handleLoadSession as EventListener);
       window.removeEventListener('newChat', handleNewChat);
     };
-  }, [sessions, setMessages, setFileHistory, setGeneratedFiles, setActiveFileIndex, resetChat, setIsSidebarOpen, setActiveTab]);
+  }, [sessions, setMessages, setFileHistory, setGeneratedFiles, setActiveFilePath, resetChat, setIsSidebarOpen, setActiveTab]);
 
   const undoInput = useCallback(() => {
     if (chatInputHistoryIndex > 0) {
@@ -374,10 +387,10 @@ function AppContent() {
       if (reverted) {
         setFileHistory(newHistory);
         setGeneratedFiles(newHistory[newHistory.length - 1].files);
-        setActiveFileIndex(0);
+        setActiveFilePath(null);
       }
     }
-  }, [fileHistory, setFileHistory, setGeneratedFiles, setActiveFileIndex]);
+  }, [fileHistory, setFileHistory, setGeneratedFiles, setActiveFilePath]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -551,6 +564,8 @@ function AppContent() {
                   draftSelectedModel={draftSelectedModel} setDraftSelectedModel={setDraftSelectedModel}
                   draftTemperature={draftTemperature} setDraftTemperature={setDraftTemperature}
                   draftSystemPrompt={draftSystemPrompt} setDraftSystemPrompt={setDraftSystemPrompt}
+                  draftAutoRefine={draftAutoRefine} setDraftAutoRefine={setDraftAutoRefine}
+                  draftShowDiff={draftShowDiff} setDraftShowDiff={setDraftShowDiff}
                   draftActiveAgentId={draftActiveAgentId} setDraftActiveAgentId={setDraftActiveAgentId}
                   apiPresets={apiPresets} customAgents={customAgents}
                   hasSettingsChanges={hasSettingsChanges} saveSettings={saveSettings}
@@ -575,8 +590,8 @@ function AppContent() {
                   isLoading={isLoading}
                   activeAgent={activeAgent}
                   generatedFiles={generatedFiles}
-                  activeFileIndex={activeFileIndex}
-                  setActiveFileIndex={setActiveFileIndex}
+                  activeFilePath={activeFilePath}
+                  setActiveFilePath={setActiveFilePath}
                   setActiveTab={setActiveTab}
                   handleSendMessage={handleSendMessage}
                   handleRegenerate={handleRegenerate}
@@ -624,8 +639,8 @@ function AppContent() {
                 setActiveTab={setActiveTab}
                 generatedFiles={generatedFiles}
                 setGeneratedFiles={setGeneratedFiles}
-                activeFileIndex={activeFileIndex}
-                setActiveFileIndex={setActiveFileIndex}
+                activeFilePath={activeFilePath}
+                setActiveFilePath={setActiveFilePath}
                 previewKey={previewKey}
                 setPreviewKey={setPreviewKey}
                 isLoading={isLoading}
@@ -677,8 +692,8 @@ function AppContent() {
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #444; }
       `}</style>
       <Toaster position="top-right" theme="dark" richColors closeButton />
       <SidebarHistory />

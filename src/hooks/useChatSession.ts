@@ -29,7 +29,7 @@ export function useChatSession({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedFiles, setGeneratedFiles] = useState<GeneratedFile[]>([]);
-  const [activeFileIndex, setActiveFileIndex] = useState(0);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [fileHistory, setFileHistory] = useState<{ timestamp: number; files: GeneratedFile[] }[]>([]);
   
   const generatedFilesRef = useRef<GeneratedFile[]>([]);
@@ -53,7 +53,7 @@ export function useChatSession({
     }] : []);
     setGeneratedFiles([]);
     setFileHistory([]);
-    setActiveFileIndex(0);
+    setActiveFilePath(null);
     setIsLoading(false);
     abortControllerRef.current?.abort();
   }, []);
@@ -64,8 +64,9 @@ export function useChatSession({
 
     let finalMessage = content;
     const parsed = parseSlashCommand(content);
-    const activeCode = generatedFilesRef.current.length > 0 ? generatedFilesRef.current[activeFileIndex]?.code || null : null;
-    const activeFileName = generatedFilesRef.current.length > 0 ? generatedFilesRef.current[activeFileIndex]?.name || null : null;
+    const activeFileIndex = generatedFilesRef.current.findIndex(f => f.name === activeFilePath);
+    const activeCode = generatedFilesRef.current.length > 0 ? (activeFileIndex !== -1 ? generatedFilesRef.current[activeFileIndex]?.code : null) : null;
+    const activeFileName = generatedFilesRef.current.length > 0 ? (activeFileIndex !== -1 ? generatedFilesRef.current[activeFileIndex]?.name : null) : null;
 
     if (parsed.isCommand && parsed.command) {
       finalMessage = parsed.command.buildPrompt(parsed.args || '', {
@@ -123,9 +124,30 @@ export function useChatSession({
     // ARCHITECTURE FIX: Inject current files context for the LLM
     // This allows the model to perform "edits" instead of just adding new code.
     const currentFiles = generatedFilesRef.current;
-    const filesContext = currentFiles.length > 0 
-      ? `\n\n[CONTEXTO DO PROJETO NEXUS]\nAtivos atuais:\n${currentFiles.map(f => `## Arquivo: ${f.name}\n\`\`\`${f.name.split('.').pop()}\n${f.code}\n\`\`\``).join('\n\n')}`
+    
+    // ERROR PERSISTENCE: Get recent errors and inject them into the context
+    const { errorLogs, collectiveIntelligence } = useSettingsStore.getState();
+    
+    const recentErrorsContext = errorLogs.length > 0
+      ? `\n\n<recent_errors_log>\n${errorLogs.slice(0, 5).map(l => `- [${l.type}] ${l.message}`).join('\n')}\n</recent_errors_log>\n* Use these recent failures to inform more stable code generation.`
       : '';
+
+    const intelligenceContext = collectiveIntelligence.lessonsLearned.length > 0
+      ? `\n\n<nexus_knowledge_base>\n${collectiveIntelligence.lessonsLearned.slice(0, 10).map(l => `- ${l}`).join('\n')}\n</nexus_knowledge_base>\n* Strictly adhere to these established patterns for compatibility.`
+      : '';
+
+    const filesContext = currentFiles.length > 0 
+      ? `\n\n<nexus_project_vfs>\n${currentFiles.map(f => `<file name="${f.name}">\n${f.code}\n</file>`).join('\n')}\n</nexus_project_vfs>${recentErrorsContext}${intelligenceContext}`
+      : `${recentErrorsContext}${intelligenceContext}`;
+
+    // ADAPTIVE TEMPERATURE
+    let finalTemperature = temperature;
+    const lowerPrompt = content.toLowerCase();
+    const isTechnical = /refactor|fix|bug|error|architect|typescript|interface|strict|logic/.test(lowerPrompt);
+    const isCreative = /style|design|beautify|animate|concept|idea|color/.test(lowerPrompt);
+
+    if (isTechnical) finalTemperature = Math.max(0.2, temperature - 0.2);
+    else if (isCreative) finalTemperature = Math.min(1.0, temperature + 0.15);
 
     setIsLoading(true);
 
@@ -160,7 +182,7 @@ export function useChatSession({
     try {
       let globalFullResponse = "";
 
-      const performChatFetch = async (currentPrompt: string, prefixText: string = "") => {
+      const performChatFetch = async (currentPrompt: string, prefixText: string = "", fetchTemp?: number) => {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -174,7 +196,7 @@ export function useChatSession({
               images: (m as any).images 
             })),
             systemPrompt,
-            temperature,
+            temperature: fetchTemp ?? finalTemperature,
             agentId: activeAgent.id,
             apiKey,
             model: selectedModel,
@@ -256,8 +278,7 @@ export function useChatSession({
                           if (existingIdx >= 0) merged[existingIdx] = cf;
                           else merged.push(cf);
                         });
-                        const focusedIdx = merged.findIndex(f => f.name === newFile.name);
-                        setActiveFileIndex(Math.max(0, focusedIdx));
+                        setActiveFilePath(newFile.name);
                         return merged;
                       });
                     } else if (currentFiles.length === turnGeneratedFilesCount && currentFiles.length > 0) {
@@ -322,7 +343,7 @@ export function useChatSession({
              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: globalFullResponse } : m));
           },
           sendMessageToAI: async (prompt, prefix) => {
-             return await performChatFetch(prompt, prefix);
+             return await performChatFetch(prompt, prefix, 0.1);
           }
         });
       } else {
@@ -330,7 +351,47 @@ export function useChatSession({
       }
 
       // Finalize
-      const finalFiles = extractFilesFromMarkdown(globalFullResponse, messageId.slice(0, 5));
+      let finalFiles = extractFilesFromMarkdown(globalFullResponse, messageId.slice(0, 5));
+      
+      // AUTO-REFINEMENT CHAIN
+      const { autoRefine: isAutoRefineEnabled } = useSettingsStore.getState();
+      const isNormalMessage = !parsed.isCommand || !isSubAgentCommand(parsed.commandName || '');
+      
+      if (isAutoRefineEnabled && isNormalMessage && finalFiles.length > 0) {
+         // Identify what files were just updated (the "active" files of this turn)
+         // For simplicity, let's just review the first updated file or the most relevant one
+         const mainFile = finalFiles[0]; 
+         const codeBefore = mainFile.code;
+         
+         await runReviewSubAgents({
+          files: finalFiles,
+          activeFile: mainFile.name,
+          autoFix: true, // We are in auto-refine mode
+          updateSteps,
+          appendMessage: (text) => {
+             globalFullResponse += text;
+             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: globalFullResponse } : m));
+          },
+          sendMessageToAI: async (prompt, prefix) => {
+             return await performChatFetch(prompt, prefix, 0.1);
+          }
+        });
+
+        // RE-EXTRACT files after refinement to capture corrections
+        finalFiles = extractFilesFromMarkdown(globalFullResponse, messageId.slice(0, 5));
+        
+        // SHOW VISUAL DIFF (Metadata tag for UI)
+        const { showDiff: isShowDiffEnabled } = useSettingsStore.getState();
+        if (isShowDiffEnabled && finalFiles.length > 0) {
+          const mainFileAfter = finalFiles.find(f => f.name === mainFile.name) || finalFiles[0];
+          if (mainFileAfter.code !== codeBefore) {
+             const diffTag = `\n\n:::visual-diff\n{ "file": "${mainFileAfter.name}", "before": ${JSON.stringify(codeBefore)}, "after": ${JSON.stringify(mainFileAfter.code)} }\n:::\n`;
+             globalFullResponse += diffTag;
+             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: globalFullResponse } : m));
+          }
+        }
+      }
+
       if (finalFiles.length > 0) {
         setGeneratedFiles(prev => {
           const merged = [...prev];
@@ -339,7 +400,10 @@ export function useChatSession({
             if (existingIdx >= 0) merged[existingIdx] = newFile;
             else merged.push(newFile);
           });
-          setFileHistory(history => [...history, { timestamp: Date.now(), files: merged }]);
+          setFileHistory(history => {
+            const newHistory = [...history, { timestamp: Date.now(), files: JSON.parse(JSON.stringify(merged)) }];
+            return newHistory.slice(-10); // Keep only last 10 versions to save memory
+          });
           
           const { securityRules } = useSettingsStore.getState();
           const activeRules = securityRules.filter(r => r.enabled);
@@ -382,6 +446,14 @@ export function useChatSession({
       }
       
       updateSteps(steps.map(s => ({ ...s, status: s.status === 'running' ? 'success' : s.status })));
+      
+      // EXTRACT LESSONS FOR COLLECTIVE INTELLIGENCE
+      const lessonMatch = globalFullResponse.match(/:::nexus-lesson\n([\s\S]*?)\n:::/);
+      if (lessonMatch) {
+        const lesson = lessonMatch[1].trim();
+        useSettingsStore.getState().addLessonLearned(lesson);
+        toast.success("Nova Lição Aprendida", { description: "O Nexus Collective Intelligence foi atualizado com novos conhecimentos." });
+      }
 
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -412,8 +484,8 @@ export function useChatSession({
     isLoading,
     generatedFiles,
     setGeneratedFiles,
-    activeFileIndex,
-    setActiveFileIndex,
+    activeFilePath,
+    setActiveFilePath,
     fileHistory,
     setFileHistory,
     resetChat,

@@ -8,6 +8,8 @@ import { cn } from '../../lib/utils';
 import { GeneratedFile } from '../../types';
 import { generatePreviewHTML } from './preview/virtualBundler';
 
+import { useSettingsStore } from '../../store/appStore';
+
 export interface PreviewPaneProps {
   generatedFiles: GeneratedFile[];
   previewKey: number;
@@ -52,15 +54,25 @@ export const PreviewPane = ({
     }
   }, [generatedFiles, previewKey, vfs]);
 
+  const { addErrorLog } = useSettingsStore();
+
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'PREVIEW_LOG') {
         setLogs(prev => [...prev, { type: e.data.logType, args: e.data.content }].slice(-50));
+        
+        // Report to global store for agent awareness
+        if (e.data.logType === 'error') {
+          const message = e.data.content.map((arg: any) => 
+            typeof arg === 'string' ? arg : JSON.stringify(arg)
+          ).join(' ');
+          addErrorLog({ message, type: 'runtime' });
+        }
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [addErrorLog]);
 
   const [showConsole, setShowConsole] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -74,8 +86,8 @@ export const PreviewPane = ({
   return (
     <div className="flex-1 flex flex-col bg-background relative overflow-hidden min-h-0 h-full w-full">
       {/* Top Controls */}
-      <div className="h-11 border-b border-border bg-background/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0 z-20">
-        <div className="flex items-center gap-2 text-muted-foreground/80">
+      <div className="h-11 border-b border-border bg-background flex items-center justify-between px-4 shrink-0 z-20">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Smartphone size={14} />
           <span className="text-[10px] font-black uppercase tracking-widest mt-0.5">Mobile Preview</span>
         </div>
@@ -149,9 +161,9 @@ export const PreviewPane = ({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 h-64 bg-background/95 backdrop-blur-3xl border-t border-border z-[40] flex flex-col font-mono shadow-[0_-20px_50px_rgba(0,0,0,0.5)]"
+              className="absolute bottom-0 left-0 right-0 h-64 bg-background border-t border-border z-[40] flex flex-col font-mono shadow-2xl"
             >
-              <div className="h-9 border-b border-border flex items-center justify-between px-4 shrink-0 bg-white/[0.02]">
+              <div className="h-9 border-b border-border flex items-center justify-between px-4 shrink-0 bg-muted">
                 <div className="flex items-center gap-3">
                   <TerminalIcon size={12} className="text-primary" />
                   <span className="text-[9px] font-black uppercase text-muted-foreground tracking-[.3em]">Terminal de Saída Cortex</span>
@@ -187,9 +199,9 @@ export const PreviewPane = ({
                    </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar bg-black/20">
+              <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar bg-muted">
                 {logs.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-60">
+                  <div className="h-full flex flex-col items-center justify-center">
                     <div className="w-10 h-10 rounded-full border border-dashed border-border mb-3 animate-[spin_10s_linear_infinite]" />
                     <span className="text-[10px] uppercase font-bold tracking-[0.5em] italic">Nenhum Sinal Detectado</span>
                   </div>
@@ -201,12 +213,12 @@ export const PreviewPane = ({
                       key={i} 
                       className={cn(
                         "text-[11px] flex gap-3 border-l-2 pl-3 py-1 items-start transition-colors group",
-                        log.type === 'error' ? "text-red-400 border-red-500/80 bg-red-500/5" :
-                        log.type === 'warn' ? "text-amber-400 border-amber-500/80 bg-amber-500/5" :
-                        "text-muted-foreground border-primary/20 hover:bg-white/[0.02]"
+                        log.type === 'error' ? "text-red-500 border-red-600 bg-red-500/10" :
+                        log.type === 'warn' ? "text-amber-500 border-amber-600 bg-amber-500/10" :
+                        "text-muted-foreground border-primary hover:bg-muted/50"
                       )}
                     >
-                      <span className="text-muted-foreground font-bold shrink-0 select-none group-hover:text-primary/40 transition-colors">
+                      <span className="text-muted-foreground font-bold shrink-0 select-none group-hover:text-primary transition-colors">
                         {new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
                       <span className="break-all font-medium leading-relaxed">

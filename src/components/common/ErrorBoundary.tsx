@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen bg-background flex items-center justify-center p-6 font-sans">
           <div className="max-w-xl w-full">
-            <div className="bg-white/[0.02] border border-red-500/20 rounded-[2.5rem] p-10 md:p-16 relative overflow-hidden shadow-2xl">
+            <div className="bg-card border border-red-500/20 rounded-[2.5rem] p-10 md:p-16 relative overflow-hidden shadow-2xl">
               {/* Background Accents */}
               <div className="absolute -top-24 -right-24 w-64 h-64 bg-red-500/10 blur-[100px] rounded-full" />
               <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-primary/5 blur-[100px] rounded-full" />

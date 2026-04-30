@@ -4,6 +4,7 @@ export interface SubAgentContext {
   files: GeneratedFile[];
   activeFile: string | null;
   target?: string;
+  autoFix?: boolean;
   updateSteps: (steps: TechnicalStep[]) => void;
   appendMessage: (content: string) => void;
   sendMessageToAI: (prompt: string, prefix?: string) => Promise<string>;
@@ -20,8 +21,13 @@ export const REVIEW_PIPELINE = [
 ];
 
 export async function runReviewSubAgents(ctx: SubAgentContext): Promise<void> {
-  const { files, activeFile, target, updateSteps, appendMessage, sendMessageToAI } = ctx;
-  const initialSteps: TechnicalStep[] = REVIEW_PIPELINE.map(agent => ({
+  const { files, activeFile, target, autoFix, updateSteps, appendMessage, sendMessageToAI } = ctx;
+  const pipeline = [...REVIEW_PIPELINE];
+  if (autoFix) {
+    pipeline.push({ id: 'fixer', name: 'Feature Dev (Auto-Fix)', icon: 'Wrench' as any });
+  }
+
+  const initialSteps: TechnicalStep[] = pipeline.map(agent => ({
     id: agent.id,
     label: `${agent.name}`,
     status: 'pending',
@@ -32,25 +38,27 @@ export async function runReviewSubAgents(ctx: SubAgentContext): Promise<void> {
 
   const fileCode = files.find(f => f.name === activeFile)?.code || '';
   const targetDescription = activeFile 
-    ? `Arquivo alvo: ${activeFile}\n\n${fileCode}`
-    : 'Todo o projeto ativo.';
+    ? `Alvo de análise:\n<file name="${activeFile}">\n${fileCode}\n</file>`
+    : `<project_scope>\n${files.map(f => `<file name="${f.name}">\n${f.code}\n</file>`).join('\n')}\n</project_scope>`;
 
-  appendMessage(`## Iniciando Revisão Rigorosa Pipeline (7 Sub-Agentes)\n` + (target ? `**Foco da revisão:** ${target}\n\n` : ''));
+  appendMessage(`## Iniciando Revisão Rigorosa Pipeline (${pipeline.length} Sub-Agentes)\n` + (target ? `**Foco da revisão:** ${target}\n\n` : ''));
 
   const reports: string[] = [];
 
-  for (const agent of REVIEW_PIPELINE) {
+  for (const agent of pipeline) {
+    if (agent.id === 'fixer') break; // Fixer runs after consolidation
+    
     updateSteps([{ id: 'orchestrator', label: 'Pipeline Ativo', status: 'success', icon: 'Layers' }, 
       ...initialSteps.map(s => s.id === agent.id ? { ...s, status: 'running' as any } : s)
     ]);
 
     const prompt = `
 Você é o Sub-Agente: ${agent.name}.
-Sua missão é estritamente avaliar o artefato abaixo e reportar APENAS problemas reais que violam os princípios do seu domínio.
-Alvo de análise:
-\`\`\`
+Sua missão é estritamente avaliar os artefatos dentro do context abaixo e reportar APENAS problemas reais que violam os princípios do seu domínio.
+
+<context>
 ${targetDescription}
-\`\`\`
+</context>
 
 DIRETRIZES OBRIGATÓRIAS:
 1. NÃO ELOGIE. NUNCA diga 'está bom' ou 'bem estruturado'. Se não achar problemas críticos, responda EXATAMENTE: [PASSOU_SEM_RESSALVAS_CRITICAS]
@@ -85,6 +93,35 @@ Agrupe, resuma e crie um plano de ação CLARO para consertar os problemas reais
 Não seja genérico.`;
 
      await sendMessageToAI(consolidatorPrompt, `\n\n---\n\n## 📋 Síntese do Maestro de Qualidade\n`);
+  }
+  
+  if (autoFix && reports.length > 0) {
+    const fixerAgent = pipeline.find(a => a.id === 'fixer');
+    if (fixerAgent) {
+      updateSteps([{ id: 'orchestrator', label: 'Iniciando Auto-Correção', status: 'running', icon: 'Layers' }, 
+        ...initialSteps.map(s => s.id === fixerAgent.id ? { ...s, status: 'running' as any } : s)
+      ]);
+
+      const fixerPrompt = `
+Você é o Agente Feature Dev (Modo Auto-Fix).
+Sua missão é ler o código original e os relatórios de erros dos sub-agentes e gerar a VERSÃO FINAL CORRIGIDA do código.
+
+Código Original:
+${targetDescription}
+
+Relatórios de Erros:
+${reports.join('\n\n')}
+
+Instruções:
+1. Analise todos os pontos levantados.
+2. Reescreva o código corrigindo CADA UM dos pontos válidos.
+3. Mantenha a funcionalidade original.
+4. Responda apenas com o bloco de código novo.`;
+
+      await sendMessageToAI(fixerPrompt, `\n\n---\n\n### 🔧 Auto-Fix Aplicado\nApliquei correções baseadas nos relatórios acima.\n`);
+      
+      initialSteps.find(s => s.id === fixerAgent.id)!.status = 'success';
+    }
   }
 
   updateSteps([{ id: 'orchestrator', label: 'Revisão Concluída', status: 'success', icon: 'Layers' }, ...initialSteps]);

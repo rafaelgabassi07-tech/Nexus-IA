@@ -34,8 +34,22 @@ export const CommandPalette = () => {
         if (btn) btn.click();
         else toast.info("Função de exportação não disponível nesta vista.");
     }},
+    { id: 'refine', name: 'Toggle Auto-Refinement', icon: <Zap size={16} className="text-emerald-400" />, shortcut: 'T', action: () => {
+        import('../store/appStore').then(m => {
+          const { autoRefine, setAutoRefine } = m.useSettingsStore.getState();
+          setAutoRefine(!autoRefine);
+          toast.success(`Pipeline Nexus ${!autoRefine ? 'Sincronizado' : 'Desconectado'}`);
+        });
+    }},
+    { id: 'diff', name: 'Toggle Visual Diff', icon: <Files size={16} className="text-blue-400" />, shortcut: 'V', action: () => {
+        import('../store/appStore').then(m => {
+          const { showDiff, setShowDiff } = m.useSettingsStore.getState();
+          setShowDiff(!showDiff);
+          toast.success(`Visual Diff ${!showDiff ? 'Mapeado' : 'Oculto'}`);
+        });
+    }},
     { id: 'clear', name: 'Formatar Protocolos de Chat', icon: <Trash2 size={16} />, shortcut: 'D', action: () => {
-        if (confirm("Deseja formatar todos os protocolos de chat? Isso é irreversível.")) {
+        if (window.confirm("Deseja formatar TODOS os protocolos de chat? Isso apagará permanentemente todo o histórico de projetos salvos localmente.")) {
             clearHistory();
             toast.success("Protocolos formatados com sucesso.");
         }
@@ -92,7 +106,7 @@ export const CommandPalette = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsCommandPaletteOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]"
+            className="fixed inset-0 bg-black z-[9998]"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
@@ -100,7 +114,7 @@ export const CommandPalette = () => {
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             className="fixed left-1/2 top-[20%] -translate-x-1/2 w-full max-w-[500px] z-[9999] px-4"
           >
-            <div className="bg-background/90 backdrop-blur-2xl border border-border rounded-2xl shadow-2xl overflow-hidden shadow-primary/5">
+            <div className="bg-background border border-border rounded-2xl shadow-2xl overflow-hidden">
               <div className="relative group">
                 <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <input
@@ -109,10 +123,10 @@ export const CommandPalette = () => {
                   placeholder="SINTETIZAR COMANDO NEXUS..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-14 bg-transparent border-b border-border pl-12 pr-4 text-sm font-bold text-foreground placeholder:text-foreground/5 focus:outline-none uppercase tracking-widest italic"
+                  className="w-full h-14 bg-transparent border-b border-border pl-12 pr-4 text-sm font-bold text-foreground placeholder:text-muted focus:outline-none uppercase tracking-widest italic"
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-60">
-                    <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded border border-border">ESC</span>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded border border-border">ESC</span>
                 </div>
               </div>
               
@@ -134,7 +148,7 @@ export const CommandPalette = () => {
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "p-2 rounded-lg transition-colors",
-                          selectedIndex === index ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted"
+                          selectedIndex === index ? "text-primary-foreground bg-primary" : "text-muted-foreground bg-muted"
                         )}>
                           {action.icon}
                         </div>
@@ -143,34 +157,34 @@ export const CommandPalette = () => {
                            selectedIndex === index ? "text-foreground" : "text-muted-foreground"
                         )}>{action.name}</span>
                       </div>
-                      <div className="flex items-center gap-1 opacity-60">
+                      <div className="flex items-center gap-1">
                          <span className="text-[9px] font-black uppercase">{action.shortcut}</span>
                       </div>
                     </button>
                   ))
                 ) : (
-                  <div className="py-10 flex flex-col items-center justify-center opacity-60 text-center">
-                    <Zap size={24} className="mb-2" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Nenhum comando sintetizado</span>
+                  <div className="py-10 flex flex-col items-center justify-center text-center">
+                    <Zap size={24} className="mb-2 text-muted-foreground" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nenhum comando sintetizado</span>
                   </div>
                 )}
               </div>
               
-              <div className="h-8 bg-white/[0.02] border-t border-border flex items-center justify-between px-4">
+              <div className="h-8 bg-muted border-t border-border flex items-center justify-between px-4">
                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1">
                        <span className="text-[8px] text-muted-foreground font-black uppercase">Navegar</span>
                        <div className="flex gap-1">
-                          <span className="text-[8px] bg-white/10 px-1 rounded">↑</span>
-                          <span className="text-[8px] bg-white/10 px-1 rounded">↓</span>
+                          <span className="text-[8px] bg-background px-1 rounded border border-border">↑</span>
+                          <span className="text-[8px] bg-background px-1 rounded border border-border">↓</span>
                        </div>
                     </div>
                     <div className="flex items-center gap-1">
                        <span className="text-[8px] text-muted-foreground font-black uppercase">Executar</span>
-                       <span className="text-[8px] bg-white/10 px-1 rounded">↵</span>
+                       <span className="text-[8px] bg-background px-1 rounded border border-border">↵</span>
                     </div>
                  </div>
-                 <span className="text-[8px] font-black italic text-primary/40 uppercase tracking-tighter">Protocolo de Comando Nexus 1.0</span>
+                 <span className="text-[8px] font-black italic text-primary uppercase tracking-tighter">Protocolo de Comando Nexus 1.0</span>
               </div>
             </div>
           </motion.div>

@@ -84,7 +84,16 @@ interface SettingsState {
   customAgents: AgentDefinition[];
   temperature: number;
   searchGrounding: boolean;
+  autoRefine: boolean;
+  showDiff: boolean;
   autoSave: boolean;
+  errorLogs: Array<{ timestamp: number; message: string; type: 'lint' | 'runtime' | 'vfs' }>;
+  collectiveIntelligence: {
+    lessonsLearned: string[];
+    successfulPatterns: Array<{ id: string; description: string; code: string }>;
+  };
+  snapshots: Array<{ id: string; timestamp: number; name: string; files: any[] }>;
+  searchQuery: string;
   securityRules: SecurityRule[];
   
   setApiKey: (key: string) => void;
@@ -95,7 +104,17 @@ interface SettingsState {
   setCustomAgents: (agents: AgentDefinition[]) => void;
   setTemperature: (temp: number) => void;
   setSearchGrounding: (active: boolean) => void;
+  setAutoRefine: (active: boolean) => void;
+  setShowDiff: (active: boolean) => void;
   setAutoSave: (active: boolean) => void;
+  addErrorLog: (log: { message: string; type: 'lint' | 'runtime' | 'vfs' }) => void;
+  clearErrorLogs: () => void;
+  addLessonLearned: (lesson: string) => void;
+  removeLessonLearned: (index: number) => void;
+  addSuccessfulPattern: (pattern: { description: string; code: string }) => void;
+  createSnapshot: (name: string, files: any[]) => void;
+  deleteSnapshot: (id: string) => void;
+  setSearchQuery: (query: string) => void;
   setSecurityRules: (rules: SecurityRule[]) => void;
 }
 
@@ -110,7 +129,21 @@ export const useSettingsStore = create<SettingsState>()(
       customAgents: [],
       temperature: 0.7,
       searchGrounding: false,
+      autoRefine: true,
+      showDiff: true,
       autoSave: true,
+      errorLogs: [],
+      collectiveIntelligence: {
+        lessonsLearned: [
+          'Prever o uso de tailwind v4 com @import "tailwindcss"',
+          'Usar framer-motion (motion/react) para todas as animações',
+          'Nexus Engine prefere Lucide React para ícones',
+          'Componentes devem ser funcionais e usar hooks'
+        ],
+        successfulPatterns: []
+      },
+      snapshots: [],
+      searchQuery: '',
       securityRules: defaultSecurityRules,
       
       setApiKey: (key) => set((state) => { state.apiKey = key; }),
@@ -121,7 +154,40 @@ export const useSettingsStore = create<SettingsState>()(
       setCustomAgents: (customAgents) => set((state) => { state.customAgents = customAgents; }),
       setTemperature: (temperature) => set((state) => { state.temperature = temperature; }),
       setSearchGrounding: (searchGrounding) => set((state) => { state.searchGrounding = searchGrounding; }),
+      setAutoRefine: (autoRefine) => set((state) => { state.autoRefine = autoRefine; }),
+      setShowDiff: (showDiff) => set((state) => { state.showDiff = showDiff; }),
       setAutoSave: (autoSave) => set((state) => { state.autoSave = autoSave; }),
+      addErrorLog: (log) => set((state) => { 
+        state.errorLogs = [
+          { ...log, timestamp: Date.now() }, 
+          ...state.errorLogs.slice(0, 19) 
+        ]; 
+      }),
+      clearErrorLogs: () => set((state) => { state.errorLogs = []; }),
+      addLessonLearned: (lesson) => set((state) => {
+        if (!state.collectiveIntelligence.lessonsLearned.includes(lesson)) {
+          state.collectiveIntelligence.lessonsLearned = [lesson, ...state.collectiveIntelligence.lessonsLearned.slice(0, 49)];
+        }
+      }),
+      removeLessonLearned: (index) => set((state) => {
+        state.collectiveIntelligence.lessonsLearned.splice(index, 1);
+      }),
+      addSuccessfulPattern: (pattern) => set((state) => {
+        state.collectiveIntelligence.successfulPatterns = [
+          { ...pattern, id: Math.random().toString(36).substr(2, 9) },
+          ...state.collectiveIntelligence.successfulPatterns.slice(0, 19)
+        ];
+      }),
+      createSnapshot: (name, files) => set((state) => {
+        state.snapshots = [
+          { id: Math.random().toString(36).substr(2, 9), timestamp: Date.now(), name, files: JSON.parse(JSON.stringify(files)) },
+          ...state.snapshots.slice(0, 9)
+        ];
+      }),
+      deleteSnapshot: (id) => set((state) => {
+        state.snapshots = state.snapshots.filter(s => s.id !== id);
+      }),
+      setSearchQuery: (searchQuery) => set((state) => { state.searchQuery = searchQuery; }),
       setSecurityRules: (securityRules) => set((state) => { state.securityRules = securityRules; }),
     })),
     {
@@ -132,30 +198,34 @@ export const useSettingsStore = create<SettingsState>()(
 
 interface UIState {
   activeTab: 'chat' | 'code' | 'preview' | 'settings' | 'files';
-  settingsTab: 'overview' | 'general' | 'agent' | 'security';
+  settingsTab: 'general' | 'agent' | 'security' | 'intelligence';
   isSidebarOpen: boolean;
   isSaving: boolean;
   isCommandPaletteOpen: boolean;
+  activeFilePath: string | null;
   
   setActiveTab: (tab: 'chat' | 'code' | 'preview' | 'settings' | 'files') => void;
-  setSettingsTab: (tab: 'overview' | 'general' | 'agent' | 'security') => void;
+  setSettingsTab: (tab: 'general' | 'agent' | 'security' | 'intelligence') => void;
   setIsSidebarOpen: (isOpen: boolean) => void;
   setIsSaving: (isSaving: boolean) => void;
   setIsCommandPaletteOpen: (isOpen: boolean) => void;
+  setActiveFilePath: (path: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   activeTab: 'chat',
-  settingsTab: 'overview',
+  settingsTab: 'general',
   isSidebarOpen: false,
   isSaving: false,
   isCommandPaletteOpen: false,
+  activeFilePath: null,
   
   setActiveTab: (activeTab) => set({ activeTab }),
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setIsSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
   setIsSaving: (isSaving) => set({ isSaving }),
   setIsCommandPaletteOpen: (isCommandPaletteOpen) => set({ isCommandPaletteOpen }),
+  setActiveFilePath: (activeFilePath) => set({ activeFilePath }),
 }));
 
 interface ChatHistoryState {

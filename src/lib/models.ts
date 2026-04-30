@@ -16,7 +16,7 @@ export const NEXUS_MODELS: NexusModel[] = [
     contextWindow: 1048576,
     group: 'Google Gemini',
     tier: 'lite',
-    rateLimit: '500 rpd • 15 rpm',
+    rateLimit: '1000 rpd • 15 rpm',
     recommended: false
   },
   {
@@ -25,7 +25,7 @@ export const NEXUS_MODELS: NexusModel[] = [
     contextWindow: 1048576,
     group: 'Google Gemini',
     tier: 'standard',
-    rateLimit: '20 rpd • 5 rpm',
+    rateLimit: '500 rpd • 15 rpm',
     recommended: true
   },
   {
@@ -34,7 +34,7 @@ export const NEXUS_MODELS: NexusModel[] = [
     contextWindow: 1048576,
     group: 'Google Gemini',
     tier: 'standard',
-    rateLimit: '20 rpd • 5 rpm'
+    rateLimit: '200 rpd • 10 rpm'
   },
   {
     id: 'gemini-2.5-flash-lite',
@@ -42,7 +42,7 @@ export const NEXUS_MODELS: NexusModel[] = [
     contextWindow: 1048576,
     group: 'Google Gemini',
     tier: 'lite',
-    rateLimit: '20 rpd • 10 rpm'
+    rateLimit: '500 rpd • 15 rpm'
   }
 ];
 

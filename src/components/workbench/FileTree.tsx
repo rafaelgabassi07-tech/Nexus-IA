@@ -5,8 +5,8 @@ import { GeneratedFile } from '../../types';
 
 interface FileTreeProps {
   files: GeneratedFile[];
-  activeFileIndex: number;
-  onSelect: (index: number) => void;
+  activeFilePath: string | null;
+  onSelect: (path: string) => void;
 }
 
 type TreeNode = {
@@ -74,13 +74,13 @@ const getIcon = (fileName: string) => {
 
 const FileTreeNode = ({ 
   node, 
-  activeFileIndex, 
-  onSelect,
+  activeFilePath, 
+  onSelect, 
   level = 0
 }: { 
   node: TreeNode, 
-  activeFileIndex: number, 
-  onSelect: (idx: number) => void,
+  activeFilePath: string | null, 
+  onSelect: (path: string) => void,
   level?: number 
 }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -90,7 +90,7 @@ const FileTreeNode = ({
       <div className="w-full flex flex-col">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-white/[0.04] text-muted-foreground hover:text-foreground transition-all rounded text-left group"
+          className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-all rounded text-left group"
           style={{ paddingLeft: `${level * 12 + 8}px` }}
         >
           {isOpen ? <ChevronDown size={12} className="opacity-60" /> : <ChevronRight size={12} className="opacity-60" />}
@@ -103,7 +103,7 @@ const FileTreeNode = ({
               <FileTreeNode 
                 key={child.path} 
                 node={child} 
-                activeFileIndex={activeFileIndex} 
+                activeFilePath={activeFilePath} 
                 onSelect={onSelect} 
                 level={level + 1}
               />
@@ -114,14 +114,14 @@ const FileTreeNode = ({
     );
   }
 
-  const isActive = activeFileIndex === node.fileIndex;
+  const isActive = activeFilePath === node.path;
 
   return (
     <button
-      onClick={() => onSelect(node.fileIndex!)}
+      onClick={() => onSelect(node.path)}
       className={cn(
-        "flex items-center gap-2 py-1.5 hover:bg-white/[0.04] transition-all rounded text-left group pr-2 w-full",
-        isActive ? "bg-white/[0.06] text-foreground font-semibold" : "text-muted-foreground/80 hover:text-foreground"
+        "flex items-center gap-2 py-1.5 hover:bg-muted transition-all rounded text-left group pr-2 w-full",
+        isActive ? "bg-muted text-foreground font-semibold" : "text-muted-foreground/80 hover:text-foreground"
       )}
       style={{ paddingLeft: `${level * 12 + 24}px` }}
     >
@@ -141,13 +141,13 @@ const FileTreeNode = ({
   );
 };
 
-export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) => {
+export const FileTree = ({ files, activeFilePath, onSelect }: FileTreeProps) => {
   const tree = useMemo(() => buildTree(files), [files]);
 
   if (!files || files.length === 0) return null;
 
   return (
-    <div className="w-full h-full flex flex-col bg-background/50 backdrop-blur-xl overflow-hidden py-2 md:min-w-[200px]">
+    <div className="w-full h-full flex flex-col bg-background overflow-hidden py-2 md:min-w-[200px] border-r border-border">
       <div className="px-4 mb-3 mt-1 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[9px] font-black text-muted-foreground uppercase tracking-[.3em] italic">Explorador</h3>
@@ -161,7 +161,7 @@ export const FileTree = ({ files, activeFileIndex, onSelect }: FileTreeProps) =>
             <FileTreeNode 
               key={node.path} 
               node={node} 
-              activeFileIndex={activeFileIndex} 
+              activeFilePath={activeFilePath} 
               onSelect={onSelect} 
             />
           ))}
