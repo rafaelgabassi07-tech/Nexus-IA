@@ -27,6 +27,7 @@ app.set('trust proxy', 1);
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+  frameguard: false,
 }));
 
 app.use(express.json({ limit: '10mb' }));
