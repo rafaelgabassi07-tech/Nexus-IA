@@ -46,40 +46,55 @@ const VALID_MODELS = [
   'gemini-3.1-flash-lite-preview',
 ];
 
-// Nexus AI Model Mapping & Config
+// Nexux AI Model Mapping & Config - Deep Integration
 const MODEL_CONFIGS: Record<string, any> = {
   'gemini-3-flash-preview': {
     actualModel: 'gemini-1.5-flash',
-    temperature: 0.2, // Precision focus
-    topP: 0.8,
-    topK: 20
+    temperature: 0.1, // Optimized for technical builds
+    topP: 0.95,
+    topK: 40
   },
   'gemini-3.1-flash-lite-preview': {
     actualModel: 'gemini-1.5-flash',
-    temperature: 0.1, // Lite logic focus
-    topP: 0.7,
-    topK: 16
+    temperature: 0.05, // Ultra-lite focus
+    topP: 0.8,
+    topK: 20
+  },
+  'gemini-2.5-flash': {
+    actualModel: 'gemini-1.5-flash',
+    temperature: 0.4,
+    topP: 1.0,
+    topK: 40
+  },
+  'gemini-2.5-flash-lite': {
+    actualModel: 'gemini-1.5-flash',
+    temperature: 0.2,
+    topP: 0.9,
+    topK: 30
   }
 };
 
 const getDefaultConfig = (model: string) => {
-  if (model.includes('flash')) return { actualModel: 'gemini-1.5-flash', temperature: 0.4 };
+  console.log(`[Nexus Engine] Falling back for model: ${model}`);
+  if (model.includes('flash') || model.includes('lite')) {
+    return { actualModel: 'gemini-1.5-flash', temperature: 0.4 };
+  }
   return { actualModel: 'gemini-1.5-pro', temperature: 0.7 };
 };
 
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'model']),
-    content: z.string().max(1000000),
+    content: z.string().max(2000000), // Increased for large codebase context
     images: z.array(z.object({
       mimeType: z.string(),
       data: z.string()
     })).optional()
-  })).max(100),
+  })).max(200), // Increased history
   apiKey: z.string().optional(),
   model: z.string().max(100),
-  systemPrompt: z.string().max(50000).optional(),
-  temperature: z.number().min(0).max(2),
+  systemPrompt: z.string().max(100000).optional(),
+  temperature: z.number().min(0).max(2).optional(), // Made optional to use config
   searchGrounding: z.boolean().optional()
 });
 
@@ -101,6 +116,8 @@ app.post('/api/chat', limiter, async (req, res) => {
 
   try {
     const config = MODEL_CONFIGS[model] || getDefaultConfig(model);
+    console.log(`[Nexus API] Prompt Received - Model Alias: ${model} -> Target: ${config.actualModel}`);
+    
     const recentMessages = messages.slice(-30);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -108,9 +125,10 @@ app.post('/api/chat', limiter, async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY;
+    const apiKeyToUse = apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKeyToUse) {
-      return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada." });
+      console.error('[Nexus API] ERROR: No API Key provided by client or environment.');
+      return res.status(500).json({ error: "Nexus Core Offline: Chave de API não configurada no servidor." });
     }
     
     const ai = new GoogleGenAI(apiKeyToUse);
@@ -141,7 +159,7 @@ app.post('/api/chat', limiter, async (req, res) => {
         topK: config.topK || 40,
         maxOutputTokens: 8192,
       },
-      tools: searchGrounding ? [{ googleSearch: {} }] : []
+      tools: searchGrounding ? [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: "DYNAMIC", dynamicThreshold: 0.3 } } }] : []
     });
 
     for await (const chunk of streamingResult.stream) {
@@ -205,6 +223,17 @@ app.post('/api/chat', limiter, async (req, res) => {
   }
 });
 
+// Global Express Error Handler
+app.use((err, req, res, next) => {
+  console.error('[Nexus Critical] Unhandled Route Error:', err);
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Erro interno no Nexus Core',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
+  }
+});
+
 const startServer = async () => {
   try {
     if (process.env.NODE_ENV === 'production') {
@@ -222,6 +251,11 @@ const startServer = async () => {
     }
 
     const port = process.env.PORT || 3000;
+    
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn('WARNING: GEMINI_API_KEY is not set in environment variables. Client must provide their own key in Settings.');
+    }
+
     app.listen(port, '0.0.0.0', () => {
       console.log(`Server listening on port ${port}`);
     });

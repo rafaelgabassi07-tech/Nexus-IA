@@ -70,6 +70,17 @@ ${args ? `Foco extra: ${args}` : ''}`;
     category: 'code',
     buildPrompt: (_args, ctx) => `Gere testes abrangentes para o arquivo ativo: ${ctx.activeFile}\n\n${ctx.activeFileContent}`,
   },
+  análise: {
+    name: 'análise',
+    description: 'Executa uma auditoria profunda com 7 sub-agentes especializados',
+    icon: 'ShieldCheck',
+    color: 'text-sky-500',
+    category: 'review',
+    buildPrompt: (args, ctx) => {
+      const target = args.trim() || ctx.activeFile || 'o projeto';
+      return `Audite profundamente o ${target} usando o pipeline de sub-agentes de elite.`;
+    },
+  },
   docs: {
     name: 'docs',
     description: 'Generate documentation for the current file or project',

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { DEFAULT_MODEL } from '../lib/models';
 import { APIPreset, ChatSession, SecurityRule, AgentDefinition } from '../types';
 
@@ -100,7 +101,7 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    immer((set) => ({
       apiKey: '',
       selectedModel: DEFAULT_MODEL,
       activeAgentId: 'general-specialist',
@@ -112,17 +113,17 @@ export const useSettingsStore = create<SettingsState>()(
       autoSave: true,
       securityRules: defaultSecurityRules,
       
-      setApiKey: (key) => set({ apiKey: key }),
-      setSelectedModel: (selectedModel) => set({ selectedModel }),
-      setActiveAgentId: (activeAgentId) => set({ activeAgentId }),
-      setActivePresetId: (activePresetId) => set({ activePresetId }),
-      setApiPresets: (apiPresets) => set({ apiPresets }),
-      setCustomAgents: (customAgents) => set({ customAgents }),
-      setTemperature: (temperature) => set({ temperature }),
-      setSearchGrounding: (searchGrounding) => set({ searchGrounding }),
-      setAutoSave: (autoSave) => set({ autoSave }),
-      setSecurityRules: (securityRules) => set({ securityRules }),
-    }),
+      setApiKey: (key) => set((state) => { state.apiKey = key; }),
+      setSelectedModel: (selectedModel) => set((state) => { state.selectedModel = selectedModel; }),
+      setActiveAgentId: (activeAgentId) => set((state) => { state.activeAgentId = activeAgentId; }),
+      setActivePresetId: (activePresetId) => set((state) => { state.activePresetId = activePresetId; }),
+      setApiPresets: (apiPresets) => set((state) => { state.apiPresets = apiPresets; }),
+      setCustomAgents: (customAgents) => set((state) => { state.customAgents = customAgents; }),
+      setTemperature: (temperature) => set((state) => { state.temperature = temperature; }),
+      setSearchGrounding: (searchGrounding) => set((state) => { state.searchGrounding = searchGrounding; }),
+      setAutoSave: (autoSave) => set((state) => { state.autoSave = autoSave; }),
+      setSecurityRules: (securityRules) => set((state) => { state.securityRules = securityRules; }),
+    })),
     {
       name: 'nexus-settings-storage',
     }

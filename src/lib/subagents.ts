@@ -91,5 +91,5 @@ Não seja genérico.`;
 }
 
 export function isSubAgentCommand(name: string): boolean {
-  return ['review', 'test', 'explore', 'fix', 'refactor', 'optimize', 'docs'].includes(name);
+  return ['review', 'test', 'explore', 'fix', 'refactor', 'optimize', 'docs', 'análise'].includes(name);
 }
