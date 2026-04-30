@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { 
   Message, TechnicalStep, GeneratedFile, AgentDefinition 
 } from '../types';
@@ -7,6 +7,7 @@ import { useSettingsStore } from '../store/appStore';
 import { toast } from 'sonner';
 import { parseSlashCommand } from '../lib/commands';
 import { runReviewSubAgents, isSubAgentCommand } from '../lib/subagents';
+import { VFS } from '../lib/vfs';
 
 interface UseChatSessionProps {
   activeAgent: AgentDefinition;
@@ -394,6 +395,17 @@ export function useChatSession({
     }
   }, [messages, isLoading, activeAgent, apiKey, selectedModel, systemPrompt, temperature, searchGrounding]);
 
+  const vfs = useMemo(() => {
+    const virtualFS: VFS = {};
+    generatedFiles.forEach(file => {
+      virtualFS[file.name] = {
+        type: 'file',
+        content: file.code
+      };
+    });
+    return virtualFS;
+  }, [generatedFiles]);
+
   return {
     messages,
     setMessages,
@@ -406,6 +418,7 @@ export function useChatSession({
     setFileHistory,
     resetChat,
     sendMessage,
+    vfs,
     abortRequest: () => abortControllerRef.current?.abort()
   };
 }

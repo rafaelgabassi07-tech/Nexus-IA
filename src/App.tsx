@@ -89,7 +89,8 @@ function AppContent() {
     fileHistory,
     setFileHistory,
     resetChat: hookResetChat,
-    sendMessage
+    sendMessage,
+    vfs
   } = useChatSession({
     activeAgent,
     apiKey,
@@ -630,6 +631,7 @@ function AppContent() {
                 isLoading={isLoading}
                 fileHistory={fileHistory}
                 setFileHistory={setFileHistory}
+                vfs={vfs}
               />
             </motion.div>
           ) : null}

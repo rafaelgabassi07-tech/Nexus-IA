@@ -25,6 +25,7 @@ interface WorkbenchProps {
   isLoading: boolean;
   previewKey: number;
   setPreviewKey: React.Dispatch<React.SetStateAction<number>>;
+  vfs?: any;
 }
 
 import JSZip from 'jszip';
@@ -40,7 +41,8 @@ export const Workbench = memo(({
   setGeneratedFiles,
   isLoading,
   previewKey,
-  setPreviewKey
+  setPreviewKey,
+  vfs
 }: WorkbenchProps) => {
   const hasFiles = generatedFiles.length > 0;
   const rightPaneTab = ['preview', 'code'].includes(activeTab) ? activeTab : 'preview';
@@ -228,6 +230,7 @@ export const Workbench = memo(({
                   previewKey={previewKey} 
                   onReload={() => setPreviewKey((k: number) => k + 1)}
                   isLoading={isLoading}
+                  vfs={vfs}
                 />
               </motion.div>
             ) : (

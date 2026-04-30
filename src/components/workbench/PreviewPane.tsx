@@ -19,8 +19,9 @@ export const PreviewPane = ({
   generatedFiles, 
   previewKey, 
   onReload,
-  isLoading
-}: PreviewPaneProps) => {
+  isLoading,
+  vfs
+}: PreviewPaneProps & { vfs?: any }) => {
   const [logs, setLogs] = useState<{ type: string; args: any[] }[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -29,6 +30,7 @@ export const PreviewPane = ({
     if (!iframeRef.current || generatedFiles.length === 0) return;
 
     const generatePreviewContent = () => {
+      // Pass vfs if available to allow local resolution in future refinements
       return generatePreviewHTML(generatedFiles);
     };
 
@@ -36,8 +38,19 @@ export const PreviewPane = ({
     const content = generatePreviewContent();
     if (iframeRef.current) {
       iframeRef.current.srcdoc = content;
+      
+      // Inject VFS for potential runtime use or debugging
+      const currentIframe = iframeRef.current;
+      const injectVfs = () => {
+        if (currentIframe.contentWindow) {
+          (currentIframe.contentWindow as any).vfs = vfs;
+        }
+      };
+      
+      currentIframe.addEventListener('load', injectVfs);
+      return () => currentIframe.removeEventListener('load', injectVfs);
     }
-  }, [generatedFiles, previewKey]);
+  }, [generatedFiles, previewKey, vfs]);
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
