@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
-import helmet from 'helmet';
 import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,13 +21,6 @@ process.on('uncaughtException', (error) => {
 
 const app = express();
 app.set('trust proxy', 1);
-
-// Security Headers
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  frameguard: false,
-}));
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -156,15 +148,38 @@ app.post('/api/chat', limiter, async (req, res) => {
       modelConfig.maxOutputTokens = 4096;
     }
     
-    const streamingResult = await ai.models.generateContentStream({
-      model: targetModel,
-      contents: contents,
-      config: modelConfig
-    }, { signal: controller.signal });
+    // Map Nexus models to real Gemini models
+    let actualModel = targetModel;
+    if (targetModel.includes('lite') || targetModel.includes('flash')) {
+      actualModel = 'gemini-1.5-flash';
+    } else {
+      actualModel = 'gemini-1.5-pro';
+    }
 
-    for await (const chunk of streamingResult) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+    const genModel = ai.getGenerativeModel({ 
+      model: actualModel,
+      systemInstruction: systemPrompt || undefined,
+    });
+
+    const streamingResult = await genModel.generateContentStream({
+      contents: contents,
+      generationConfig: {
+        temperature: modelConfig.temperature,
+        topP: modelConfig.topP,
+        topK: modelConfig.topK,
+        maxOutputTokens: modelConfig.maxOutputTokens,
+      },
+      tools: tools
+    });
+
+    for await (const chunk of streamingResult.stream) {
+      try {
+        const text = chunk.text();
+        if (text) {
+          res.write(`data: ${JSON.stringify({ text })}\n\n`);
+        }
+      } catch (e) {
+        console.warn('Empty or blocked chunk detected:', e);
       }
     }
     
